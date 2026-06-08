@@ -243,3 +243,28 @@ D'après le design Claude Design :
 - Panel admin multi-utilisateurs
 - Support POP3
 - Notifications push mobile
+
+---
+
+## Références
+
+### Stalwart
+- [Site officiel](https://stalw.art/)
+- [GitHub stalwartlabs/stalwart](https://github.com/stalwartlabs/stalwart)
+- [Releases (v0.16.x)](https://github.com/stalwartlabs/stalwart/releases)
+- [Blog — Stalwart v0.16 : A New Foundation](https://stalw.art/blog/stalwart-0-16/) — architectural changes (all config in DB, DKIM in DB)
+- [Blog — Roadmap & webmail](https://stalw.art/blog/roadmap/)
+- [Documentation — Installation Docker](https://stalw.art/docs/install/platform/docker/)
+- [Documentation — Vue d'ensemble HTTP](https://stalw.art/docs/http/overview/)
+- [Documentation — API Endpoints](https://stalw.art/docs/development/api/)
+- [Documentation — TLS & ACME](https://stalw.art/docs/server/tls/acme/configuration/)
+- [Documentation — Domaine & DKIM](https://stalw.art/docs/ref/object/domain/)
+- [Documentation — Prérequis système](https://stalw.art/docs/install/requirements/)
+
+### Stack technique
+- [TanStack Start](https://tanstack.com/start/latest)
+- [TanStack Router](https://tanstack.com/router/latest)
+- [TanStack Query](https://tanstack.com/query/latest)
+- [shadcn/ui](https://ui.shadcn.com/)
+- [JMAP RFC 8620](https://datatracker.ietf.org/doc/html/rfc8620)
+- [JMAP for Email RFC 8621](https://datatracker.ietf.org/doc/html/rfc8621)
