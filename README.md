@@ -1,21 +1,38 @@
-# TanStack Start + shadcn/ui
+# Stalmail
 
-This is a template for a new TanStack Start project with React, TypeScript, and shadcn/ui.
-
-## Adding components
-
-To add components to your app, run the following command:
+Webmail client et lanceur de serveur pour [Stalwart](https://stalw.art/) — lancez votre propre serveur mail en une commande.
 
 ```bash
-npx shadcn@latest add button
+curl -sSL https://get.stalmail.io | sh
 ```
 
-This will place the ui components in the `components` directory.
+Un wizard de configuration prend en charge le domaine, le DNS et les certificats SSL automatiquement.
 
-## Using components
+## Stack
 
-To use the components in your app, import them as follows:
+- [TanStack Start](https://tanstack.com/start/latest) — SSR + server functions (BFF)
+- [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
+- [Stalwart v0.16](https://stalw.art/) — serveur mail (JMAP, IMAP, SMTP)
+- Docker + Caddy
 
-```tsx
-import { Button } from "@/components/ui/button";
+## Développement
+
+```bash
+bun install
+bun run dev
 ```
+
+## Tests
+
+```bash
+bun run test
+```
+
+## Architecture
+
+Voir [`docs/superpowers/specs/2026-06-08-stalmail-design.md`](docs/superpowers/specs/2026-06-08-stalmail-design.md).
+
+## Licence
+
+MIT
