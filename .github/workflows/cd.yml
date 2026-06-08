@@ -10,10 +10,23 @@ permissions:
   contents: read
 
 jobs:
+  check:
+    name: Check prerequisites
+    runs-on: ubuntu-latest
+    outputs:
+      has_dockerfile: ${{ steps.check.outputs.has_dockerfile }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Check Dockerfile exists
+        id: check
+        run: echo "has_dockerfile=$(test -f Dockerfile && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   build-and-push:
     name: Build & Push Docker image
+    needs: check
+    if: needs.check.outputs.has_dockerfile == 'true'
     runs-on: ubuntu-latest
-    if: hashFiles('Dockerfile') != ''
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
