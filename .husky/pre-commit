@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+
+cat <<'MSG'
+
+╔════════════════════════════════════════════════════════════════╗
+║              Stalmail — pre-commit checks                      ║
+║                                                                ║
+║  Running: lint · typecheck · tests                            ║
+║                                                                ║
+║  ⚠  Do NOT bypass with --no-verify except in a genuine        ║
+║     emergency. Every bypass skips quality gates and risks      ║
+║     breaking the main branch for the whole team.               ║
+╚════════════════════════════════════════════════════════════════╝
+
+MSG
+
+bun run lint && bun run typecheck && bun run test
