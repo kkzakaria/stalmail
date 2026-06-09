@@ -1,6 +1,9 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import type { ComponentType } from "react"
 import { lazy, Suspense } from "react"
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../i18n/i18n'
+import { getServerLang } from '../server/setup-lang'
 
 import appCss from "../styles.css?url"
 
@@ -27,6 +30,10 @@ const DevTools: ComponentType = isDev
   : () => null
 
 export const Route = createRootRoute({
+  loader: async () => {
+    const { lang } = await getServerLang()
+    return { lang }
+  },
   head: () => ({
     meta: [
       {
@@ -57,13 +64,15 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { lang } = Route.useLoaderData()
+  const i18n = createI18n(lang)
   return (
-    <html lang="en">
+    <html lang={lang}>
       <head>
         <HeadContent />
       </head>
       <body>
-        {children}
+        <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
         {isDev && (
           <Suspense fallback={null}>
             <DevTools />
