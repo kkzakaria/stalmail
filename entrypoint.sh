@@ -19,15 +19,22 @@ STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
   /usr/local/bin/stalwart --config /etc/stalwart/config.toml &
 STALWART_PID=$!
 
-# Attendre que Stalwart soit prêt
+# Attendre que Stalwart soit prêt (timeout 60 s)
 echo "[stalmail] Waiting for Stalwart..."
+_i=0
 until curl -sf http://localhost:8080/healthz/live > /dev/null 2>&1; do
+  _i=$((_i + 1))
+  if [ "${_i}" -ge 60 ]; then
+    echo "[stalmail] ERROR: Stalwart failed to start within 60 seconds" >&2
+    exit 1
+  fi
   sleep 1
 done
 echo "[stalmail] Stalwart ready"
 
-# Démarrer Caddy en background (pas accès aux credentials admin)
-caddy start --config /etc/caddy/Caddyfile
+# Démarrer Caddy en foreground background (PID tracké pour le wait)
+caddy run --config /etc/caddy/Caddyfile &
+CADDY_PID=$!
 echo "[stalmail] Caddy ready"
 
 # Démarrer TanStack Start (BFF a besoin des credentials pour stalwartAdminFetch)
@@ -36,7 +43,7 @@ STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
   node /app/server.js &
 APP_PID=$!
 
-# Forwarder les signaux
-trap "kill ${STALWART_PID} ${APP_PID}; caddy stop" SIGTERM SIGINT
+# Forwarder les signaux vers tous les process enfants
+trap "kill ${STALWART_PID} ${CADDY_PID} ${APP_PID}" SIGTERM SIGINT
 
-wait ${STALWART_PID} ${APP_PID}
+wait ${STALWART_PID} ${CADDY_PID} ${APP_PID}
