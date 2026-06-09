@@ -47,13 +47,14 @@ APP_PID=$!
 cleanup() {
   echo "[stalmail] Shutting down..."
   kill "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
+  wait "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
 }
-trap cleanup SIGTERM SIGINT
+# EXIT couvre les sorties inattendues dues à set -e (ex: crash d'un enfant)
+trap cleanup EXIT SIGTERM SIGINT
 
-# Bloquer jusqu'au premier crash/arrêt, puis terminer les autres
 # wait -n disponible depuis bash 4.3 (debian bookworm : bash 5.2)
-wait -n "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}"
-EXIT_CODE=$?
+# &&/|| pour capturer l'exit code sans déclencher set -e
+wait -n "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" && EXIT_CODE=$? || EXIT_CODE=$?
+trap - EXIT   # éviter double-appel de cleanup au exit suivant
 cleanup
-wait "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
 exit "${EXIT_CODE}"

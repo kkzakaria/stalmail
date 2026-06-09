@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 22 (binaire depuis l'image officielle — pas de curl|bash)
+# Node.js 24 (binaire depuis l'image officielle — pas de curl|bash)
 COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 
 # Caddy et Stalwart (binaires depuis leurs images officielles)
