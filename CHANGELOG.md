@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/kkzakaria/stalmail/compare/v0.1.0...v0.1.1) (2026-06-09)
+
+
+### Features
+
+* Plan 1 — Foundation (Vitest, setup-flag, Stalwart client, Docker, install script) ([#5](https://github.com/kkzakaria/stalmail/issues/5)) ([a38c277](https://github.com/kkzakaria/stalmail/commit/a38c277127e58dc2b017c581f5b16ea15447c53e))
+
 ## 0.1.0 (2026-06-08)
 
 
