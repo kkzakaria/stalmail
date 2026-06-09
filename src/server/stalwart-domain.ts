@@ -12,7 +12,7 @@ export interface StalwartDomain {
 export const DEFAULT_PUBLISH_RECORDS = [
   'dkim', 'spf', 'mx', 'dmarc', 'srv', 'mtaSts',
   'tlsRpt', 'caa', 'autoConfig', 'autoConfigLegacy', 'autoDiscover',
-]
+] as const
 
 export async function getPrimaryDomain(): Promise<StalwartDomain | null> {
   const accountId = await resolveAccountId()
@@ -24,16 +24,14 @@ export async function getPrimaryDomain(): Promise<StalwartDomain | null> {
       '1',
     ],
   ])
-  const get = responses.find((r) => r[0] === 'x:Domain/get')
-  const list = (get?.[1] as { list?: StalwartDomain[] } | undefined)?.list ?? []
+  const list = (firstResponse(responses, 1)[1] as { list?: StalwartDomain[] }).list ?? []
   return list[0] ?? null
 }
 
 export async function setDnsManagementAutomatic(
-  domainId: string,
-  dnsServerId: string,
-  origin: string,
+  opts: { domainId: string; dnsServerId: string; origin: string },
 ): Promise<void> {
+  const { domainId, dnsServerId, origin } = opts
   const accountId = await resolveAccountId()
   const responses = await jmapCall([
     [

@@ -1,16 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type * as JmapModule from './jmap'
 
-vi.mock('./jmap', () => ({
+vi.mock('./jmap', async (importActual) => ({
+  ...(await importActual<typeof JmapModule>()),
   jmapCall: vi.fn(),
   resolveAccountId: vi.fn(async () => 'd333333'),
-  firstResponse: (responses: unknown[], index = 0) => {
-    const r = responses[index]
-    if (!r) throw new Error('empty')
-    return r
-  },
-  JmapError: class JmapError extends Error {
-    constructor(message: string, readonly detail?: unknown) { super(message); this.name = 'JmapError' }
-  },
 }))
 
 // eslint-disable-next-line import/first
@@ -49,7 +43,7 @@ describe('getPrimaryDomain', () => {
 describe('setDnsManagementAutomatic', () => {
   it('updates the domain dnsManagement to Automatic with the dns server id', async () => {
     mj.mockResolvedValue([['x:Domain/set', { updated: { b: null } }, '0']])
-    await setDnsManagementAutomatic('b', 'srv1', 'exemple.fr')
+    await setDnsManagementAutomatic({ domainId: 'b', dnsServerId: 'srv1', origin: 'exemple.fr' })
     const [[, args]] = mj.mock.calls[0][0] as [[string, Record<string, unknown>, string]]
     expect(args.update).toEqual({
       b: {
@@ -65,6 +59,6 @@ describe('setDnsManagementAutomatic', () => {
 
   it('throws when the update is rejected', async () => {
     mj.mockResolvedValue([['x:Domain/set', { notUpdated: { b: { type: 'forbidden' } } }, '0']])
-    await expect(setDnsManagementAutomatic('b', 'srv1', 'exemple.fr')).rejects.toThrow()
+    await expect(setDnsManagementAutomatic({ domainId: 'b', dnsServerId: 'srv1', origin: 'exemple.fr' })).rejects.toThrow()
   })
 })

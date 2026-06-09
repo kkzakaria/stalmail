@@ -21,9 +21,21 @@ const boot = vi.mocked(isBootstrapMode)
 const dom = vi.mocked(getPrimaryDomain)
 const mj = vi.mocked(jmapCall)
 
+// Helper: a JMAP query+get pair for the given account list.
+const accounts = (list: Array<{ name?: string; description?: string }>) =>
+  [
+    ['x:Account/query', { ids: list.map((_, i) => String(i)) }, '0'],
+    ['x:Account/get', { list }, '1'],
+  ] as [string, Record<string, unknown>, string][]
+
+// The system admin Stalwart auto-creates during bootstrap.
+const SYSTEM_ADMIN = { name: 'admin', description: 'System administrator' }
+
 beforeEach(() => {
   vi.clearAllMocks()
-  mj.mockResolvedValue([['x:Account/query', { ids: [] }, '0']]) // no admin user by default
+  boot.mockResolvedValue(false)
+  dom.mockResolvedValue(null)
+  mj.mockResolvedValue(accounts([SYSTEM_ADMIN])) // only the system admin by default
 })
 
 describe('deriveSetupStep', () => {
@@ -38,25 +50,29 @@ describe('deriveSetupStep', () => {
     expect(await deriveSetupStep()).toBe('collect')
   })
 
-  it('returns "account" in normal mode with no admin user', async () => {
+  it('returns "account" when only the auto-created system admin exists', async () => {
     flag.mockReturnValue(false)
-    boot.mockResolvedValue(false)
-    mj.mockResolvedValue([['x:Account/query', { ids: [] }, '0']])
+    mj.mockResolvedValue(accounts([SYSTEM_ADMIN]))
     expect(await deriveSetupStep()).toBe('account')
   })
 
-  it('returns "dns" when an admin exists but dnsManagement is Manual', async () => {
+  it('treats a user-created account named "admin" but without the system description as a real account', async () => {
     flag.mockReturnValue(false)
-    boot.mockResolvedValue(false)
-    mj.mockResolvedValue([['x:Account/query', { ids: ['c'] }, '0']])
+    mj.mockResolvedValue(accounts([SYSTEM_ADMIN, { name: 'koffi' }]))
     dom.mockResolvedValue({ id: 'b', name: 'exemple.fr', dnsManagement: { '@type': 'Manual' } })
     expect(await deriveSetupStep()).toBe('dns')
   })
 
-  it('returns "ssl" when dnsManagement is Automatic but the finish flag is unset', async () => {
+  it('returns "dns" when a user account exists but dnsManagement is Manual', async () => {
     flag.mockReturnValue(false)
-    boot.mockResolvedValue(false)
-    mj.mockResolvedValue([['x:Account/query', { ids: ['c'] }, '0']])
+    mj.mockResolvedValue(accounts([SYSTEM_ADMIN, { name: 'koffi' }]))
+    dom.mockResolvedValue({ id: 'b', name: 'exemple.fr', dnsManagement: { '@type': 'Manual' } })
+    expect(await deriveSetupStep()).toBe('dns')
+  })
+
+  it('returns "ssl" when a user account exists and dnsManagement is Automatic', async () => {
+    flag.mockReturnValue(false)
+    mj.mockResolvedValue(accounts([SYSTEM_ADMIN, { name: 'koffi' }]))
     dom.mockResolvedValue({ id: 'b', name: 'exemple.fr', dnsManagement: { '@type': 'Automatic' } })
     expect(await deriveSetupStep()).toBe('ssl')
   })
