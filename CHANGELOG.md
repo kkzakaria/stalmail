@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/kkzakaria/stalmail/compare/v0.1.2...v0.1.3) (2026-06-09)
+
+
+### Features
+
+* Plan 2a — Setup Wizard backend (Stalwart v0.16 bootstrap) ([#8](https://github.com/kkzakaria/stalmail/issues/8)) ([4947bdb](https://github.com/kkzakaria/stalmail/commit/4947bdbc444999dc5e938d2e8f02dd6e28ccdc3d))
+
 ## [0.1.2](https://github.com/kkzakaria/stalmail/compare/v0.1.1...v0.1.2) (2026-06-09)
 
 
