@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/kkzakaria/stalmail/compare/v0.1.1...v0.1.2) (2026-06-09)
+
+
+### Bug Fixes
+
+* corriger le chemin de sortie du build Docker ([1ff91d4](https://github.com/kkzakaria/stalmail/commit/1ff91d412bb3b979aaa17a658d6e1b10ad50842c))
+
 ## [0.1.1](https://github.com/kkzakaria/stalmail/compare/v0.1.0...v0.1.1) (2026-06-09)
 
 
