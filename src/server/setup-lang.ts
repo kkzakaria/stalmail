@@ -1,12 +1,11 @@
 import { createServerFn } from '@tanstack/react-start'
-import { getCookie } from '@tanstack/react-start/server'
 import { DEFAULT_LANG, isLang, LANG_COOKIE } from '@/i18n/i18n'
 import type { Lang } from '@/i18n/i18n'
 
 /**
  * Pure helper — parses the raw Cookie header string to extract the stalmail_lang cookie.
  * Falls back to DEFAULT_LANG if the value is absent or not a recognized Lang.
- * Tested directly; the server-fn wrapper delegates to getCookie() instead.
+ * Tested directly; the server-fn handler reads the cookie via getCookie() instead.
  */
 export function parseLangCookie(cookieHeader: string | undefined): Lang {
   const match = cookieHeader?.match(new RegExp(`${LANG_COOKIE}=([^;]+)`))
@@ -15,13 +14,15 @@ export function parseLangCookie(cookieHeader: string | undefined): Lang {
 }
 
 /**
- * Server-fn handler — reads the lang cookie via TanStack Start's getCookie() helper
- * (exported from @tanstack/react-start/server via start-server-core/request-response).
- * getCookie() returns undefined when the cookie is absent, which parseLangCookie handles.
+ * Server fn — reads the lang cookie SSR-side. `@tanstack/react-start/server` is a
+ * server-only entry, so it is imported lazily INSIDE the handler: a top-level import
+ * would pull a server-only module into the client graph (the loader that calls this is
+ * isomorphic) and trip TanStack Start's import-protection plugin at build time.
  */
-export async function getServerLangHandler(): Promise<{ lang: Lang }> {
-  const cookieValue = getCookie(LANG_COOKIE)
-  return { lang: isLang(cookieValue) ? cookieValue : DEFAULT_LANG }
-}
-
-export const getServerLang = createServerFn({ method: 'GET' }).handler(getServerLangHandler)
+export const getServerLang = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<{ lang: Lang }> => {
+    const { getCookie } = await import('@tanstack/react-start/server')
+    const cookieValue = getCookie(LANG_COOKIE)
+    return { lang: isLang(cookieValue) ? cookieValue : DEFAULT_LANG }
+  },
+)
