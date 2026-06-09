@@ -19,7 +19,7 @@ export async function resolveRecordStatus(record: ZoneRecord): Promise<RecordSta
       const [prio, exchange] = record.value.split(/\s+/)
       const mx = await resolveMx(host)
       const found = mx.some(
-        (r) => stripDot(r.exchange) === stripDot(exchange) && String(r.priority) === prio,
+        (r) => stripDot(r.exchange) === stripDot(exchange) && Number(r.priority) === Number(prio),
       )
       return found ? 'verified' : mx.length ? 'mismatch' : 'missing'
     }
