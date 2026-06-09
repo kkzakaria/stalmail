@@ -3,6 +3,7 @@ import { deriveSetupStep } from './setup-state'
 import type { BootstrapInput } from './stalwart-bootstrap'
 import { submitBootstrap } from './stalwart-bootstrap'
 import { requestStalwartRestart } from './stalwart-restart'
+import { domainSchema } from '@/components/setup/schemas'
 
 export async function getStepHandler(): Promise<{ step: string }> {
   return { step: await deriveSetupStep() }
@@ -19,5 +20,5 @@ export async function submitBootstrapHandler(
 export const getStep = createServerFn({ method: 'GET' }).handler(getStepHandler)
 
 export const submitBootstrapFn = createServerFn({ method: 'POST' })
-  .validator((d: BootstrapInput) => d)
+  .validator((d: BootstrapInput) => domainSchema.parse(d))
   .handler(submitBootstrapHandler)
