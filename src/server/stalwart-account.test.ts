@@ -14,7 +14,7 @@ vi.mock('./jmap', () => ({
 }))
 
 // eslint-disable-next-line import/first
-import { jmapCall } from './jmap'
+import { jmapCall, JmapError } from './jmap'
 // eslint-disable-next-line import/first
 import { createAdminAccount, WeakPasswordError } from './stalwart-account'
 
@@ -51,6 +51,6 @@ describe('createAdminAccount', () => {
     mj.mockResolvedValue([['x:Account/set', { notCreated: { u1: { type: 'invalidProperties', properties: ['name'] } } }, '0']])
     await expect(
       createAdminAccount({ name: 'bad name', domainId: 'b', password: 'correct horse battery staple' }),
-    ).rejects.toThrow()
+    ).rejects.toBeInstanceOf(JmapError)
   })
 })
