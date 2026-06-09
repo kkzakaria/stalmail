@@ -54,7 +54,7 @@ trap cleanup EXIT SIGTERM SIGINT
 
 # wait -n disponible depuis bash 4.3 (debian bookworm : bash 5.2)
 # &&/|| pour capturer l'exit code sans déclencher set -e
-wait -n "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" && EXIT_CODE=$? || EXIT_CODE=$?
+wait -n "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null && EXIT_CODE=$? || EXIT_CODE=$?
 trap - EXIT   # éviter double-appel de cleanup au exit suivant
 cleanup
 exit "${EXIT_CODE}"
