@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const writeFileSync = vi.fn()
-vi.mock('node:fs', () => ({ writeFileSync: (...a: unknown[]) => writeFileSync(...a) }))
+const mkdirSync = vi.fn()
+vi.mock('node:fs', () => ({
+  writeFileSync: (...a: unknown[]) => writeFileSync(...a),
+  mkdirSync: (...a: unknown[]) => mkdirSync(...a),
+}))
 
 // eslint-disable-next-line import/first
 import { requestStalwartRestart, RESTART_SENTINEL } from './stalwart-restart'
@@ -24,5 +28,11 @@ describe('requestStalwartRestart', () => {
     requestStalwartRestart()
     expect(writeFileSync).toHaveBeenCalledWith('/tmp/run/restart-stalwart', expect.any(String), 'utf-8')
     delete process.env.STALMAIL_RUN_DIR
+  })
+
+  it('creates the run dir before writing the sentinel', () => {
+    delete process.env.STALMAIL_RUN_DIR
+    requestStalwartRestart()
+    expect(mkdirSync).toHaveBeenCalledWith('/run/stalmail', { recursive: true })
   })
 })
