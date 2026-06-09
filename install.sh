@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CONTAINER_NAME="stalmail"
-IMAGE="ghcr.io/stalmail/stalmail:latest"
+IMAGE="ghcr.io/kkzakaria/stalmail:latest"
 
 echo "╔══════════════════════════════════╗"
 echo "║        Stalmail Installer        ║"
