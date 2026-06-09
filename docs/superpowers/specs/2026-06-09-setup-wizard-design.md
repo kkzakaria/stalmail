@@ -25,18 +25,28 @@ données**. Cela impose un cycle de vie que le design initial ignorait :
   à déclencher le bootstrap. Le démarrage Docker officiel v0.16 n'utilise
   **aucun** `--init` ni `--config`.
   ([docker install](https://stalw.art/docs/install/platform/docker/))
-- **Soumettre l'objet `Bootstrap` termine le bootstrap** : Stalwart écrit la
-  config, crée le compte admin permanent, provisionne le reste, puis **redémarre
-  en mode normal**. Le compte temporaire de bootstrap ne s'applique plus ensuite.
+- **Soumettre l'objet `Bootstrap` écrit la config** (`config.json`) et génère un
+  compte admin technique `admin@<domaine>` (`username`/`secret` sont *serverSet* —
+  voir ci-dessous). **⚠ Vérifié empiriquement** : le process **ne bascule PAS tout
+  seul** en mode normal — il faut **redémarrer le process Stalwart** pour qu'il
+  relise `config.json` et démarre les services mail. Voir
+  [`2026-06-09-stalwart-api-capture.md`](2026-06-09-stalwart-api-capture.md).
 
 ### Conséquence
 
 Le wizard ne peut **pas** muter Stalwart étape par étape pendant le bootstrap (le
-seul objet disponible est `Bootstrap`). Le flux devient :
+seul objet disponible est `Bootstrap` ; tout autre type renvoie `forbidden`). Le
+flux devient :
 
 ```
-COLLECTE (aucune mutation)  →  1 submit Bootstrap  →  MONITORING (mode normal)
+COLLECTE (aucune mutation)  →  submit Bootstrap  →  RESTART Stalwart  →  MONITORING (mode normal)
 ```
+
+Point important : le compte admin de l'**utilisateur** (son email + mot de passe)
+n'est **pas** un champ du Bootstrap (les champs `username`/`secret` du Bootstrap
+sont *serverSet* et produisent un admin technique `admin@<domaine>`). Le compte
+utilisateur se crée donc en **mode normal**, via `x:Account/set` (variant `User`,
+rôle `Admin`), pendant la phase monitoring.
 
 ## 3. Authentification BFF → Stalwart
 
@@ -68,13 +78,18 @@ inopérant. Correctifs à apporter dans ce plan :
 - Lancer `stalwart` **sans `--init`** ni `--config` pré-fabriqué → laisse le
   bootstrap se déclencher sur volume vierge.
 - Conserver `STALWART_RECOVERY_ADMIN` défini en permanence.
-- **Superviser le redémarrage post-bootstrap** : à la fin du bootstrap, Stalwart
-  bascule en mode normal. Vérifier empiriquement si le process est relancé (auquel
-  cas l'actuel `wait -n` ferait sortir le container) et adapter la supervision en
-  conséquence.
+- **Superviser Stalwart en boucle de redémarrage** : le process Stalwart **ne se
+  relance pas seul** après le submit Bootstrap (confirmé : `config.json` est écrit
+  mais le process reste en bootstrap). L'entrypoint doit donc relancer Stalwart pour
+  qu'il passe en mode normal. Modèle retenu : un **superviseur** qui (re)démarre
+  Stalwart tant que le container vit ; après le submit, le BFF déclenche le
+  redémarrage (envoi de signal au process Stalwart) et le superviseur le relance —
+  Stalwart lit alors `config.json` et démarre en mode normal. Le crash d'un *autre*
+  process (Caddy, app) reste fatal au container comme aujourd'hui.
 
-> Point à confirmer à l'implémentation : comportement exact du redémarrage
-> (re-exec du process vs reconfiguration interne). Voir Smoke test §9.
+> Confirmé empiriquement : pas de re-exec automatique, reconfiguration **non**
+> interne — un redémarrage explicite du process est requis. Voir
+> [`stalwart-api-capture` §2](2026-06-09-stalwart-api-capture.md).
 
 ## 5. Structure du wizard
 
@@ -84,13 +99,14 @@ inopérant. Correctifs à apporter dans ce plan :
 |---|---|
 | 1. Bienvenue | Choix de langue, bouton Commencer. |
 | 2. Domaine | Saisie du hostname public (`mail.exemple.fr`) et du domaine mail (`exemple.fr`). Vérification DNS **optionnelle et non bloquante** : warning si le A/AAAA record du hostname ne pointe pas (encore) sur l'IP de ce serveur. L'enregistrement A reste à la charge de l'utilisateur (Stalwart ne le publie pas — il ne connaît pas l'IP publique). |
-| 3. Provider DNS | Sélection parmi les **10 providers d'API hébergée** réellement supportés par Stalwart v0.16 : Cloudflare, AWS Route 53, Google Cloud DNS, OVH, deSEC, DigitalOcean, Bunny DNS, Porkbun, DNSimple, Spaceship — ou **Manuel**. Saisie de la clé API / credentials selon le provider. ([providers](https://stalw.art/docs/server/dns/provider)) |
-| 4. Compte admin | Nom complet, adresse email, mot de passe (indicateur de force). Premier utilisateur, doté des permissions d'administration. |
+| 3. Provider DNS | Sélection parmi les **71 variantes** réellement exposées par le schéma Stalwart v0.16 (`DnsServerBootstrapType` : Cloudflare, OVH, Route 53, Google Cloud DNS, Azure, GoDaddy, Hetzner, Gandi, Scaleway, deSEC, DigitalOcean, Bunny, Porkbun, DNSimple, Hurricane, Tsig…) ou **Manuel**. La liste est rendue depuis le schéma serveur, pas hardcodée. Saisie du credential (champ `secret`) selon le provider. |
+| 4. Compte admin | Nom complet, adresse email, mot de passe. **Indicateur de force aligné sur la validation serveur** (Stalwart rejette les mots de passe faibles, type zxcvbn). Les valeurs sont seulement *collectées* ici ; le compte est créé en phase monitoring (mode normal). |
 | 5. Récap | Récapitulatif des saisies avant soumission. |
 
 ### Soumission
 
-Le BFF construit et soumet **un seul** objet `Bootstrap` :
+Le BFF soumet l'objet `Bootstrap` (update du singleton), **sans compte admin
+utilisateur** (champs `username`/`secret` *serverSet*) :
 
 ```jsonc
 {
@@ -99,7 +115,7 @@ Le BFF construit et soumet **un seul** objet `Bootstrap` :
   "generateDkimKeys": true,               // défaut
   "requestTlsCertificate": false,         // ACME déclenché plus tard, post-DNS
   "directory": { "@type": "Internal" },   // annuaire interne
-  // + compte admin (nom, email, mot de passe)
+  "dnsServer": { "@type": "Manual" }      // provider configuré en mode normal
   // stores: défauts RocksDB (dataStore/blobStore/searchStore/inMemoryStore)
 }
 ```
@@ -107,36 +123,37 @@ Le BFF construit et soumet **un seul** objet `Bootstrap` :
 `requestTlsCertificate` est mis à **`false`** : ACME ne doit se déclencher
 qu'**après** la publication DNS, sinon le challenge échoue faute de DNS prêt.
 
-Stalwart écrit la config, crée l'admin, provisionne, **redémarre en mode normal**.
+Stalwart écrit `config.json` et génère l'admin technique `admin@<domaine>`. Le BFF
+**déclenche ensuite un redémarrage du process Stalwart** (le process ne bascule pas
+seul) ; au redémarrage, Stalwart démarre en **mode normal**.
 
-### Phase Monitoring (mode normal)
+### Phase Monitoring (mode normal, après redémarrage Stalwart)
 
 | Étape | Contenu |
 |---|---|
-| 6. DNS | Le BFF crée un objet `DnsServer` (variante du provider choisi + credentials) puis configure `Domain.dnsManagement = Automatic` avec `dnsServerId` → Stalwart publie le jeu d'enregistrements. **Grille par-record live** (voir §6). En mode Manuel : affichage du champ `Domain.dnsZoneFile` à copier-coller (pas de `DnsServer`). |
-| 7. SSL | Déclenche l'obtention du certificat ACME (task `DnsManagement` avec `onSuccessRenewCertificate`, ou requête de certificat). Affiche le statut de la task (`Pending` / `Retry` / `Failed` / succès) + `failureReason` en cas d'échec. ([tasks](https://stalw.art/docs/management/tasks-actions/tasks)) |
-| 8. Terminé | Récap (domaine, SSL, compte). Rappel backup `stalmail-data`. Pose le flag `/var/lib/stalwart/.stalmail-configured`. Bouton « Ouvrir ma boîte mail » → `/login`. |
+| 6. Compte admin | Le BFF crée le compte utilisateur via `x:Account/set` (variant `User` : `name` + `domainId` + `credentials` Password, rôle `Admin`). `emailAddress` est *serverSet* (dérivé de `name`+`domainId`). Mot de passe trop faible rejeté côté serveur → retour à la saisie. |
+| 7. DNS | Mode automatique : le BFF crée un `DnsServer` (variante provider + credential `secret`) puis met `Domain.dnsManagement = Automatic` (`dnsServerId`, `origin`, `publishRecords`) → Stalwart publie. **Grille par-record live** (voir §6). Mode Manuel : affichage de `Domain.dnsZoneFile` à copier-coller (pas de `DnsServer`). |
+| 8. SSL | Déclenche l'obtention du certificat ACME (task `DnsManagement` + `onSuccessRenewCertificate`, ou `certificateManagement`). Statut de la task (`Pending`/`Retry`/`Failed`/succès) + `failureReason`. ([tasks](https://stalw.art/docs/management/tasks-actions/tasks)) |
+| 9. Terminé | Récap (domaine, SSL, compte). Rappel backup `stalmail-data`. Pose le flag `/var/lib/stalwart/.stalmail-configured`. Bouton « Ouvrir ma boîte mail » → `/login`. |
 
-## 6. Grille DNS par type de record (étape 6)
+## 6. Grille DNS par type de record (étape 7)
 
-Stalwart n'expose qu'un statut **global** par task (`Pending`/`Retry`/`Failed`),
-pas un statut par record. La grille par-record est donc reconstruite par le BFF à
-partir de deux sources :
+Le repérage a révélé deux enums natifs : **`DnsPublishStatus`** (`synced` / `pending`
+/ `failed` / `unknown`) et **`DnsRecordType`** (les 12 types). La grille s'appuie sur
+deux sources, dans cet ordre de préférence :
 
-- **Lignes + valeurs attendues** : parsing du champ `Domain.dnsZoneFile`, qui
-  contient le texte de tous les enregistrements gérés par Stalwart (DKIM, SPF, MX,
-  DMARC, SRV, MTA-STS, TLS-RPT, CAA, autoconfig, autoconfig legacy, autodiscover).
-  Ce même texte sert de contenu copier-coller pour le mode Manuel.
-  ([dns-records](https://stalw.art/docs/domains/dns-records))
-- **Statut live par ligne** : le BFF **résout le DNS lui-même** par type et compare
-  à l'attendu :
-  - `✓ vérifié` — record présent et conforme
-  - `⚠ différent` — record présent mais valeur différente
-  - `⏳ propagation` — pas encore visible (Stalwart fait aussi sa propre vérif via
-    `propagationDelay` / `pollingInterval` / `propagationTimeout`)
-  - `✕ absent` — record manquant
+- **Lignes + valeurs attendues** : parsing du champ `Domain.dnsZoneFile` (texte de
+  tous les enregistrements gérés par Stalwart). Ce même texte sert de contenu
+  copier-coller pour le mode Manuel. ([dns-records](https://stalw.art/docs/domains/dns-records))
+- **Statut par ligne** :
+  - **Priorité au statut natif Stalwart** (`DnsPublishStatus` par type de record) si
+    exposé une fois `dnsManagement=Automatic` (à confirmer au Plan 2a — cf. §8 de
+    [`stalwart-api-capture`](2026-06-09-stalwart-api-capture.md)).
+  - **Complément/repli : résolution DNS côté BFF** par type, comparée à l'attendu —
+    `✓ vérifié` · `⚠ différent` · `⏳ propagation` · `✕ absent`. Utile en mode Manuel
+    (pas de statut Stalwart) et pour refléter la propagation publique réelle.
 
-Le statut global de la task `DnsManagement` est affiché en complément (ex. échec
+Le statut global de la task `DnsManagement` est affiché en complément (échec
 d'authentification provider → `failureReason`).
 
 ## 7. Reprise du wizard (dérivation d'état)
@@ -144,14 +161,16 @@ d'authentification provider → `failureReason`).
 **Pas d'état de wizard persisté séparément.** L'état réel vit déjà dans Stalwart.
 Au chargement de `/setup`, le BFF dérive l'étape courante depuis l'état réel :
 
-1. Mode bootstrap actif (pas de `config.json`) → phase Collecte.
-2. Mode normal, mais `Domain.dnsManagement` non configuré → étape 6 (DNS).
-3. DNS configuré mais pas de certificat valide → étape 7 (SSL).
-4. Tout OK mais flag `.stalmail-configured` absent → étape 8 (Terminé).
-5. Flag présent → le wizard est terminé (redirect `/login`).
+1. Mode bootstrap actif (`x:Domain` renvoie `forbidden`) → phase Collecte.
+2. Mode normal, mais aucun compte utilisateur admin → étape 6 (Compte admin).
+3. Compte créé, mais `Domain.dnsManagement` non configuré (et mode auto demandé) → étape 7 (DNS).
+4. DNS configuré mais pas de certificat valide → étape 8 (SSL).
+5. Tout OK mais flag `.stalmail-configured` absent → étape 9 (Terminé).
+6. Flag présent → le wizard est terminé (redirect `/login`).
 
-Cette approche est robuste aux fermetures de navigateur **et** au redémarrage du
-container provoqué par la fin du bootstrap.
+Le mode (bootstrap vs normal) se détecte en sondant un type non-Bootstrap : une
+réponse `forbidden` « bootstrap mode » ⇒ encore en collecte. Cette approche est
+robuste aux fermetures de navigateur **et** au redémarrage du process Stalwart.
 
 ## 8. Gestion des erreurs
 
