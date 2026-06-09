@@ -20,7 +20,10 @@ export async function isBootstrapMode(): Promise<boolean> {
   const accountId = await resolveAccountId()
   const responses = await jmapCall([['x:Domain/query', { accountId }, '0']])
   const [name, result] = firstResponse(responses)
-  if (name === 'error' && isBootstrapForbidden(result)) return true
+  if (name === 'error') {
+    if (isBootstrapForbidden(result)) return true
+    throw new JmapError('unexpected error probing bootstrap mode', result)
+  }
   return false
 }
 

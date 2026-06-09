@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type * as JmapModule from './jmap'
 
 vi.mock('./setup-flag', () => ({ isSetupComplete: vi.fn() }))
 vi.mock('./stalwart-bootstrap', () => ({ isBootstrapMode: vi.fn() }))
 vi.mock('./stalwart-domain', () => ({ getPrimaryDomain: vi.fn() }))
-vi.mock('./jmap', () => ({ jmapCall: vi.fn(), resolveAccountId: vi.fn(async () => 'd333333') }))
+vi.mock('./jmap', async (importActual) => ({
+  ...(await importActual<typeof JmapModule>()),
+  jmapCall: vi.fn(),
+  resolveAccountId: vi.fn(async () => 'd333333'),
+}))
 
 // eslint-disable-next-line import/first
 import { isSetupComplete } from './setup-flag'
@@ -75,5 +80,14 @@ describe('deriveSetupStep', () => {
     mj.mockResolvedValue(accounts([SYSTEM_ADMIN, { name: 'koffi' }]))
     dom.mockResolvedValue({ id: 'b', name: 'exemple.fr', dnsManagement: { '@type': 'Automatic' } })
     expect(await deriveSetupStep()).toBe('ssl')
+  })
+
+  it('propagates errors from the account query instead of forcing the account step', async () => {
+    flag.mockReturnValue(false)
+    mj.mockResolvedValue([
+      ['x:Account/query', { ids: ['0'] }, '0'],
+      ['error', { type: 'serverFail' }, '1'],
+    ])
+    await expect(deriveSetupStep()).rejects.toThrow()
   })
 })

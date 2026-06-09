@@ -30,6 +30,12 @@ describe('isBootstrapMode', () => {
     mf.mockReturnValue(false)
     expect(await isBootstrapMode()).toBe(false)
   })
+
+  it('throws when the probe returns a non-bootstrap error', async () => {
+    mj.mockResolvedValue([['error', { type: 'serverFail' }, '0']])
+    mf.mockReturnValue(false)
+    await expect(isBootstrapMode()).rejects.toThrow(/unexpected error/i)
+  })
 })
 
 describe('getBootstrap', () => {

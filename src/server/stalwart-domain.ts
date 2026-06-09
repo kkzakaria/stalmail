@@ -1,4 +1,4 @@
-import { jmapCall, resolveAccountId, firstResponse, JmapError } from './jmap'
+import { jmapCall, resolveAccountId, firstResponse, expectResult, JmapError } from './jmap'
 
 export interface StalwartDomain {
   id: string
@@ -24,7 +24,7 @@ export async function getPrimaryDomain(): Promise<StalwartDomain | null> {
       '1',
     ],
   ])
-  const list = (firstResponse(responses, 1)[1] as { list?: StalwartDomain[] }).list ?? []
+  const list = (expectResult(responses, 1) as { list?: StalwartDomain[] }).list ?? []
   return list[0] ?? null
 }
 

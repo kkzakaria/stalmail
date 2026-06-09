@@ -38,6 +38,14 @@ describe('getPrimaryDomain', () => {
     ])
     expect(await getPrimaryDomain()).toBeNull()
   })
+
+  it('throws when the domain get returns an error response', async () => {
+    mj.mockResolvedValue([
+      ['x:Domain/query', { ids: ['b'] }, '0'],
+      ['error', { type: 'serverFail' }, '1'],
+    ])
+    await expect(getPrimaryDomain()).rejects.toThrow()
+  })
 })
 
 describe('setDnsManagementAutomatic', () => {

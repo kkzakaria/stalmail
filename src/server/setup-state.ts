@@ -1,7 +1,7 @@
 import { isSetupComplete } from './setup-flag'
 import { isBootstrapMode } from './stalwart-bootstrap'
 import { getPrimaryDomain } from './stalwart-domain'
-import { jmapCall, resolveAccountId } from './jmap'
+import { jmapCall, resolveAccountId, expectResult } from './jmap'
 
 export type SetupStep = 'collect' | 'account' | 'dns' | 'ssl' | 'done'
 
@@ -30,8 +30,7 @@ async function hasUserAdminAccount(): Promise<boolean> {
       '1',
     ],
   ])
-  const get = responses.find((r) => r[0] === 'x:Account/get')
-  const list = (get?.[1] as { list?: AccountSummary[] } | undefined)?.list ?? []
+  const list = (expectResult(responses, 1) as { list?: AccountSummary[] }).list ?? []
   return list.some((a) => !isSystemAdmin(a))
 }
 

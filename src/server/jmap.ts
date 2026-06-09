@@ -59,13 +59,30 @@ export async function jmapCall(
   return body.methodResponses ?? []
 }
 
-/** Returns the response tuple at `index`, or throws JmapError if the response set is too short. */
 export function firstResponse(
   responses: JmapMethodResponse[],
   index = 0,
 ): JmapMethodResponse {
-  if (responses.length <= index) throw new JmapError('empty or truncated JMAP response')
+  if (!Number.isInteger(index) || index < 0 || index >= responses.length) {
+    throw new JmapError(`no JMAP response at index ${index}`)
+  }
   return responses[index]
+}
+
+// Returns the result payload of the response at `index`, throwing JmapError when
+// the slot is missing OR the response is a JMAP method-level error
+// (["error", {...}, id]). This prevents callers from mistaking a transient
+// backend error for an empty/normal result.
+export function expectResult(
+  responses: JmapMethodResponse[],
+  index = 0,
+): Record<string, unknown> {
+  const [name, result] = firstResponse(responses, index)
+  if (name === 'error') {
+    const type = (result as { type?: string }).type ?? 'unknown'
+    throw new JmapError(`JMAP method error: ${type}`, result)
+  }
+  return result
 }
 
 // test-only: reset the cached account id between tests if needed

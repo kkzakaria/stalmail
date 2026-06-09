@@ -4,7 +4,7 @@ const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
 // eslint-disable-next-line import/first
-import { jmapCall, resolveAccountId, isBootstrapForbidden, JmapError, _resetAccountIdCache, firstResponse } from './jmap'
+import { jmapCall, resolveAccountId, isBootstrapForbidden, JmapError, _resetAccountIdCache, firstResponse, expectResult } from './jmap'
 
 const okJson = (body: unknown) => ({ ok: true, json: async () => body })
 
@@ -83,6 +83,28 @@ describe('firstResponse', () => {
   })
   it('throws JmapError on an empty response set', () => {
     expect(() => firstResponse([])).toThrow(JmapError)
+  })
+  it('throws on a negative index', () => {
+    const r: [string, Record<string, unknown>, string] = ['x:Domain/get', {}, '0']
+    expect(() => firstResponse([r], -1)).toThrow(JmapError)
+  })
+  it('throws on a non-integer index', () => {
+    const r: [string, Record<string, unknown>, string] = ['x:Domain/get', {}, '0']
+    expect(() => firstResponse([r], 1.5)).toThrow(JmapError)
+  })
+})
+
+describe('expectResult', () => {
+  it('returns the result payload for a successful response', () => {
+    const r: [string, Record<string, unknown>, string] = ['x:Domain/get', { list: [] }, '0']
+    expect(expectResult([r])).toEqual({ list: [] })
+  })
+  it('throws JmapError when the response is a method-level error', () => {
+    const r: [string, Record<string, unknown>, string] = ['error', { type: 'serverFail' }, '0']
+    expect(() => expectResult([r])).toThrow(JmapError)
+  })
+  it('throws when the slot is missing', () => {
+    expect(() => expectResult([], 0)).toThrow(JmapError)
   })
 })
 
