@@ -25,7 +25,7 @@ COPY --from=caddy:2.9.1 /usr/bin/caddy /usr/local/bin/caddy
 COPY --from=stalwartlabs/stalwart:v0.16 /usr/local/bin/stalwart /usr/local/bin/stalwart
 
 # App buildée
-COPY --from=builder /app/.output /app
+COPY --from=builder /app/dist /app
 
 # Config
 COPY Caddyfile /etc/caddy/Caddyfile

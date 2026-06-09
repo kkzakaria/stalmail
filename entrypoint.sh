@@ -40,7 +40,7 @@ echo "[stalmail] Caddy ready"
 # Démarrer TanStack Start (BFF a besoin des credentials pour stalwartAdminFetch)
 echo "[stalmail] Starting app server..."
 STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
-  node /app/server.js &
+  node /app/server/server.js &
 APP_PID=$!
 
 # Tuer proprement tous les processus enfants
