@@ -20,10 +20,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Caddy
-RUN curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_amd64.tar.gz" \
-    | tar -xz -C /usr/local/bin caddy \
-    && chmod +x /usr/local/bin/caddy
+# Caddy (binaire depuis l'image officielle, même pattern que Stalwart)
+COPY --from=caddy:2.9.1 /usr/bin/caddy /usr/local/bin/caddy
 
 # Stalwart (binaire depuis l'image officielle)
 COPY --from=stalwartlabs/stalwart:v0.16 /usr/local/bin/stalwart /usr/local/bin/stalwart
@@ -42,6 +40,6 @@ VOLUME /var/lib/stalwart
 EXPOSE 443 80 25 587 465 993 143
 
 ENV NODE_ENV=production
-ENV STALMAIL_SECRET=""
+# STALMAIL_SECRET doit être fourni au runtime via -e — le container refuse de démarrer sans lui
 
 ENTRYPOINT ["/entrypoint.sh"]
