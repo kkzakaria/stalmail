@@ -7,6 +7,12 @@ set -euo pipefail
 # Dériver les credentials admin (uniquement si non fournis explicitement)
 _RECOVERY_ADMIN="${STALWART_RECOVERY_ADMIN:-stalmail-admin:${STALMAIL_SECRET}}"
 
+# Overridable for tests; production defaults below.
+STALWART_BIN="${STALWART_BIN:-/usr/local/bin/stalwart}"
+CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
+APP_CMD="${APP_CMD:-node /app/server/server.js}"
+HEALTHZ_URL="${HEALTHZ_URL:-http://localhost:8080/healthz/live}"
+
 # ── Stalwart (v0.16 bootstrap model) ─────────────────────────────
 # No --init / config.toml. On a blank /etc/stalwart the server enters
 # bootstrap mode automatically; the BFF drives setup and asks for a restart
@@ -19,7 +25,7 @@ mkdir -p "${RUN_DIR}"
 RESTART_SENTINEL="${RUN_DIR}/restart-stalwart"
 
 start_stalwart() {
-  /usr/local/bin/stalwart &
+  "${STALWART_BIN}" &
   STALWART_PID=$!
 }
 
@@ -52,7 +58,7 @@ SUPERVISOR_PID=$!
 # Attendre que Stalwart soit prêt (timeout 60 s)
 echo "[stalmail] Waiting for Stalwart..."
 _i=0
-until curl -sf http://localhost:8080/healthz/live > /dev/null 2>&1; do
+until curl -sf "${HEALTHZ_URL}" > /dev/null 2>&1; do
   _i=$((_i + 1))
   if [ "${_i}" -ge 60 ]; then
     echo "[stalmail] ERROR: Stalwart failed to start within 60 seconds" >&2
@@ -63,15 +69,16 @@ done
 echo "[stalmail] Stalwart ready"
 
 # Démarrer Caddy en arrière-plan (PID tracké pour wait -n)
-caddy run --config /etc/caddy/Caddyfile &
+"${CADDY_BIN}" run --config /etc/caddy/Caddyfile &
 CADDY_PID=$!
 echo "[stalmail] Caddy ready"
 
 # Démarrer TanStack Start (BFF a besoin des credentials pour stalwartAdminFetch)
 echo "[stalmail] Starting app server..."
+# shellcheck disable=SC2086
 STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
   STALMAIL_RUN_DIR="${RUN_DIR}" \
-  node /app/server/server.js &
+  ${APP_CMD} &
 APP_PID=$!
 
 # Tuer proprement tous les processus enfants
