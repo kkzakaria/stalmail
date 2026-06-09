@@ -7,6 +7,15 @@ vi.mock('./jmap', () => ({
   JmapError: class JmapError extends Error {
     constructor(message: string, readonly detail?: unknown) { super(message); this.name = 'JmapError' }
   },
+  firstResponse: vi.fn((responses: unknown[], index = 0) => {
+    const r = responses[index]
+    if (!r) {
+      const err = new Error('empty or truncated JMAP response')
+      err.name = 'JmapError'
+      throw err
+    }
+    return r
+  }),
 }))
 
 // eslint-disable-next-line import/first
@@ -39,6 +48,11 @@ describe('getBootstrap', () => {
       ['x:Bootstrap/get', { list: [{ id: 'singleton', defaultDomain: 'example.org' }] }, '0'],
     ])
     expect(await getBootstrap()).toEqual({ id: 'singleton', defaultDomain: 'example.org' })
+  })
+
+  it('throws when the singleton list is empty', async () => {
+    mj.mockResolvedValue([['x:Bootstrap/get', { list: [] }, '0']])
+    await expect(getBootstrap()).rejects.toThrow(/not found/i)
   })
 })
 

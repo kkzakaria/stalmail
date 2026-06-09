@@ -3,6 +3,7 @@ import {
   resolveAccountId,
   isBootstrapForbidden,
   JmapError,
+  firstResponse,
 } from './jmap'
 
 export interface BootstrapInput {
@@ -18,7 +19,7 @@ export interface GeneratedAdmin {
 export async function isBootstrapMode(): Promise<boolean> {
   const accountId = await resolveAccountId()
   const responses = await jmapCall([['x:Domain/query', { accountId }, '0']])
-  const [name, result] = responses[0]
+  const [name, result] = firstResponse(responses)
   if (name === 'error' && isBootstrapForbidden(result)) return true
   return false
 }
@@ -28,7 +29,7 @@ export async function getBootstrap(): Promise<Record<string, unknown>> {
   const responses = await jmapCall([
     ['x:Bootstrap/get', { accountId, ids: null }, '0'],
   ])
-  const result = responses[0][1] as { list?: Record<string, unknown>[] }
+  const result = firstResponse(responses)[1] as { list?: Record<string, unknown>[] }
   const obj = result.list?.[0]
   if (!obj) throw new JmapError('bootstrap singleton not found')
   return obj
@@ -57,7 +58,7 @@ export async function submitBootstrap(
       '0',
     ],
   ])
-  const result = responses[0][1] as {
+  const result = firstResponse(responses)[1] as {
     updated?: { singleton?: GeneratedAdmin }
     notUpdated?: unknown
   }

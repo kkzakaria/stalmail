@@ -4,7 +4,7 @@ const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
 // eslint-disable-next-line import/first
-import { jmapCall, resolveAccountId, isBootstrapForbidden, JmapError, _resetAccountIdCache } from './jmap'
+import { jmapCall, resolveAccountId, isBootstrapForbidden, JmapError, _resetAccountIdCache, firstResponse } from './jmap'
 
 const okJson = (body: unknown) => ({ ok: true, json: async () => body })
 
@@ -73,6 +73,16 @@ describe('jmapCall', () => {
   it('throws JmapError when an HTTP error occurs', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) })
     await expect(jmapCall([['x:Bootstrap/get', {}, '0']])).rejects.toBeInstanceOf(JmapError)
+  })
+})
+
+describe('firstResponse', () => {
+  it('returns the tuple at the given index', () => {
+    const r: [string, Record<string, unknown>, string] = ['x:Domain/get', { list: [] }, '0']
+    expect(firstResponse([r])).toBe(r)
+  })
+  it('throws JmapError on an empty response set', () => {
+    expect(() => firstResponse([])).toThrow(JmapError)
   })
 })
 

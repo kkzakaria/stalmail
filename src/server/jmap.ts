@@ -59,6 +59,15 @@ export async function jmapCall(
   return body.methodResponses ?? []
 }
 
+/** Returns the response tuple at `index`, or throws JmapError if the response set is too short. */
+export function firstResponse(
+  responses: JmapMethodResponse[],
+  index = 0,
+): JmapMethodResponse {
+  if (responses.length <= index) throw new JmapError('empty or truncated JMAP response')
+  return responses[index]
+}
+
 // test-only: reset the cached account id between tests if needed
 export function _resetAccountIdCache(): void {
   cachedAccountId = undefined
