@@ -13,9 +13,14 @@ export default defineConfig({
       {
         test: {
           name: 'client',
-          include: ['src/routes/**/*.test.tsx', 'src/components/**/*.test.tsx'],
+          include: [
+            'src/routes/**/*.test.{ts,tsx}',
+            'src/components/**/*.test.{ts,tsx}',
+            'src/i18n/**/*.test.{ts,tsx}',
+          ],
           environment: 'jsdom',
           globals: true,
+          setupFiles: ['./src/test-setup.ts'],
         },
       },
     ],
