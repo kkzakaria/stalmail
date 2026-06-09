@@ -7,6 +7,25 @@
 
 * Plan 2a — Setup Wizard backend (Stalwart v0.16 bootstrap) ([#8](https://github.com/kkzakaria/stalmail/issues/8)) ([4947bdb](https://github.com/kkzakaria/stalmail/commit/4947bdbc444999dc5e938d2e8f02dd6e28ccdc3d))
 
+  Backend pilotant un Stalwart v0.16 neuf à travers le premier démarrage
+  (bootstrap → redémarrage → mode normal), exposé en server functions TanStack,
+  sans UI (la UI est le Plan 2b). Fondé sur un repérage empirique de l'API JMAP
+  management v0.16. Inclus :
+  - **Transport JMAP management** (`urn:stalwart:jmap`, `POST /jmap/`) avec
+    `accountId` mémoïsé et helpers `firstResponse` / `expectResult` (les erreurs
+    JMAP sont remontées, jamais confondues avec un résultat vide).
+  - **Bootstrap** : détection du mode, lecture/soumission de l'objet `Bootstrap`,
+    déclenchement du redémarrage Stalwart via fichier sentinel.
+  - **Compte admin** (`x:Account`, variante User + rôle Admin) avec gestion de la
+    validation de force du mot de passe côté serveur.
+  - **Domaine** : `dnsManagement` automatique, liste des 70 providers DNS réels,
+    parsing du `dnsZoneFile`.
+  - **Vérification DNS côté BFF** (TXT/MX/SRV/CAA) pour la grille par-record, et
+    **dérivation de l'étape** du wizard depuis l'état réel Stalwart.
+  - **Entrypoint** corrigé pour le modèle bootstrap v0.16 (plus de `--init`) +
+    superviseur Stalwart (redémarrage par sentinel, arrêt borné TERM→KILL).
+  - Couverture : 82 tests unitaires + test d'intégration du superviseur.
+
 ## [0.1.2](https://github.com/kkzakaria/stalmail/compare/v0.1.1...v0.1.2) (2026-06-09)
 
 
