@@ -11,9 +11,8 @@ const checkSetup = createServerFn({ method: 'GET' }).handler(getSetupStatus)
 export const Route = createFileRoute('/')({
   loader: async () => {
     const { configured } = await checkSetup()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // Routes /setup and /mail/inbox are created in Task 5; cast until then
     if (!configured) throw redirect({ to: '/setup' as any })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     throw redirect({ to: '/mail/inbox' as any })
   },
   component: () => null,
