@@ -6,23 +6,71 @@ set -euo pipefail
 
 # Dériver les credentials admin (uniquement si non fournis explicitement)
 _RECOVERY_ADMIN="${STALWART_RECOVERY_ADMIN:-stalmail-admin:${STALMAIL_SECRET}}"
-STALWART_URL="http://localhost:8080"
 
-# Initialiser la config Stalwart au premier démarrage
-if [ ! -f /etc/stalwart/config.toml ]; then
-  echo "[stalmail] First boot: initializing Stalwart config..."
-  /usr/local/bin/stalwart --init /etc/stalwart
-fi
+# Overridable for tests; production defaults below.
+STALWART_BIN="${STALWART_BIN:-/usr/local/bin/stalwart}"
+CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
+APP_CMD="${APP_CMD:-node /app/server/server.js}"
+HEALTHZ_URL="${HEALTHZ_URL:-http://localhost:8080/healthz/live}"
 
-# Démarrer Stalwart en arrière-plan (credentials passés uniquement à ce process)
-STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
-  /usr/local/bin/stalwart --config /etc/stalwart/config.toml &
-STALWART_PID=$!
+# ── Stalwart (v0.16 bootstrap model) ─────────────────────────────
+# No --init / config.toml. On a blank /etc/stalwart the server enters
+# bootstrap mode automatically; the BFF drives setup and asks for a restart
+# via the sentinel below to switch into normal mode.
+export STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}"
+export STALWART_URL="http://localhost:8080"
+
+RUN_DIR="${STALMAIL_RUN_DIR:-/run/stalmail}"
+mkdir -p "${RUN_DIR}"
+RESTART_SENTINEL="${RUN_DIR}/restart-stalwart"
+
+# Terminate a PID: send TERM, wait up to ~5s for it to exit, then KILL. Bounded
+# so a child that ignores TERM cannot hang restart or shutdown.
+term_wait_kill() {
+  local pid="$1" i
+  kill -TERM "${pid}" 2>/dev/null || true
+  for i in $(seq 1 10); do
+    kill -0 "${pid}" 2>/dev/null || return 0
+    sleep 0.5
+  done
+  kill -KILL "${pid}" 2>/dev/null || true
+}
+
+start_stalwart() {
+  "${STALWART_BIN}" &
+  STALWART_PID=$!
+}
+
+# Supervisor: (re)start Stalwart for the life of the container. A restart is
+# requested by the BFF touching ${RESTART_SENTINEL} (after the Bootstrap submit).
+supervise_stalwart() {
+  trap 'kill "${STALWART_PID}" 2>/dev/null || true; exit 0' TERM
+  start_stalwart
+  while true; do
+    if [ -f "${RESTART_SENTINEL}" ]; then
+      rm -f "${RESTART_SENTINEL}"
+      echo "[stalmail] Restart requested — restarting Stalwart into normal mode..."
+      term_wait_kill "${STALWART_PID}"
+      wait "${STALWART_PID}" 2>/dev/null || true
+      start_stalwart
+    fi
+    # If Stalwart died on its own (crash), exit the supervisor so the container
+    # restarts under Docker's restart policy.
+    if ! kill -0 "${STALWART_PID}" 2>/dev/null; then
+      echo "[stalmail] Stalwart exited unexpectedly" >&2
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+supervise_stalwart &
+SUPERVISOR_PID=$!
 
 # Attendre que Stalwart soit prêt (timeout 60 s)
 echo "[stalmail] Waiting for Stalwart..."
 _i=0
-until curl -sf http://localhost:8080/healthz/live > /dev/null 2>&1; do
+until curl -sf "${HEALTHZ_URL}" > /dev/null 2>&1; do
   _i=$((_i + 1))
   if [ "${_i}" -ge 60 ]; then
     echo "[stalmail] ERROR: Stalwart failed to start within 60 seconds" >&2
@@ -33,28 +81,32 @@ done
 echo "[stalmail] Stalwart ready"
 
 # Démarrer Caddy en arrière-plan (PID tracké pour wait -n)
-caddy run --config /etc/caddy/Caddyfile &
+"${CADDY_BIN}" run --config /etc/caddy/Caddyfile &
 CADDY_PID=$!
 echo "[stalmail] Caddy ready"
 
 # Démarrer TanStack Start (BFF a besoin des credentials pour stalwartAdminFetch)
 echo "[stalmail] Starting app server..."
+# shellcheck disable=SC2086
 STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
-  node /app/server/server.js &
+  STALMAIL_RUN_DIR="${RUN_DIR}" \
+  ${APP_CMD} &
 APP_PID=$!
 
 # Tuer proprement tous les processus enfants
 cleanup() {
   echo "[stalmail] Shutting down..."
-  kill "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
-  wait "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
+  term_wait_kill "${SUPERVISOR_PID}"
+  term_wait_kill "${CADDY_PID}"
+  term_wait_kill "${APP_PID}"
+  wait "${SUPERVISOR_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
 }
 # EXIT couvre les sorties inattendues dues à set -e (ex: crash d'un enfant)
 trap cleanup EXIT SIGTERM SIGINT
 
 # wait -n disponible depuis bash 4.3 (debian bookworm : bash 5.2)
 # &&/|| pour capturer l'exit code sans déclencher set -e
-wait -n "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null && EXIT_CODE=$? || EXIT_CODE=$?
+wait -n "${SUPERVISOR_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null && EXIT_CODE=$? || EXIT_CODE=$?
 trap - EXIT   # éviter double-appel de cleanup au exit suivant
 cleanup
 exit "${EXIT_CODE}"

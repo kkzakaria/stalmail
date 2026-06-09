@@ -1,0 +1,130 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { resolveRecordStatus } from './dns-resolve'
+
+const resolveTxt = vi.fn()
+const resolveMx = vi.fn()
+const resolveSrv = vi.fn()
+const resolveCaa = vi.fn()
+vi.mock('node:dns/promises', () => ({
+  resolveTxt: (...a: unknown[]) => resolveTxt(...a),
+  resolveMx: (...a: unknown[]) => resolveMx(...a),
+  resolveSrv: (...a: unknown[]) => resolveSrv(...a),
+  resolveCaa: (...a: unknown[]) => resolveCaa(...a),
+}))
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('resolveRecordStatus', () => {
+  it('returns "verified" when a TXT record matches the expected value', async () => {
+    resolveTxt.mockResolvedValue([['v=spf1 mx -all']])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'TXT', value: 'v=spf1 mx -all' })
+    expect(s).toBe('verified')
+  })
+
+  it('returns "mismatch" when a TXT record exists with a different value', async () => {
+    resolveTxt.mockResolvedValue([['v=spf1 -all']])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'TXT', value: 'v=spf1 mx -all' })
+    expect(s).toBe('mismatch')
+  })
+
+  it('returns "missing" when resolution finds nothing (NXDOMAIN/ENODATA)', async () => {
+    resolveTxt.mockRejectedValue(Object.assign(new Error('not found'), { code: 'ENOTFOUND' }))
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'TXT', value: 'v=spf1 mx -all' })
+    expect(s).toBe('missing')
+  })
+
+  it('verifies MX records by host and priority', async () => {
+    resolveMx.mockResolvedValue([{ exchange: 'mail.exemple.fr', priority: 10 }])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'MX', value: '10 mail.exemple.fr.' })
+    expect(s).toBe('verified')
+  })
+
+  it('joins multi-chunk TXT before comparing', async () => {
+    resolveTxt.mockResolvedValue([['v=spf1', ' mx', ' -all']])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'TXT', value: 'v=spf1 mx -all' })
+    expect(s).toBe('verified')
+  })
+
+  it('returns "missing" when TXT resolves to an empty list', async () => {
+    resolveTxt.mockResolvedValue([])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'TXT', value: 'v=spf1 mx -all' })
+    expect(s).toBe('missing')
+  })
+
+  it('treats ENODATA as "missing"', async () => {
+    resolveTxt.mockRejectedValue(Object.assign(new Error('no data'), { code: 'ENODATA' }))
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'TXT', value: 'x' })
+    expect(s).toBe('missing')
+  })
+
+  it('rethrows unexpected resolver errors (e.g. ETIMEDOUT)', async () => {
+    resolveTxt.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }))
+    await expect(
+      resolveRecordStatus({ name: 'exemple.fr.', type: 'TXT', value: 'x' }),
+    ).rejects.toThrow(/timeout/i)
+  })
+
+  it('returns "mismatch" for an MX with a different host', async () => {
+    resolveMx.mockResolvedValue([{ exchange: 'other.exemple.fr', priority: 10 }])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'MX', value: '10 mail.exemple.fr.' })
+    expect(s).toBe('mismatch')
+  })
+
+  it('returns "missing" for an MX with no records', async () => {
+    resolveMx.mockResolvedValue([])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'MX', value: '10 mail.exemple.fr.' })
+    expect(s).toBe('missing')
+  })
+
+  it('returns "unsupported" for record types other than TXT/MX', async () => {
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'A', value: '203.0.113.1' })
+    expect(s).toBe('unsupported')
+  })
+
+  it('verifies MX even when the expected priority has a leading zero', async () => {
+    resolveMx.mockResolvedValue([{ exchange: 'mail.exemple.fr', priority: 10 }])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'MX', value: '010 mail.exemple.fr.' })
+    expect(s).toBe('verified')
+  })
+
+  it('verifies an SRV record by priority/weight/port/target', async () => {
+    resolveSrv.mockResolvedValue([{ priority: 0, weight: 1, port: 993, name: 'mail.exemple.fr' }])
+    const s = await resolveRecordStatus({ name: '_imaps._tcp.exemple.fr.', type: 'SRV', value: '0 1 993 mail.exemple.fr.' })
+    expect(s).toBe('verified')
+  })
+
+  it('returns "mismatch" for an SRV with a different port', async () => {
+    resolveSrv.mockResolvedValue([{ priority: 0, weight: 1, port: 143, name: 'mail.exemple.fr' }])
+    const s = await resolveRecordStatus({ name: '_imaps._tcp.exemple.fr.', type: 'SRV', value: '0 1 993 mail.exemple.fr.' })
+    expect(s).toBe('mismatch')
+  })
+
+  it('returns "missing" for an SRV with no records', async () => {
+    resolveSrv.mockResolvedValue([])
+    const s = await resolveRecordStatus({ name: '_imaps._tcp.exemple.fr.', type: 'SRV', value: '0 1 993 mail.exemple.fr.' })
+    expect(s).toBe('missing')
+  })
+
+  it('verifies a CAA issue record', async () => {
+    resolveCaa.mockResolvedValue([{ critical: 0, issue: 'letsencrypt.org' }])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: '0 issue "letsencrypt.org"' })
+    expect(s).toBe('verified')
+  })
+
+  it('returns "mismatch" for a CAA with a different issuer', async () => {
+    resolveCaa.mockResolvedValue([{ critical: 0, issue: 'example-ca.org' }])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: '0 issue "letsencrypt.org"' })
+    expect(s).toBe('mismatch')
+  })
+
+  it('returns "missing" for a CAA with no records', async () => {
+    resolveCaa.mockResolvedValue([])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: '0 issue "letsencrypt.org"' })
+    expect(s).toBe('missing')
+  })
+
+  it('returns "unsupported" for an unparseable CAA rdata', async () => {
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: 'garbage' })
+    expect(s).toBe('unsupported')
+  })
+})
