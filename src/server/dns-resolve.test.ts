@@ -3,9 +3,13 @@ import { resolveRecordStatus } from './dns-resolve'
 
 const resolveTxt = vi.fn()
 const resolveMx = vi.fn()
+const resolveSrv = vi.fn()
+const resolveCaa = vi.fn()
 vi.mock('node:dns/promises', () => ({
   resolveTxt: (...a: unknown[]) => resolveTxt(...a),
   resolveMx: (...a: unknown[]) => resolveMx(...a),
+  resolveSrv: (...a: unknown[]) => resolveSrv(...a),
+  resolveCaa: (...a: unknown[]) => resolveCaa(...a),
 }))
 
 beforeEach(() => vi.clearAllMocks())
@@ -81,5 +85,46 @@ describe('resolveRecordStatus', () => {
     resolveMx.mockResolvedValue([{ exchange: 'mail.exemple.fr', priority: 10 }])
     const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'MX', value: '010 mail.exemple.fr.' })
     expect(s).toBe('verified')
+  })
+
+  it('verifies an SRV record by priority/weight/port/target', async () => {
+    resolveSrv.mockResolvedValue([{ priority: 0, weight: 1, port: 993, name: 'mail.exemple.fr' }])
+    const s = await resolveRecordStatus({ name: '_imaps._tcp.exemple.fr.', type: 'SRV', value: '0 1 993 mail.exemple.fr.' })
+    expect(s).toBe('verified')
+  })
+
+  it('returns "mismatch" for an SRV with a different port', async () => {
+    resolveSrv.mockResolvedValue([{ priority: 0, weight: 1, port: 143, name: 'mail.exemple.fr' }])
+    const s = await resolveRecordStatus({ name: '_imaps._tcp.exemple.fr.', type: 'SRV', value: '0 1 993 mail.exemple.fr.' })
+    expect(s).toBe('mismatch')
+  })
+
+  it('returns "missing" for an SRV with no records', async () => {
+    resolveSrv.mockResolvedValue([])
+    const s = await resolveRecordStatus({ name: '_imaps._tcp.exemple.fr.', type: 'SRV', value: '0 1 993 mail.exemple.fr.' })
+    expect(s).toBe('missing')
+  })
+
+  it('verifies a CAA issue record', async () => {
+    resolveCaa.mockResolvedValue([{ critical: 0, issue: 'letsencrypt.org' }])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: '0 issue "letsencrypt.org"' })
+    expect(s).toBe('verified')
+  })
+
+  it('returns "mismatch" for a CAA with a different issuer', async () => {
+    resolveCaa.mockResolvedValue([{ critical: 0, issue: 'example-ca.org' }])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: '0 issue "letsencrypt.org"' })
+    expect(s).toBe('mismatch')
+  })
+
+  it('returns "missing" for a CAA with no records', async () => {
+    resolveCaa.mockResolvedValue([])
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: '0 issue "letsencrypt.org"' })
+    expect(s).toBe('missing')
+  })
+
+  it('returns "unsupported" for an unparseable CAA rdata', async () => {
+    const s = await resolveRecordStatus({ name: 'exemple.fr.', type: 'CAA', value: 'garbage' })
+    expect(s).toBe('unsupported')
   })
 })

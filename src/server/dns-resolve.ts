@@ -1,4 +1,4 @@
-import { resolveTxt, resolveMx } from 'node:dns/promises'
+import { resolveTxt, resolveMx, resolveSrv, resolveCaa } from 'node:dns/promises'
 import type { ZoneRecord } from './dns-zone'
 
 export type RecordStatus = 'verified' | 'mismatch' | 'missing' | 'unsupported'
@@ -22,6 +22,28 @@ export async function resolveRecordStatus(record: ZoneRecord): Promise<RecordSta
         (r) => stripDot(r.exchange) === stripDot(exchange) && Number(r.priority) === Number(prio),
       )
       return found ? 'verified' : mx.length ? 'mismatch' : 'missing'
+    }
+    if (record.type === 'SRV') {
+      // zone rdata: "<priority> <weight> <port> <target>"
+      const [prio, weight, port, target] = record.value.split(/\s+/)
+      const srv = await resolveSrv(host)
+      const found = srv.some(
+        (r) =>
+          Number(r.priority) === Number(prio) &&
+          Number(r.weight) === Number(weight) &&
+          Number(r.port) === Number(port) &&
+          stripDot(r.name) === stripDot(target),
+      )
+      return found ? 'verified' : srv.length ? 'mismatch' : 'missing'
+    }
+    if (record.type === 'CAA') {
+      // zone rdata: '<flags> <tag> "<value>"' e.g. '0 issue "letsencrypt.org"'
+      const m = record.value.match(/^\d+\s+(\w+)\s+"?([^"]*)"?\s*$/)
+      if (!m) return 'unsupported'
+      const [, tag, value] = m
+      const caa = await resolveCaa(host)
+      const found = caa.some((r) => (r as unknown as Record<string, unknown>)[tag] === value)
+      return found ? 'verified' : caa.length ? 'mismatch' : 'missing'
     }
     return 'unsupported'
   } catch (e) {
