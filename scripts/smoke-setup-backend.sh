@@ -15,22 +15,29 @@ docker run -d --name "$NAME" -e STALWART_RECOVERY_ADMIN="$SECRET" -p ${PORT}:808
 AUTH=$(printf '%s' "$SECRET" | base64)
 J() { curl -s -m 12 -X POST -H "Authorization: Basic $AUTH" -H 'Content-Type: application/json' -d "$1" http://localhost:${PORT}/jmap/; }
 
-until curl -sf http://localhost:${PORT}/healthz/live >/dev/null 2>&1; do sleep 1; done
+WAIT=0
+until curl -sf http://localhost:${PORT}/healthz/live >/dev/null 2>&1; do
+  sleep 1; WAIT=$((WAIT+1)); [ $WAIT -lt 60 ] || { echo "FAIL (healthz timeout)"; exit 1; }
+done
 echo "1. bootstrap mode reached:"; docker logs "$NAME" 2>&1 | grep -q 'bootstrap mode' && echo "   OK" || { echo "   FAIL (no 'bootstrap mode' in logs)"; exit 1; }
 
 echo "2. submit bootstrap:"
+# accountId "d333333" is Stalwart v0.16's fixed bootstrap singleton account id (NOT a domain id)
 J '{"using":["urn:stalwart:jmap"],"methodCalls":[["x:Bootstrap/set",{"accountId":"d333333","update":{"singleton":{"serverHostname":"mail.smoke.test","defaultDomain":"smoke.test","requestTlsCertificate":false,"generateDkimKeys":true,"directory":{"@type":"Internal"},"dnsServer":{"@type":"Manual"}}}},"0"]]}' | grep -q '"username":"admin@smoke.test"' && echo "   OK (admin generated)" || { echo "   FAIL (no admin@smoke.test in bootstrap response)"; exit 1; }
 
-echo "3. restart -> normal mode:"; docker restart "$NAME" >/dev/null; sleep 8
-until curl -sf http://localhost:${PORT}/healthz/live >/dev/null 2>&1; do sleep 1; done
+echo "3. restart -> normal mode:"; docker restart "$NAME" >/dev/null; sleep 2
+WAIT=0
+until curl -sf http://localhost:${PORT}/healthz/live >/dev/null 2>&1; do
+  sleep 1; WAIT=$((WAIT+1)); [ $WAIT -lt 60 ] || { echo "FAIL (healthz timeout)"; exit 1; }
+done
 DOMAIN=$(J '{"using":["urn:stalwart:jmap"],"methodCalls":[["x:Domain/query",{"accountId":"d333333"},"0"],["x:Domain/get",{"accountId":"d333333","#ids":{"resultOf":"0","name":"x:Domain/query","path":"/ids"}},"1"]]}')
 echo "$DOMAIN" | grep -q '"name":"smoke.test"' && echo "   OK (domain present in normal mode)" || { echo "   FAIL (smoke.test domain not found)"; exit 1; }
 echo "$DOMAIN" | grep -q 'dnsZoneFile' && echo "   OK (dnsZoneFile exposed)" || { echo "   FAIL (dnsZoneFile not found)"; exit 1; }
 
 # Extract the real domain id from the x:Domain/query ids array (e.g. "ids":["b"])
-DOMAIN_ID=$(printf '%s' "$DOMAIN" | grep -o '"ids":\["[^"]*"' | sed 's/"ids":\["\([^"]*\)"/\1/' | head -1)
+DOMAIN_ID=$(printf '%s' "$DOMAIN" | grep -o '"ids":\["[^"]*"' | sed 's/"ids":\["\([^"]*\)"/\1/' | head -1 || true)
 if [ -z "$DOMAIN_ID" ]; then
-  echo "   FAIL (could not extract domain id)"; exit 1
+  echo "   FAIL (could not extract domain id from: $DOMAIN)"; exit 1
 fi
 echo "   domain id extracted: $DOMAIN_ID"
 
