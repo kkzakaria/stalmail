@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockFetch = vi.fn()
-// eslint-disable-next-line import/first
 vi.stubGlobal('fetch', mockFetch)
 
 // eslint-disable-next-line import/first
