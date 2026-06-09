@@ -83,6 +83,8 @@ make_longlived_stub "${TMP}/app"
 set -m
 STALMAIL_SECRET=test \
 STALWART_BIN="${TMP}/stalwart" \
+STALWART_DATA_DIR="${TMP}" \
+STALWART_CONFIG="${TMP}/config.json" \
 CADDY_BIN="${TMP}/caddy" \
 APP_CMD="${TMP}/app" \
 HEALTHZ_URL="http://127.0.0.1:${PORT}/healthz" \

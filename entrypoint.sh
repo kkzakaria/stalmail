@@ -12,6 +12,11 @@ STALWART_BIN="${STALWART_BIN:-/usr/local/bin/stalwart}"
 CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
 APP_CMD="${APP_CMD:-node /app/server/server.js}"
 HEALTHZ_URL="${HEALTHZ_URL:-http://localhost:8080/healthz/live}"
+# Stalwart invocation matches the official image: `stalwart --config <path>` run from
+# the data dir. On a blank config path the server enters bootstrap mode. (Invoking the
+# binary bare prints usage and exits — the bug the stub test could not catch.)
+STALWART_CONFIG="${STALWART_CONFIG:-/etc/stalwart/config.json}"
+STALWART_DATA_DIR="${STALWART_DATA_DIR:-/var/lib/stalwart}"
 
 # ── Stalwart (v0.16 bootstrap model) ─────────────────────────────
 # No --init / config.toml. On a blank /etc/stalwart the server enters
@@ -37,7 +42,10 @@ term_wait_kill() {
 }
 
 start_stalwart() {
-  "${STALWART_BIN}" &
+  # Subshell cd so Stalwart runs from its data dir (like the official image's WORKDIR)
+  # without changing the parent shell's cwd (the dev APP_CMD needs cwd=/app). exec keeps
+  # the subshell PID, so STALWART_PID tracks the real process for restart/shutdown.
+  ( cd "${STALWART_DATA_DIR}" && exec "${STALWART_BIN}" --config "${STALWART_CONFIG}" ) &
   STALWART_PID=$!
 }
 

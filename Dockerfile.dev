@@ -1,0 +1,29 @@
+# Dev image — bun runtime + Stalwart/Caddy binaries. The repo source is bind-mounted
+# at runtime (see compose.dev.yml) so Vite HMR works against live files. The container
+# runs entrypoint_dev.sh, which execs the production entrypoint.sh with APP_CMD set to
+# the dev server — exercising the real orchestration during development.
+#
+# No apt-get: oven/bun bundles its own TLS CA store (so `bun install` works), `curl`
+# is provided as a tiny bun-fetch shim for entrypoint.sh's healthcheck, and the system
+# CA bundle is copied from the (cached) caddy image. This avoids a slow, OOM-prone
+# apt layer in this WSL2 environment.
+FROM oven/bun:1
+
+# System CA bundle (Caddy/Stalwart TLS) from a cached image — no network needed.
+COPY --from=caddy:2.9.1 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Same binaries as the production image, from their official images.
+COPY --from=caddy:2.9.1 /usr/bin/caddy /usr/local/bin/caddy
+COPY --from=stalwartlabs/stalwart:v0.16 /usr/local/bin/stalwart /usr/local/bin/stalwart
+
+# Caddy config, both entrypoints (dev execs prod), and the curl shim.
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY entrypoint.sh /entrypoint.sh
+COPY entrypoint_dev.sh /entrypoint_dev.sh
+COPY dev-curl-shim.sh /usr/local/bin/curl
+RUN chmod +x /entrypoint.sh /entrypoint_dev.sh /usr/local/bin/curl
+
+# Runs as root (dev only): root binds :80/:443 without setcap, and can write the
+# bootstrap volumes + /run/stalmail. Production runs non-root with setcap instead.
+WORKDIR /app
+ENTRYPOINT ["/entrypoint_dev.sh"]

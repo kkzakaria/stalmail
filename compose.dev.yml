@@ -1,0 +1,32 @@
+# Dev stack — runs the app THROUGH the production orchestration (entrypoint.sh) with
+# Vite/HMR. Fresh Stalwart volumes mean it boots in bootstrap mode, so the setup wizard
+# runs end to end — INCLUDING the bootstrap→normal restart, because the in-container
+# supervisor acts on the restart sentinel (a plain Stalwart container cannot).
+#
+# Usage:
+#   docker compose -f compose.dev.yml up --build      # start (HMR on live source)
+#   docker compose -f compose.dev.yml down            # stop (keep bootstrap state)
+#   docker compose -f compose.dev.yml down -v         # stop + wipe → fresh bootstrap
+# Then open https://localhost (Caddy tls internal → self-signed; accept the warning).
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: stalmail-dev
+    ports:
+      - "443:443" # Caddy → Vite (https://localhost) — the D1 path
+      - "80:80" # Caddy → https redirect
+      - "3000:3000" # Vite direct (http://localhost:3000) — friction-free dev access
+    environment:
+      STALMAIL_SECRET: dev-insecure-secret
+    volumes:
+      - .:/app # live source (HMR)
+      - stalmail-dev-modules:/app/node_modules # container-native deps (shadow host's)
+      - stalmail-dev-etc:/etc/stalwart # fresh → Stalwart bootstrap mode
+      - stalmail-dev-data:/var/lib/stalwart
+
+volumes:
+  stalmail-dev-modules:
+  stalmail-dev-etc:
+  stalmail-dev-data:

@@ -1,6 +1,8 @@
 :443 {
   tls internal
-  reverse_proxy localhost:3000
+  # Explicit IPv4 loopback (not "localhost") so the upstream never resolves to ::1
+  # while the app binds 0.0.0.0 — the mismatch otherwise yields a 502.
+  reverse_proxy 127.0.0.1:3000
 }
 
 :80 {
