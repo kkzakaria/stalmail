@@ -31,6 +31,18 @@ describe('resolveAccountId', () => {
     mockFetch.mockResolvedValue(okJson({ primaryAccounts: {} }))
     await expect(resolveAccountId()).rejects.toThrow(/management account/i)
   })
+
+  it('returns the cached value on a second call (no second fetch)', async () => {
+    mockFetch.mockResolvedValue(okJson({ primaryAccounts: { 'urn:stalwart:jmap': 'd333333' } }))
+    await resolveAccountId()
+    await resolveAccountId()
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws when the session endpoint returns an HTTP error', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) })
+    await expect(resolveAccountId()).rejects.toBeInstanceOf(JmapError)
+  })
 })
 
 describe('jmapCall', () => {

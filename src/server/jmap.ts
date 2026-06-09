@@ -15,7 +15,7 @@ export class JmapError extends Error {
   }
 }
 
-export interface JmapErrorBody {
+interface JmapErrorBody {
   type: string
   description?: string
 }
@@ -26,19 +26,25 @@ export function isBootstrapForbidden(err: unknown): boolean {
   return e.type === 'forbidden' && /bootstrap mode/i.test(e.description ?? '')
 }
 
-let cachedAccountId: string | undefined
+let cachedAccountId: Promise<string> | undefined
 
-export async function resolveAccountId(force = false): Promise<string> {
-  if (cachedAccountId && !force) return cachedAccountId
-  const res = await stalwartAdminFetch('/jmap/session', { method: 'GET' })
-  if (!res.ok) throw new JmapError(`session request failed: HTTP ${res.status}`)
-  const session = (await res.json()) as {
-    primaryAccounts?: Record<string, string>
-  }
-  const id = session.primaryAccounts?.[MANAGEMENT_CAPABILITY]
-  if (!id) throw new JmapError('no management account in session')
-  cachedAccountId = id
-  return id
+export function resolveAccountId(force = false): Promise<string> {
+  if (force) cachedAccountId = undefined
+  if (cachedAccountId) return cachedAccountId
+  const pending = (async () => {
+    const res = await stalwartAdminFetch('/jmap/session', { method: 'GET' })
+    if (!res.ok) throw new JmapError(`session request failed: HTTP ${res.status}`)
+    const session = (await res.json()) as { primaryAccounts?: Record<string, string> }
+    const id = session.primaryAccounts?.[MANAGEMENT_CAPABILITY]
+    if (!id) throw new JmapError('no management account in session')
+    return id
+  })()
+  // On rejection, evict so the next caller retries instead of getting a rejected cache.
+  pending.catch(() => {
+    if (cachedAccountId === pending) cachedAccountId = undefined
+  })
+  cachedAccountId = pending
+  return cachedAccountId
 }
 
 export async function jmapCall(
@@ -57,3 +63,4 @@ export async function jmapCall(
 export function _resetAccountIdCache(): void {
   cachedAccountId = undefined
 }
+
