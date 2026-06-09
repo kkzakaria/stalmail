@@ -26,6 +26,7 @@ start_stalwart() {
 # Supervisor: (re)start Stalwart for the life of the container. A restart is
 # requested by the BFF touching ${RESTART_SENTINEL} (after the Bootstrap submit).
 supervise_stalwart() {
+  trap 'kill "${STALWART_PID}" 2>/dev/null || true; exit 0' TERM
   start_stalwart
   while true; do
     if [ -f "${RESTART_SENTINEL}" ]; then
@@ -76,7 +77,7 @@ APP_PID=$!
 # Tuer proprement tous les processus enfants
 cleanup() {
   echo "[stalmail] Shutting down..."
-  kill "${SUPERVISOR_PID}" "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
+  kill "${SUPERVISOR_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
   wait "${SUPERVISOR_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
 }
 # EXIT couvre les sorties inattendues dues à set -e (ex: crash d'un enfant)
