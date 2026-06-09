@@ -63,6 +63,15 @@ rôle `Admin`), pendant la phase monitoring.
 - Post-wizard (Plan 3), les appels passeront par le token OAuth de l'utilisateur
   admin ; le credential de bootstrap n'est plus sollicité.
 
+**⚠ Durcissement à prévoir (post-setup, hors Plan 2a).** Comme `STALWART_RECOVERY_ADMIN`
+reste défini pendant toute la vie du container, l'endpoint management privilégié sur
+`:8080` demeure joignable indéfiniment — c'est un credential permanent. La doc Stalwart
+recommande de **désactiver le listener HTTP / le recovery admin une fois le setup
+terminé**. À câbler dans l'étape « Terminé » (Plan 2b) : après `markSetupComplete()`,
+le BFF déclenche la désactivation (et/ou l'entrypoint cesse d'exporter le credential au
+prochain démarrage une fois le flag `.stalmail-configured` présent). Tracé ici pour ne
+pas l'oublier ; non implémenté en 2a car l'étape de finalisation vit en 2b.
+
 ## 4. Correction de l'entrypoint (inclus dans ce plan)
 
 L'`entrypoint.sh` actuel (Plan 1) utilise un modèle **pré-0.16** incompatible :
