@@ -11,8 +11,8 @@ const checkSetup = createServerFn({ method: 'GET' }).handler(getSetupStatus)
 export const Route = createFileRoute('/')({
   loader: async () => {
     const { configured } = await checkSetup()
-    if (!configured) throw redirect({ to: '/setup' as any })
-    throw redirect({ to: '/mail/inbox' as any })
+    if (!configured) throw redirect({ to: '/setup' })
+    throw redirect({ to: '/mail/$folder', params: { folder: 'inbox' } })
   },
   component: () => null,
 })

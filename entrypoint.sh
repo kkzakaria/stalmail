@@ -14,7 +14,7 @@ if [ ! -f /etc/stalwart/config.toml ]; then
   /usr/local/bin/stalwart --init /etc/stalwart
 fi
 
-# Démarrer Stalwart en background (credentials passés uniquement à ce process)
+# Démarrer Stalwart en arrière-plan (credentials passés uniquement à ce process)
 STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
   /usr/local/bin/stalwart --config /etc/stalwart/config.toml &
 STALWART_PID=$!
@@ -32,7 +32,7 @@ until curl -sf http://localhost:8080/healthz/live > /dev/null 2>&1; do
 done
 echo "[stalmail] Stalwart ready"
 
-# Démarrer Caddy en foreground background (PID tracké pour le wait)
+# Démarrer Caddy en arrière-plan (PID tracké pour wait -n)
 caddy run --config /etc/caddy/Caddyfile &
 CADDY_PID=$!
 echo "[stalmail] Caddy ready"
@@ -43,7 +43,17 @@ STALWART_RECOVERY_ADMIN="${_RECOVERY_ADMIN}" STALWART_URL="${STALWART_URL}" \
   node /app/server.js &
 APP_PID=$!
 
-# Forwarder les signaux vers tous les process enfants
-trap "kill ${STALWART_PID} ${CADDY_PID} ${APP_PID}" SIGTERM SIGINT
+# Tuer proprement tous les processus enfants
+cleanup() {
+  echo "[stalmail] Shutting down..."
+  kill "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
+}
+trap cleanup SIGTERM SIGINT
 
-wait ${STALWART_PID} ${CADDY_PID} ${APP_PID}
+# Bloquer jusqu'au premier crash/arrêt, puis terminer les autres
+# wait -n disponible depuis bash 4.3 (debian bookworm : bash 5.2)
+wait -n "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}"
+EXIT_CODE=$?
+cleanup
+wait "${STALWART_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
+exit "${EXIT_CODE}"
