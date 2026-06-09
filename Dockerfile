@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js 22 (binaire depuis l'image officielle — pas de curl|bash)
-COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 
 # Caddy et Stalwart (binaires depuis leurs images officielles)
 COPY --from=caddy:2.9.1 /usr/bin/caddy /usr/local/bin/caddy
