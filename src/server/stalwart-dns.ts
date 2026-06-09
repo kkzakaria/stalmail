@@ -1,6 +1,7 @@
 import { jmapCall, resolveAccountId, firstResponse, JmapError } from './jmap'
 
-// Captured from the v0.16 schema enum DnsServerBootstrapType (71 variants).
+// Captured from the v0.16 schema enum DnsServerBootstrapType. The enum lists 71
+// entries; the deprecated placeholder ("Deprecated1") is omitted here, leaving 70.
 // See docs/superpowers/specs/2026-06-09-stalwart-api-capture.md §6.
 export const DNS_PROVIDERS = [
   'Manual', 'Tsig', 'Cloudflare', 'DigitalOcean', 'DeSEC', 'Ovh', 'Bunny',
