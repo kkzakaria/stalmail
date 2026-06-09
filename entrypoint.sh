@@ -24,6 +24,18 @@ RUN_DIR="${STALMAIL_RUN_DIR:-/run/stalmail}"
 mkdir -p "${RUN_DIR}"
 RESTART_SENTINEL="${RUN_DIR}/restart-stalwart"
 
+# Terminate a PID: send TERM, wait up to ~5s for it to exit, then KILL. Bounded
+# so a child that ignores TERM cannot hang restart or shutdown.
+term_wait_kill() {
+  local pid="$1" i
+  kill -TERM "${pid}" 2>/dev/null || true
+  for i in $(seq 1 10); do
+    kill -0 "${pid}" 2>/dev/null || return 0
+    sleep 0.5
+  done
+  kill -KILL "${pid}" 2>/dev/null || true
+}
+
 start_stalwart() {
   "${STALWART_BIN}" &
   STALWART_PID=$!
@@ -38,7 +50,7 @@ supervise_stalwart() {
     if [ -f "${RESTART_SENTINEL}" ]; then
       rm -f "${RESTART_SENTINEL}"
       echo "[stalmail] Restart requested — restarting Stalwart into normal mode..."
-      kill "${STALWART_PID}" 2>/dev/null || true
+      term_wait_kill "${STALWART_PID}"
       wait "${STALWART_PID}" 2>/dev/null || true
       start_stalwart
     fi
@@ -84,7 +96,9 @@ APP_PID=$!
 # Tuer proprement tous les processus enfants
 cleanup() {
   echo "[stalmail] Shutting down..."
-  kill "${SUPERVISOR_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
+  term_wait_kill "${SUPERVISOR_PID}"
+  term_wait_kill "${CADDY_PID}"
+  term_wait_kill "${APP_PID}"
   wait "${SUPERVISOR_PID}" "${CADDY_PID}" "${APP_PID}" 2>/dev/null || true
 }
 # EXIT couvre les sorties inattendues dues à set -e (ex: crash d'un enfant)
