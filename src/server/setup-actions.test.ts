@@ -25,4 +25,12 @@ describe('submitBootstrapHandler', () => {
     expect(requestStalwartRestart).toHaveBeenCalled()
     expect(out).toEqual({ ok: true })
   })
+
+  it('does not request a restart if submitBootstrap throws', async () => {
+    vi.mocked(submitBootstrap).mockRejectedValueOnce(new Error('network'))
+    await expect(
+      submitBootstrapHandler({ data: { serverHostname: 'x', defaultDomain: 'y' } }),
+    ).rejects.toThrow('network')
+    expect(requestStalwartRestart).not.toHaveBeenCalled()
+  })
 })
