@@ -1,21 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type * as JmapModule from './jmap'
 
-vi.mock('./jmap', () => ({
+vi.mock('./jmap', async (importActual) => ({
+  ...(await importActual<typeof JmapModule>()),
   jmapCall: vi.fn(),
   resolveAccountId: vi.fn(async () => 'd333333'),
   isBootstrapForbidden: vi.fn(),
-  JmapError: class JmapError extends Error {
-    constructor(message: string, readonly detail?: unknown) { super(message); this.name = 'JmapError' }
-  },
-  firstResponse: vi.fn((responses: unknown[], index = 0) => {
-    const r = responses[index]
-    if (!r) {
-      const err = new Error('empty or truncated JMAP response')
-      err.name = 'JmapError'
-      throw err
-    }
-    return r
-  }),
 }))
 
 // eslint-disable-next-line import/first

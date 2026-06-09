@@ -1,16 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type * as JmapModule from './jmap'
 
-vi.mock('./jmap', () => ({
+vi.mock('./jmap', async (importActual) => ({
+  ...(await importActual<typeof JmapModule>()),
   jmapCall: vi.fn(),
   resolveAccountId: vi.fn(async () => 'd333333'),
-  firstResponse: (responses: unknown[], index = 0) => {
-    const r = responses[index]
-    if (!r) throw new Error('empty')
-    return r
-  },
-  JmapError: class JmapError extends Error {
-    constructor(message: string, readonly detail?: unknown) { super(message); this.name = 'JmapError' }
-  },
 }))
 
 // eslint-disable-next-line import/first
