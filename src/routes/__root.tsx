@@ -1,8 +1,30 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
-import { TanStackDevtools } from "@tanstack/react-devtools"
+import type { ComponentType } from "react"
+import { lazy, Suspense } from "react"
 
 import appCss from "../styles.css?url"
+
+const isDev = process.env.NODE_ENV !== "production"
+
+// Chargement dynamique : Vite/Rollup exclut ces modules du bundle production
+const DevTools: ComponentType = isDev
+  ? lazy(async () => {
+      const [{ TanStackDevtools }, { TanStackRouterDevtoolsPanel }] = await Promise.all([
+        import("@tanstack/react-devtools"),
+        import("@tanstack/react-router-devtools"),
+      ])
+      return {
+        default: function DevToolsPanel() {
+          return (
+            <TanStackDevtools
+              config={{ position: "bottom-right" }}
+              plugins={[{ name: "Tanstack Router", render: <TanStackRouterDevtoolsPanel /> }]}
+            />
+          )
+        },
+      }
+    })
+  : () => null
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,7 +37,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "Stalmail",
       },
     ],
     links: [
@@ -42,17 +64,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <TanStackDevtools
-          config={{
-            position: "bottom-right",
-          }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
+        {isDev && (
+          <Suspense fallback={null}>
+            <DevTools />
+          </Suspense>
+        )}
         <Scripts />
       </body>
     </html>
