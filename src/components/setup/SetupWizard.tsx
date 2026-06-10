@@ -12,10 +12,13 @@ import { AdminAccountStep } from './steps/AdminAccountStep'
 import { RecapStep } from './steps/RecapStep'
 import { AccountStep } from './steps/AccountStep'
 import { DnsStep } from './steps/DnsStep'
+import { SslStep } from './steps/SslStep'
+import { DoneStep } from './steps/DoneStep'
 import { RestartScreen } from './RestartScreen'
 import type { DomainValues, DnsProviderValues, AdminAccountValues } from './schemas'
 import type { Theme } from '@/server/setup-theme'
 import type { CreateAccountResult, DnsGridRecord } from '@/server/setup-actions'
+import type { AcmeStatus } from '@/server/stalwart-acme'
 import './wizard.css'
 
 type CollectScreen = 'welcome' | 'domain' | 'dns' | 'account' | 'recap' | 'restarting'
@@ -29,6 +32,9 @@ interface Props {
   createDnsServer: (input: { provider: string; secret: string }) => Promise<{ dnsServerId: string }>
   setDnsManagement: (input: { dnsServerId: string }) => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
+  configureAcme: (input: { hostname: string; contactEmail: string }) => Promise<{ ok: true }>
+  acmeStatus: () => Promise<{ status: AcmeStatus }>
+  finishSetup: () => Promise<{ ok: true }>
 }
 
 export function SetupWizard(props: Props) {
@@ -48,6 +54,9 @@ function WizardInner({
   createDnsServer,
   setDnsManagement,
   gridStatus,
+  configureAcme,
+  acmeStatus,
+  finishSetup,
 }: Props) {
   const { t } = useTranslation()
   const { data, setData } = useWizard()
@@ -93,7 +102,7 @@ function WizardInner({
     ? t('wizard.common.stepOf', { n: current })
     : t('wizard.common.stepOf', { n: current <= 5 ? current : 6 })
 
-  // Monitoring phase: account + DNS are live (Plan 2b-ii Stage A); ssl/done stay placeholder.
+  // Monitoring phase (Plan 2b-ii): account → dns → ssl → done, all live.
   const content = monitorStep === 'account' ? (
     <AccountStep
       name={data.name ?? ''}
@@ -113,6 +122,23 @@ function WizardInner({
       setDnsManagement={setDnsManagement}
       gridStatus={gridStatus}
       onNext={() => setMonitorStep('ssl')}
+    />
+  ) : monitorStep === 'ssl' ? (
+    <SslStep
+      hostname={data.serverHostname ?? ''}
+      contactEmail={`${data.name ?? ''}@${data.defaultDomain ?? ''}`}
+      configureAcme={configureAcme}
+      acmeStatus={acmeStatus}
+      onStatusChange={(s) => setData({ sslStatus: s })}
+      onNext={() => setMonitorStep('done')}
+    />
+  ) : monitorStep === 'done' ? (
+    <DoneStep
+      domain={data.defaultDomain ?? ''}
+      hostname={data.serverHostname ?? ''}
+      adminEmail={`${data.name ?? ''}@${data.defaultDomain ?? ''}`}
+      sslStatus={data.sslStatus ?? 'pending'}
+      finishSetup={finishSetup}
     />
   ) : monitorStep ? (
     <p data-testid="monitor-step" className="step-body" style={{ textAlign: 'center' }}>

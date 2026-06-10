@@ -471,3 +471,14 @@
   background: color-mix(in oklab, var(--success) 8%, var(--card));
 }
 .stalmail-wizard .zonefile-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ============ Terminé ============ */
+.stalmail-wizard .step-done { gap: 20px; }
+.stalmail-wizard .done-mark {
+  width: 52px; height: 52px; border-radius: 999px; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--success) 12%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--success) 35%, transparent);
+  color: var(--success);
+}
+.stalmail-wizard .step-done .step-header { text-align: center; }

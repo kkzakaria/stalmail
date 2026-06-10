@@ -12,6 +12,9 @@ const monitorProps = () => ({
   createDnsServer: vi.fn().mockResolvedValue({ dnsServerId: 's1' }),
   setDnsManagement: vi.fn().mockResolvedValue({ ok: true as const }),
   gridStatus: vi.fn().mockResolvedValue({ origin: 'x', records: [] }),
+  configureAcme: vi.fn().mockResolvedValue({ ok: true as const }),
+  acmeStatus: vi.fn().mockResolvedValue({ status: 'pending' as const }),
+  finishSetup: vi.fn().mockResolvedValue({ ok: true as const }),
 })
 
 describe('SetupWizard', () => {
@@ -106,5 +109,23 @@ describe('SetupWizard', () => {
     // Advancing reaches the DnsStep (step 7).
     fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
     await screen.findByText('Enregistrements DNS')
+  })
+
+  it('renders the SslStep when initialStep is ssl, then advances to the DoneStep', async () => {
+    wrap(
+      <SetupWizard
+        initialStep="ssl"
+        initialTheme="light"
+        submitBootstrap={vi.fn()}
+        pollStep={vi.fn()}
+        {...monitorProps()}
+      />,
+    )
+    // SslStep configures then reaches the monitor recap (non-blocking note).
+    await screen.findByText('Certificat SSL')
+    await screen.findByText(/Stalwart réessaiera automatiquement/)
+    // Advancing reaches the DoneStep (step 9).
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
+    await screen.findByText('Votre serveur est prêt')
   })
 })
