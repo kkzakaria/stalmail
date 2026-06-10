@@ -145,3 +145,69 @@ Volcengine, Vultr, WebSupport, YandexCloud.
 - Méthode exacte de déclenchement ACME en mode normal (`x:Task` `DnsManagement` avec
   `onSuccessRenewCertificate`, ou `certificateManagement`/AcmeProvider).
 - Endpoint/route de redémarrage Stalwart propre déclenché par l'entrypoint après submit.
+
+## 9. ACME / SSL & Task — repérage live (Plan 2b-ii étape B, v0.16.8)
+
+Repérage empirique en mode normal (domaine `dupont.fr`, id `b`) via la JMAP management
+(`urn:stalwart:jmap`, auth recovery-admin). **Corrige les hypothèses du design UI** —
+les formes devinées (challengeType objet, contact array, SAN array, renewBefore ms)
+étaient toutes invalides.
+
+### `x:AcmeProvider/set` (create)
+
+Forme **acceptée** (champs `notCreated.properties` révèlent les rejets) :
+
+```json
+{
+  "directory": "https://acme-v02.api.letsencrypt.org/directory",
+  "challengeType": "TlsAlpn01",
+  "contact": { "mailto:admin@dupont.fr": true }
+}
+```
+
+- `challengeType` : **enum string** (PAS `{"@type":...}`). Valeur confirmée `TlsAlpn01`
+  (Let's Encrypt + port 443). Autres valeurs supposées : `Dns01`, `Http01`, `DnsPersist01`.
+- `contact` : **map** `{ "mailto:<email>": true }` (PAS un array ; clé = URI `mailto:`,
+  valeur `true`). Une clé email nue (`"admin@dupont.fr"`) est acceptée par le schéma mais
+  rejetée à l'enregistrement ACME. « At least one contact email is required » si absent.
+- `renewBefore` : **optionnel**, enum (défaut `"R23"`). Un nombre/durée string est rejeté.
+  → on l'omet.
+- `maxRetries` : défaut `10`.
+- Réponse `created` → `{ "id": "<providerId>" }`. Le `/get` canonique expose en plus
+  `accountKey` (masqué `****`), `accountUri`, `memberTenantId`.
+- ⚠ La création **contacte réellement** le directory ACME (enregistrement de compte) :
+  nécessite un accès réseau sortant ; échoue si le directory est injoignable.
+
+### `x:Domain/set` (update `certificateManagement`)
+
+Défaut : `{ "@type": "Manual" }`. Bascule automatique :
+
+```json
+{ "certificateManagement": {
+    "@type": "Automatic",
+    "acmeProviderId": "<providerId>",
+    "subjectAlternativeNames": { "mail.dupont.fr": true }
+} }
+```
+
+- `subjectAlternativeNames` : **map** `{ "<host>": true }` (PAS un array) ; **optionnel**.
+- `acmeProviderId` : l'id retourné par `x:AcmeProvider/set`.
+- Poser `Automatic` planifie immédiatement une task `AcmeRenewal`.
+
+### `x:Task/query` + `x:Task/get` (suivi ACME)
+
+```json
+{
+  "@type": "AcmeRenewal",
+  "domainId": "b",
+  "status": { "@type": "Pending", "createdAt": "...", "due": "..." },
+  "due": "...",
+  "id": "<taskId>"
+}
+```
+
+- Filtrer/identifier par `@type === "AcmeRenewal"` (et `domainId`).
+- `status.@type` ∈ `Pending` | `Retry` | `Failed` (et vraisemblablement `Completed`/actif).
+- **Non-bloquant** : en sandbox dev (pas d'IP publique / 443 joignable depuis Internet),
+  le challenge TLS-ALPN ne peut aboutir → la task reste `Pending`/`Failed` ; l'UI laisse
+  continuer (Stalwart réessaie, `:8080/admin` reste accessible).
