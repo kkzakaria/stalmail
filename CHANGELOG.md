@@ -5,7 +5,28 @@
 
 ### Features
 
-* wizard 2b-ii Stage B — SSL/ACME + Done steps ([#22](https://github.com/kkzakaria/stalmail/issues/22)) ([9bcaaa9](https://github.com/kkzakaria/stalmail/commit/9bcaaa9a8e0ff3da4066037b8355bace5046d6e7))
+* **Wizard 2b-ii — étape B : SSL/ACME + Terminé** ([#22](https://github.com/kkzakaria/stalmail/issues/22)) ([9bcaaa9](https://github.com/kkzakaria/stalmail/commit/9bcaaa9a8e0ff3da4066037b8355bace5046d6e7))
+
+  Seconde moitié de la phase monitoring (livraison étagée 2/3) : le wizard est
+  désormais **complet de bout en bout** (collecte → submit → redémarrage → compte →
+  DNS → SSL → Terminé → `/login`). Reste l'étape C (durcissement recovery-admin).
+  - **Repérage ACME live** : le déclenchement ACME en mode normal était un point ouvert
+    de la capture d'API. Une recon empirique contre Stalwart v0.16 a **corrigé les
+    formes JMAP** supposées (toutes invalides) : `AcmeProvider.challengeType` = enum
+    string `"TlsAlpn01"`, `AcmeProvider.contact` = map `{"mailto:<email>": true}`,
+    `Domain.certificateManagement.subjectAlternativeNames` = map `{"<host>": true}` ;
+    suivi via `x:Task` `@type=AcmeRenewal`. Documenté (spec §9).
+  - **Module `stalwart-acme.ts`** : `configureAcme` (crée le fournisseur Let's Encrypt /
+    TLS-ALPN-01 puis bascule `certificateManagement=Automatic`) + `getAcmeStatus`
+    (poll de la task AcmeRenewal → `pending`/`failed`/`valid`).
+  - **Étape 8 — SSL** : **non-bloquante** (Continuer toujours actif — Stalwart réessaie,
+    `:8080/admin` reste accessible) ; récap fournisseur/contact/nom couvert + badge de
+    task, alerte si le port 443 n'est pas joignable, retry.
+  - **Étape 9 — Terminé** : `finishSetupFn` pose le flag `.stalmail-configured`
+    (`deriveSetupStep` renvoie alors `done`) ; récap (domaine, serveur, certificat,
+    admin) + rappel de sauvegarde + bouton « Ouvrir ma boîte mail » → `/login`.
+  - Server functions `configureAcmeFn` / `acmeStatusFn` / `finishSetupFn`, câblage shell
+    (`sslStatus` en contexte), i18n FR/EN, CSS écran Terminé. Couverture : 189 tests.
 
 ## [0.1.7](https://github.com/kkzakaria/stalmail/compare/v0.1.6...v0.1.7) (2026-06-10)
 
