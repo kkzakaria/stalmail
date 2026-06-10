@@ -1,6 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { getStep, submitBootstrapFn } from '@/server/setup-actions'
+import {
+  getStep,
+  submitBootstrapFn,
+  createAdminAccountFn,
+  createDnsServerFn,
+  setDnsManagementFn,
+  dnsGridStatusFn,
+} from '@/server/setup-actions'
 import { getServerTheme } from '@/server/setup-theme'
 import { SetupWizard } from '@/components/setup/SetupWizard'
 
@@ -21,6 +28,10 @@ function SetupPage() {
       initialTheme={theme}
       submitBootstrap={(data) => submitBootstrapFn({ data }).then(() => undefined)}
       pollStep={() => getStep()}
+      createAccount={(input) => createAdminAccountFn({ data: input })}
+      createDnsServer={(input) => createDnsServerFn({ data: input })}
+      setDnsManagement={(input) => setDnsManagementFn({ data: input })}
+      gridStatus={() => dnsGridStatusFn()}
     />
   )
 }

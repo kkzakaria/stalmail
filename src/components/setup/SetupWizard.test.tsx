@@ -7,6 +7,13 @@ import { SetupWizard } from './SetupWizard'
 const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n('fr')}>{ui}</I18nextProvider>)
 
+const monitorProps = () => ({
+  createAccount: vi.fn().mockResolvedValue({ status: 'ok' as const }),
+  createDnsServer: vi.fn().mockResolvedValue({ dnsServerId: 's1' }),
+  setDnsManagement: vi.fn().mockResolvedValue({ ok: true as const }),
+  gridStatus: vi.fn().mockResolvedValue({ origin: 'x', records: [] }),
+})
+
 describe('SetupWizard', () => {
   it('renders the card shell: welcome screen, header lang/theme, and a 9-dot stepper', () => {
     const { container } = wrap(
@@ -15,6 +22,7 @@ describe('SetupWizard', () => {
         initialTheme="light"
         submitBootstrap={vi.fn()}
         pollStep={vi.fn()}
+        {...monitorProps()}
       />,
     )
     // Welcome screen
@@ -33,6 +41,7 @@ describe('SetupWizard', () => {
         initialTheme="light"
         submitBootstrap={vi.fn()}
         pollStep={vi.fn()}
+        {...monitorProps()}
       />,
     )
     const root = container.querySelector('.stalmail-wizard') as HTMLElement
@@ -50,6 +59,7 @@ describe('SetupWizard', () => {
         initialTheme="light"
         submitBootstrap={submitBootstrap}
         pollStep={poll}
+        {...monitorProps()}
       />,
     )
 
@@ -80,15 +90,21 @@ describe('SetupWizard', () => {
     await screen.findByText('Configuration en cours')
   })
 
-  it('starts directly in the monitoring placeholder when initialStep is account', () => {
+  it('renders the AccountStep when initialStep is account, then advances to the DnsStep', async () => {
     wrap(
       <SetupWizard
         initialStep="account"
         initialTheme="light"
         submitBootstrap={vi.fn()}
         pollStep={vi.fn()}
+        {...monitorProps()}
       />,
     )
-    expect(screen.getByTestId('monitor-step').textContent).toBe('account')
+    // AccountStep renders (its title), and reaches the done status after the mocked create.
+    expect(screen.getByText('Compte administrateur')).toBeInTheDocument()
+    await screen.findByText('Continuer')
+    // Advancing reaches the DnsStep (step 7).
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
+    await screen.findByText('Enregistrements DNS')
   })
 })
