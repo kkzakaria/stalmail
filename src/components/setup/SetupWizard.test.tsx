@@ -17,9 +17,14 @@ describe('SetupWizard', () => {
     fireEvent.change(screen.getByLabelText('Nom d’hôte du serveur'), { target: { value: 'mail.exemple.fr' } })
     fireEvent.change(screen.getByLabelText('Domaine par défaut'), { target: { value: 'exemple.fr' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
-    // DNS step (Manual default) → Next
+    // DNS step (Manual default, combobox) → manual note shown, advance via Continuer
     await screen.findByText('Fournisseur DNS')
-    fireEvent.click(screen.getByRole('button', { name: 'Suivant' }))
+    expect(
+      screen.getByText(
+        "À l'étape 7, le wizard affichera les enregistrements à copier chez votre fournisseur.",
+      ),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
     // Account step
     await screen.findByText('Compte administrateur')
     fireEvent.change(screen.getByLabelText('Nom d’utilisateur'), { target: { value: 'koffi' } })

@@ -75,7 +75,7 @@ function WizardInner({ initialStep, submitBootstrap, pollStep }: Props) {
       )}
       {screen === 'dns' && (
         <DnsProviderStep
-          defaults={data as Partial<DnsProviderValues>}
+          defaults={data as Partial<DnsProviderValues> & { defaultDomain?: string }}
           onBack={() => setScreen('domain')}
           onNext={(v: DnsProviderValues) => {
             setData(v)
