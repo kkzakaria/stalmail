@@ -5,7 +5,16 @@
 
 ### Features
 
-* Plan 2b-i — Setup Wizard UI (i18n, collect phase, TanStack Form) ([#10](https://github.com/kkzakaria/stalmail/issues/10)) ([27572f1](https://github.com/kkzakaria/stalmail/commit/27572f1f899f9dcd4107dfdc9e94a3e3106b8c73))
+* **Setup Wizard UI (Plan 2b-i)** ([#10](https://github.com/kkzakaria/stalmail/issues/10)) ([27572f1](https://github.com/kkzakaria/stalmail/commit/27572f1f899f9dcd4107dfdc9e94a3e3106b8c73))
+  * Internationalisation FR/EN via i18next, avec parité de clés stricte (`DeepRecord`) et langue amorcée côté SSR par cookie
+  * Formulaire piloté par TanStack Form + Zod (Standard Schema), validation hostname RFC1123 et trim des secrets
+  * Phase de collecte en 5 étapes : Welcome, Domain, DnsProvider, AdminAccount, Recap
+  * Shell du wizard (stepper, contexte, indicateur de force de mot de passe) et écran de redémarrage bootstrap→normal
+  * Couverture portée à 113 tests
+
+### Dev
+
+* Stack de dev `compose.dev.yml` : service `installer` en réseau host pour contourner la corruption de `bun install` via le bridge Docker sur WSL2, + doc de troubleshooting ([#14](https://github.com/kkzakaria/stalmail/issues/14))
 
 ## [0.1.4](https://github.com/kkzakaria/stalmail/compare/v0.1.3...v0.1.4) (2026-06-10)
 
