@@ -12,6 +12,13 @@
 localhost {
   tls internal
 
+  # ACME NOTE: when switching from `tls internal` to automatic HTTPS for a real domain,
+  # exclude /.well-known/acme-challenge/* from this matcher BEFORE enabling ACME.
+  # If that path is matched here, Caddy proxies its own ACME challenge to Stalwart and
+  # certificate issuance fails. Add a preceding handle like:
+  #   handle /.well-known/acme-challenge/* { /* let Caddy answer this itself */ }
+  # or tighten @stalwart to exclude acme-challenge explicitly. `tls internal` issues no
+  # challenge today so this is documentation-only — the routing is intentionally unchanged.
   @stalwart path /.well-known/* /jmap /jmap/* /autodiscover/* /mail/config-v1.1.xml
   handle @stalwart {
     reverse_proxy stalwart:8080

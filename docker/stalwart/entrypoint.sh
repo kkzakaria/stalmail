@@ -31,7 +31,11 @@ start_stalwart
 
 while true; do
   if [ -f "${SENTINEL}" ]; then
-    rm -f "${SENTINEL}"
+    if ! rm -f "${SENTINEL}" || [ -f "${SENTINEL}" ]; then
+      echo "[stalwart-sup] WARN: could not remove sentinel ${SENTINEL}; backing off 30s to avoid a restart loop" >&2
+      sleep 30
+      continue
+    fi
     echo "[stalwart-sup] restart requested — restarting Stalwart into normal mode..."
     term_wait_kill "${STALWART_PID}"
     wait "${STALWART_PID}" 2>/dev/null || true

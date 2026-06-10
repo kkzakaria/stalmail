@@ -41,7 +41,23 @@ fi
 
 echo "→ Démarrage de la stack Stalmail (docker compose)..."
 docker compose -f compose.yml up -d --build
-echo "✓ Stalmail démarré (caddy + app + stalwart)"
+
+echo "→ Vérification du démarrage des services..."
+ok=0
+for i in $(seq 1 15); do
+  running=$(docker compose -f compose.yml ps --services --filter status=running 2>/dev/null | sort -u)
+  if printf '%s\n' "${running}" | grep -qx stalwart \
+     && printf '%s\n' "${running}" | grep -qx app \
+     && printf '%s\n' "${running}" | grep -qx caddy; then ok=1; break; fi
+  sleep 2
+done
+if [ "${ok}" != 1 ]; then
+  echo "❌ Un ou plusieurs services ne sont pas démarrés :"
+  docker compose -f compose.yml ps
+  echo "   Logs : docker compose -f compose.yml logs"
+  exit 1
+fi
+echo "✓ Services démarrés (stalwart, app, caddy)"
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
