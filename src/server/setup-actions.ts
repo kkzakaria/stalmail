@@ -51,6 +51,53 @@ export const createAdminAccountFn = createServerFn({ method: 'POST' })
   .validator((d: { name: string; password: string }) => createAccountSchema.parse(d))
   .handler(createAdminAccountHandler)
 
+export async function createDnsServerHandler(
+  { data }: { data: { provider: string; secret: string } },
+): Promise<{ dnsServerId: string }> {
+  const { createDnsServer } = await import('./stalwart-dns')
+  const id = await createDnsServer({ provider: data.provider as never, secret: data.secret })
+  return { dnsServerId: id }
+}
+
+export async function setDnsManagementHandler(
+  { data }: { data: { dnsServerId: string } },
+): Promise<{ ok: true }> {
+  const { getPrimaryDomain, setDnsManagementAutomatic } = await import('./stalwart-domain')
+  const domain = await getPrimaryDomain()
+  if (!domain) throw new Error('No primary domain found')
+  await setDnsManagementAutomatic({ domainId: domain.id, dnsServerId: data.dnsServerId, origin: domain.name })
+  return { ok: true }
+}
+
+export interface DnsGridRecord { name: string; type: string; value: string; status: 'verified' | 'pending' | 'error' }
+
+export async function dnsGridStatusHandler(): Promise<{ origin: string; records: DnsGridRecord[] }> {
+  const { getPrimaryDomain } = await import('./stalwart-domain')
+  const { parseZoneFile } = await import('./dns-zone')
+  const { resolveRecordStatus } = await import('./dns-resolve')
+  const domain = await getPrimaryDomain()
+  if (!domain?.dnsZoneFile) return { origin: domain?.name ?? '', records: [] }
+  const parsed = parseZoneFile(domain.dnsZoneFile)
+  const records = await Promise.all(
+    parsed.map(async (r) => {
+      const raw = await resolveRecordStatus(r) // 'verified' | 'mismatch' | 'missing' | 'unsupported'
+      const status: DnsGridRecord['status'] =
+        raw === 'verified' ? 'verified' : raw === 'mismatch' ? 'error' : 'pending'
+      return { name: r.name, type: r.type, value: r.value, status }
+    }),
+  )
+  return { origin: domain.name, records }
+}
+
+export const createDnsServerFn = createServerFn({ method: 'POST' })
+  .validator((d: { provider: string; secret: string }) =>
+    z.object({ provider: z.string().min(1), secret: z.string() }).parse(d))
+  .handler(createDnsServerHandler)
+export const setDnsManagementFn = createServerFn({ method: 'POST' })
+  .validator((d: { dnsServerId: string }) => z.object({ dnsServerId: z.string().min(1) }).parse(d))
+  .handler(setDnsManagementHandler)
+export const dnsGridStatusFn = createServerFn({ method: 'GET' }).handler(dnsGridStatusHandler)
+
 export const getStep = createServerFn({ method: 'GET' }).handler(getStepHandler)
 
 export const submitBootstrapFn = createServerFn({ method: 'POST' })
