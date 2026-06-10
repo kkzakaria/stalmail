@@ -7,6 +7,10 @@ import tailwindcss from "@tailwindcss/vite"
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
   plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
+  server: {
+    // Allow requests from container-internal hostnames (Docker Compose service names)
+    allowedHosts: ["app", "localhost"],
+  },
 })
 
 export default config
