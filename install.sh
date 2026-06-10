@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-CONTAINER_NAME="stalmail"
-IMAGE="ghcr.io/kkzakaria/stalmail:latest"
+# Run from a checkout of the Stalmail repo (build context = repo root). Brings up the
+# compose stack (caddy + app + stock stalwart) with a single `docker compose up -d`.
 
 echo "╔══════════════════════════════════╗"
 echo "║        Stalmail Installer        ║"
@@ -21,39 +21,46 @@ if ! docker info &> /dev/null; then
   exit 1
 fi
 
-echo "✓ Docker détecté"
-
-# Arrêter un container existant
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-  echo "→ Container existant détecté, arrêt..."
-  docker stop "${CONTAINER_NAME}" > /dev/null 2>&1 || true
-  docker rm "${CONTAINER_NAME}" > /dev/null 2>&1 || true
+if ! docker compose version &> /dev/null; then
+  echo "❌ Le plugin 'docker compose' (v2) est requis."
+  echo "   → https://docs.docker.com/compose/install/"
+  exit 1
 fi
 
-# Créer les volumes s'ils n'existent pas
-docker volume create stalmail-config > /dev/null 2>&1 || true
-docker volume create stalmail-data > /dev/null 2>&1 || true
-echo "✓ Volumes prêts (stalmail-config, stalmail-data)"
+echo "✓ Docker + Compose détectés"
 
-# Générer STALMAIL_SECRET
-SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 64)
+# Générer le secret une fois et le persister dans .env (lu par compose).
+if [ ! -f .env ]; then
+  SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 64)
+  printf 'STALMAIL_SECRET=%s\n' "${SECRET}" > .env
+  chmod 600 .env
+  echo "✓ .env créé (STALMAIL_SECRET généré)"
+else
+  echo "✓ .env existant conservé"
+fi
 
-# Lancer le container
-echo "→ Démarrage de Stalmail..."
-docker run -d \
-  --name "${CONTAINER_NAME}" \
-  --restart unless-stopped \
-  -e "STALMAIL_SECRET=${SECRET}" \
-  -p 443:443 -p 80:80 \
-  -p 25:25 -p 587:587 -p 465:465 \
-  -p 993:993 -p 143:143 \
-  -v stalmail-config:/etc/stalwart \
-  -v stalmail-data:/var/lib/stalwart \
-  "${IMAGE}" > /dev/null
+echo "→ Démarrage de la stack Stalmail (docker compose)..."
+docker compose -f compose.yml up -d --build
 
-echo "✓ Stalmail démarré"
+echo "→ Vérification du démarrage des services..."
+ok=0
+for i in $(seq 1 15); do
+  running=$(docker compose -f compose.yml ps --services --filter status=running 2>/dev/null | sort -u)
+  if printf '%s\n' "${running}" | grep -qx stalwart \
+     && printf '%s\n' "${running}" | grep -qx app \
+     && printf '%s\n' "${running}" | grep -qx caddy; then ok=1; break; fi
+  sleep 2
+done
+if [ "${ok}" != 1 ]; then
+  echo "❌ Un ou plusieurs services ne sont pas démarrés :"
+  docker compose -f compose.yml ps
+  echo "   Logs : docker compose -f compose.yml logs"
+  exit 1
+fi
+echo "✓ Services démarrés (stalwart, app, caddy)"
+
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "║  Ouvre http://$(hostname -I | awk '{print $1}') dans ton navigateur  ║"
+echo "║  Ouvre https://$(hostname -I | awk '{print $1}') dans ton navigateur  ║"
 echo "║  Le wizard de configuration va démarrer.     ║"
 echo "╚══════════════════════════════════════════════╝"

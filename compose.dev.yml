@@ -1,0 +1,54 @@
+# Stalmail dev stack — same topology as prod, but the app runs Vite/HMR against the
+# live source. `docker compose -f compose.dev.yml up` then open https://localhost
+# (Caddy, self-signed) or http://localhost:3000 (app direct). Fresh Stalwart volumes
+# → bootstrap mode → full wizard incl. the bootstrap→normal restart via the supervisor.
+services:
+  stalwart:
+    build:
+      context: .
+      dockerfile: docker/stalwart/Dockerfile
+    environment:
+      STALWART_RECOVERY_ADMIN: "stalmail-admin:dev-insecure-secret"
+      STALMAIL_RUN_DIR: /shared
+    volumes:
+      - stalmail-dev-config:/etc/stalwart
+      - stalmail-dev-data:/var/lib/stalwart
+      - stalmail-dev-shared:/shared
+    networks: [stalmail]
+
+  app:
+    image: oven/bun:1
+    working_dir: /app
+    command: sh -c "bun install && bun run dev --host"
+    environment:
+      STALWART_URL: http://stalwart:8080
+      STALWART_RECOVERY_ADMIN: "stalmail-admin:dev-insecure-secret"
+      STALMAIL_RUN_DIR: /shared
+      STALMAIL_DATA_DIR: /shared
+    volumes:
+      - .:/app
+      - stalmail-dev-modules:/app/node_modules
+      - stalmail-dev-shared:/shared
+    ports:
+      - "3000:3000"
+    depends_on: [stalwart]
+    networks: [stalmail]
+
+  caddy:
+    image: caddy:2.9.1
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on: [app, stalwart]
+    networks: [stalmail]
+
+networks:
+  stalmail:
+
+volumes:
+  stalmail-dev-config:
+  stalmail-dev-data:
+  stalmail-dev-shared:
+  stalmail-dev-modules:

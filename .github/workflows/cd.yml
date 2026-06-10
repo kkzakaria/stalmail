@@ -10,23 +10,16 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: Check prerequisites
-    runs-on: ubuntu-latest
-    outputs:
-      has_dockerfile: ${{ steps.check.outputs.has_dockerfile }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-
-      - name: Check Dockerfile exists
-        id: check
-        run: echo "has_dockerfile=$(test -f Dockerfile && echo true || echo false)" >> "$GITHUB_OUTPUT"
-
   build-and-push:
-    name: Build & Push Docker image
-    needs: check
-    if: needs.check.outputs.has_dockerfile == 'true'
+    name: Build & Push ${{ matrix.name }} image
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: app
+            dockerfile: docker/app/Dockerfile
+          - name: stalwart
+            dockerfile: docker/stalwart/Dockerfile
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
@@ -47,7 +40,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
@@ -58,9 +51,10 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
