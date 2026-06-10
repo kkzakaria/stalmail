@@ -41,7 +41,14 @@ const server = http.createServer(async (req, res) => {
     const webRes = await app.fetch(webReq)
 
     res.statusCode = webRes.status
-    webRes.headers.forEach((value, key) => res.setHeader(key, value))
+    // Headers.forEach collapses multiple Set-Cookie into one comma-joined value, which
+    // corrupts cookies (commas inside Expires, several cookies merged). Emit them as an
+    // array via getSetCookie() and copy the rest normally.
+    const setCookies = webRes.headers.getSetCookie?.() ?? []
+    webRes.headers.forEach((value, key) => {
+      if (key.toLowerCase() !== 'set-cookie') res.setHeader(key, value)
+    })
+    if (setCookies.length) res.setHeader('set-cookie', setCookies)
 
     if (webRes.body) {
       Readable.fromWeb(webRes.body).pipe(res)
