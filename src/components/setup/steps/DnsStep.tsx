@@ -154,7 +154,7 @@ export function DnsStep({
         : 'pending'
 
   const hasExternalA = records.some(
-    (r) => r.type === 'A' && isExternalHost(hostname, domain),
+    (r) => r.type === 'A' && isExternalHost(r.name.replace(/\.$/, ''), domain),
   )
 
   const zoneText = zoneFileText(records)
@@ -227,7 +227,7 @@ export function DnsStep({
                           </tr>
                           {recs.map((r, i) => {
                             const ext =
-                              r.type === 'A' && isExternalHost(hostname, domain)
+                              r.type === 'A' && isExternalHost(r.name.replace(/\.$/, ''), domain)
                             return (
                               <tr
                                 key={g.type + '-' + i}
@@ -315,7 +315,7 @@ export function DnsStep({
                 <tbody>
                   {records.map((r, i) => {
                     const ext =
-                      r.type === 'A' && isExternalHost(hostname, domain)
+                      r.type === 'A' && isExternalHost(r.name.replace(/\.$/, ''), domain)
                     return (
                       <tr
                         key={r.type + '-' + i}

@@ -57,6 +57,8 @@ describe('DownloadButton', () => {
   let createObjectURL: ReturnType<typeof vi.fn>
   let revokeObjectURL: ReturnType<typeof vi.fn>
   let anchorClick: ReturnType<typeof vi.fn>
+  const origCreate = URL.createObjectURL
+  const origRevoke = URL.revokeObjectURL
 
   beforeEach(() => {
     createObjectURL = vi.fn().mockReturnValue('blob:x')
@@ -72,6 +74,10 @@ describe('DownloadButton', () => {
   })
 
   afterEach(() => {
+    // restoreAllMocks undoes the spy but NOT the direct global assignments / timer mode.
+    URL.createObjectURL = origCreate
+    URL.revokeObjectURL = origRevoke
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 

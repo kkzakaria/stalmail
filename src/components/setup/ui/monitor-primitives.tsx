@@ -43,15 +43,17 @@ export function CopyIconBtn({ text, copyLabel, copiedLabel }: CopyIconBtnProps) 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const doCopy = () => {
-    // writeText is called synchronously; Promise.resolve normalises its result so
-    // the async rejection (denied permission / unavailable clipboard) is caught and
-    // never becomes an unhandled rejection.
-    void Promise.resolve(navigator.clipboard.writeText(text)).catch(() => {
-      // ignore.
-    })
-    setOk(true)
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => setOk(false), 1600)
+    // Only flip to the "copied" state once the write actually succeeds; a rejection
+    // (denied permission / unavailable clipboard) is swallowed and leaves the idle icon.
+    void Promise.resolve(navigator.clipboard.writeText(text))
+      .then(() => {
+        setOk(true)
+        if (timer.current) clearTimeout(timer.current)
+        timer.current = setTimeout(() => setOk(false), 1600)
+      })
+      .catch(() => {
+        // ignore — clipboard unavailable.
+      })
   }
 
   useEffect(
