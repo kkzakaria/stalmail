@@ -29,7 +29,7 @@ describe('SetupWizard', () => {
     await screen.findByText('Compte administrateur')
     fireEvent.change(screen.getByLabelText('Nom d’utilisateur'), { target: { value: 'koffi' } })
     fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'correct horse battery 9' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Suivant' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
     // Recap → Configurer (use the unique submit button to detect the recap screen)
     await screen.findByRole('button', { name: 'Configurer' })
     fireEvent.click(screen.getByRole('button', { name: 'Configurer' }))

@@ -1,12 +1,10 @@
 import { useForm } from '@tanstack/react-form'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import type { AdminAccountValues } from '../schemas'
 import { adminAccountSchema } from '../schemas'
 import { scorePassword } from '../password-strength'
-import { FieldError } from '../FieldError'
+import { Field, PasswordInput, StepHeader, StepNav, TextInput } from '../ui/primitives'
+import { StrengthMeter } from '../ui/StrengthMeter'
 
 interface Props {
   defaults: Partial<AdminAccountValues>
@@ -24,57 +22,76 @@ export function AdminAccountStep({ defaults, domain, onNext, onBack }: Props) {
   })
 
   return (
-    <form
-      className="space-y-6"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void form.handleSubmit()
-      }}
-    >
-      <h2 className="text-xl font-semibold">{t('wizard.account.title')}</h2>
+    <div className="step-body">
+      <StepHeader
+        title={t('wizard.account.title')}
+        sub={t('wizard.account.subtitle')}
+      />
       <form.Field
         name="name"
         children={(field) => (
-          <div className="space-y-1">
-            <Label htmlFor={field.name}>{t('wizard.account.name')}</Label>
-            <Input
+          <Field
+            label={t('wizard.account.name')}
+            htmlFor={field.name}
+            help={t('wizard.account.email', {
+              email: `${field.state.value.trim() || 'admin'}@${domain}`,
+            })}
+            error={
+              !field.state.meta.isValid
+                ? t('wizard.account.invalidName')
+                : undefined
+            }
+          >
+            <TextInput
               id={field.name}
               value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(e) => field.handleChange(e.target.value)}
+              mono
+              autoFocus
+              placeholder={t('wizard.account.namePlaceholder')}
+              invalid={!field.state.meta.isValid}
+              onChange={(v) => field.handleChange(v)}
+              onEnter={() => void form.handleSubmit()}
             />
-            <p className="text-muted-foreground text-sm">
-              {t('wizard.account.email')}:{' '}
-              <span>{`${field.state.value.trim() || 'admin'}@${domain}`}</span>
-            </p>
-            <FieldError field={field} />
-          </div>
+          </Field>
         )}
       />
       <form.Field
         name="password"
         children={(field) => (
-          <div className="space-y-1">
-            <Label htmlFor={field.name}>{t('wizard.account.password')}</Label>
-            <Input
-              id={field.name}
-              type="password"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
+          <>
+            <Field
+              label={t('wizard.account.password')}
+              htmlFor={field.name}
+              help={t('wizard.account.passwordHelp')}
+              error={
+                !field.state.meta.isValid
+                  ? t('wizard.account.invalidPassword')
+                  : undefined
+              }
+            >
+              <PasswordInput
+                id={field.name}
+                value={field.state.value}
+                invalid={!field.state.meta.isValid}
+                showLabel={t('wizard.account.show')}
+                hideLabel={t('wizard.account.hide')}
+                onChange={(v) => field.handleChange(v)}
+                onEnter={() => void form.handleSubmit()}
+              />
+            </Field>
+            <StrengthMeter
+              password={field.state.value}
+              label={t(`wizard.account.strength.${scorePassword(field.state.value)}`)}
             />
-            {field.state.value && (
-              <p className="text-sm">{t(`wizard.account.strength.${scorePassword(field.state.value)}`)}</p>
-            )}
-            <FieldError field={field} />
-          </div>
+          </>
         )}
       />
-      <div className="flex justify-between">
-        <Button type="button" variant="outline" onClick={onBack}>
-          {t('wizard.nav.back')}
-        </Button>
-        <Button type="submit">{t('wizard.nav.next')}</Button>
-      </div>
-    </form>
+      <StepNav
+        onBack={onBack}
+        onNext={() => void form.handleSubmit()}
+        backLabel={t('wizard.common.back')}
+        nextLabel={t('wizard.common.next')}
+      />
+    </div>
   )
 }
