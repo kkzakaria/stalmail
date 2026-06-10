@@ -22,19 +22,16 @@ const server = http.createServer(async (req, res) => {
     const host_ = req.headers.host ?? `${host}:${port}`
     const url = `${proto}://${host_}${req.url}`
 
-    // Buffer the request body.
-    const chunks = []
-    for await (const chunk of req) chunks.push(chunk)
-    const body =
-      req.method === "GET" || req.method === "HEAD"
-        ? undefined
-        : Buffer.concat(chunks)
-
+    // Stream the request body through instead of buffering it into memory:
+    // Buffer.concat-ing a large upload (e.g. an email attachment) could OOM the
+    // container. Readable.toWeb yields a Web ReadableStream; duplex:"half" is required
+    // when a Request carries a stream body.
+    const hasBody = req.method !== "GET" && req.method !== "HEAD"
     const webReq = new Request(url, {
       method: req.method,
       headers: req.headers,
-      body: body?.length ? body : undefined,
-      // @ts-ignore — Node.js 18+ supports this
+      body: hasBody ? Readable.toWeb(req) : undefined,
+      // @ts-ignore — Node.js 18+ supports duplex on Request
       duplex: "half",
     })
 
