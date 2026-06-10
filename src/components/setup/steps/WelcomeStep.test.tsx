@@ -9,16 +9,20 @@ function renderWithI18n(ui: React.ReactNode) {
 }
 
 describe('WelcomeStep', () => {
-  it('shows the start button and calls onNext', () => {
-    const onNext = vi.fn()
-    renderWithI18n(<WelcomeStep onNext={onNext} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Commencer' }))
-    expect(onNext).toHaveBeenCalled()
+  it('renders the title', () => {
+    renderWithI18n(<WelcomeStep onNext={vi.fn()} />)
+    expect(screen.getByText('Bienvenue sur Stalmail')).toBeInTheDocument()
   })
 
-  it('switches language when EN is chosen', () => {
-    renderWithI18n(<WelcomeStep onNext={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'EN' }))
-    expect(screen.getByRole('button', { name: 'Get started' })).toBeInTheDocument()
+  it('renders a need-item', () => {
+    const { container } = renderWithI18n(<WelcomeStep onNext={vi.fn()} />)
+    expect(container.querySelector('.need-item')).toBeTruthy()
+  })
+
+  it('calls onNext when the start button is clicked', () => {
+    const onNext = vi.fn()
+    renderWithI18n(<WelcomeStep onNext={onNext} />)
+    fireEvent.click(screen.getByRole('button', { name: /commencer/i }))
+    expect(onNext).toHaveBeenCalled()
   })
 })

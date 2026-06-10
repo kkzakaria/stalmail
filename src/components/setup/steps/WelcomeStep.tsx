@@ -1,36 +1,21 @@
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import { SUPPORTED_LANGS, LANG_COOKIE } from '@/i18n/i18n'
+import { BrandMark, StepHeader, Button } from '../ui/primitives'
+import { IconGlobe, IconServer, IconArrowR } from '../ui/icons'
 
 export function WelcomeStep({ onNext }: { onNext: () => void }) {
-  const { t, i18n } = useTranslation()
-
-  const setLang = (lng: string) => {
-    void i18n.changeLanguage(lng)
-    if (typeof document !== 'undefined') {
-      const secure =
-        typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : ''
-      document.cookie = `${LANG_COOKIE}=${lng}; path=/; max-age=31536000; SameSite=Lax${secure}`
-    }
-  }
-
+  const { t } = useTranslation()
   return (
-    <div className="space-y-6 text-center">
-      <div className="flex justify-center gap-2">
-        {SUPPORTED_LANGS.map((lng) => (
-          <Button
-            key={lng}
-            variant={i18n.resolvedLanguage === lng ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setLang(lng)}
-          >
-            {lng.toUpperCase()}
-          </Button>
-        ))}
+    <div className="step-body step-welcome">
+      <BrandMark size={52} />
+      <StepHeader title={t('wizard.welcome.title')} sub={t('wizard.welcome.subtitle')} />
+      <div className="need-box">
+        <p className="need-title">{t('wizard.welcome.needTitle')}</p>
+        <p className="need-item"><IconGlobe size={14} />{t('wizard.welcome.need1')}</p>
+        <p className="need-item"><IconServer size={14} />{t('wizard.welcome.need2')}</p>
       </div>
-      <h1 className="text-2xl font-semibold">{t('wizard.welcome.title')}</h1>
-      <p className="text-muted-foreground">{t('wizard.welcome.subtitle')}</p>
-      <Button onClick={onNext}>{t('wizard.welcome.start')}</Button>
+      <Button variant="primary" size="lg" onClick={onNext}>
+        {t('wizard.welcome.start')}<IconArrowR size={16} />
+      </Button>
     </div>
   )
 }
