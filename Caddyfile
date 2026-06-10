@@ -1,10 +1,15 @@
 # Public ingress for Stalmail. Caddy terminates TLS on 443 and routes:
 #   - Stalwart's public HTTP surface (discovery/federation) -> the stalwart service
 #   - everything else (webmail + setup wizard)              -> the app service
-# tls internal = self-signed (dev / pre-domain). Replace with the real hostname block
-# + automatic HTTPS for production. The app & stalwart services are NOT published
-# directly; only this proxy is.
-:443 {
+# tls internal = self-signed local CA cert (dev / pre-domain).
+# Replace the site address with your real hostname for automatic ACME HTTPS.
+# The app & stalwart services are NOT published directly; only this proxy is.
+{
+  # Ensures Caddy issues a cert for bare-IP/no-SNI connections (dev/smoke-test).
+  default_sni localhost
+}
+
+localhost {
   tls internal
 
   @stalwart path /.well-known/* /jmap /jmap/* /autodiscover/* /mail/config-v1.1.xml
