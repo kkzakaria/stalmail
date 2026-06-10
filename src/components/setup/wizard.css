@@ -1,0 +1,400 @@
+/* Stalmail wizard — scoped design tokens + composants */
+/* Geist variable fonts */
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+/* ============ Tokens (shadcn zinc + accent) — scoped to .stalmail-wizard ============ */
+.stalmail-wizard {
+  --accent-base: oklch(0.55 0.15 250);
+  --background: #fafafa;
+  --card: #ffffff;
+  --foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: #e4e4e7;
+  --input: #d4d4d8;
+  --primary: var(--accent-base);
+  --primary-hover: oklch(from var(--accent-base) calc(l - 0.06) c h);
+  --primary-foreground: #ffffff;
+  --destructive: #dc2626;
+  --success: #15803d;
+  --warning: #b45309;
+  --ring: oklch(from var(--accent-base) l c h / 0.35);
+  --radius: 8px;
+  --sidebar-bg: #18181b;
+  --sidebar-fg: #fafafa;
+  --sidebar-muted: #8b8b93;
+  --sidebar-border: #2c2c30;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 16px -4px rgb(0 0 0 / 0.06);
+  --font-sans: "Geist Variable", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Body typographic rules folded onto the scoped root */
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s ease, color 0.25s ease;
+  min-height: 100vh;
+}
+
+.stalmail-wizard[data-theme="dark"] {
+  --background: #09090b;
+  --card: #161618;
+  --foreground: #f4f4f5;
+  --muted: #232326;
+  --muted-foreground: #9f9fa8;
+  --border: #29292d;
+  --input: #3f3f46;
+  --primary: oklch(from var(--accent-base) 0.68 c h);
+  --primary-hover: oklch(from var(--accent-base) 0.74 c h);
+  --primary-foreground: #0c0c0e;
+  --destructive: #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --sidebar-bg: #111113;
+  --sidebar-fg: #f4f4f5;
+  --sidebar-muted: #7f7f88;
+  --sidebar-border: #232326;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 18px -4px rgb(0 0 0 / 0.5);
+}
+
+.stalmail-wizard .mono { font-family: var(--font-mono); }
+
+/* ============ Marque ============ */
+.stalmail-wizard .brand { display: inline-flex; align-items: center; gap: 9px; }
+.stalmail-wizard .brandmark {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary); color: var(--primary-foreground);
+}
+.stalmail-wizard .brand-name { font-weight: 600; letter-spacing: -0.01em; }
+
+/* ============ Boutons ============ */
+.stalmail-wizard .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: var(--font-sans); font-size: 13.5px; font-weight: 500;
+  border-radius: calc(var(--radius) - 1px);
+  border: 1px solid transparent; cursor: pointer;
+  padding: 0 16px; height: 36px;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+.stalmail-wizard .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.stalmail-wizard .btn:disabled { opacity: 0.55; cursor: default; }
+.stalmail-wizard .btn-lg { height: 42px; padding: 0 22px; font-size: 14.5px; }
+.stalmail-wizard .btn-sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.stalmail-wizard .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+.stalmail-wizard .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+.stalmail-wizard .btn-outline { background: var(--card); border-color: var(--input); color: var(--foreground); }
+.stalmail-wizard .btn-outline:hover:not(:disabled) { background: var(--muted); }
+.stalmail-wizard .btn-ghost { background: transparent; color: var(--muted-foreground); }
+.stalmail-wizard .btn-ghost:hover:not(:disabled) { background: var(--muted); color: var(--foreground); }
+
+/* ============ Champs ============ */
+.stalmail-wizard .field { display: flex; flex-direction: column; gap: 6px; }
+.stalmail-wizard .label { font-size: 13px; font-weight: 500; color: var(--foreground); }
+.stalmail-wizard .label-opt { font-weight: 400; color: var(--muted-foreground); }
+.stalmail-wizard .help { font-size: 12.5px; color: var(--muted-foreground); }
+.stalmail-wizard .field-error { font-size: 12.5px; color: var(--destructive); }
+.stalmail-wizard .input {
+  height: 36px; width: 100%;
+  border: 1px solid var(--input); border-radius: calc(var(--radius) - 1px);
+  background: var(--card); color: var(--foreground);
+  padding: 0 11px; font-size: 13.5px; font-family: var(--font-sans);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.stalmail-wizard .input.mono { font-family: var(--font-mono); font-size: 13px; }
+.stalmail-wizard .input::placeholder { color: var(--muted-foreground); opacity: 0.7; }
+.stalmail-wizard .input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
+.stalmail-wizard .input-invalid,
+.stalmail-wizard .input-invalid .select { border-color: var(--destructive) !important; }
+.stalmail-wizard .pw-wrap { position: relative; }
+.stalmail-wizard .pw-wrap .input { padding-right: 38px; }
+.stalmail-wizard .pw-toggle {
+  position: absolute; right: 4px; top: 4px; height: 28px; width: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 6px;
+  color: var(--muted-foreground); cursor: pointer;
+}
+.stalmail-wizard .pw-toggle:hover { background: var(--muted); color: var(--foreground); }
+
+.stalmail-wizard .select-wrap { position: relative; }
+.stalmail-wizard .select {
+  appearance: none; width: 100%; height: 36px;
+  border: 1px solid var(--input); border-radius: calc(var(--radius) - 1px);
+  background: var(--card); color: var(--foreground);
+  padding: 0 32px 0 11px; font-size: 13.5px; font-family: var(--font-sans);
+  cursor: pointer;
+}
+.stalmail-wizard .select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
+.stalmail-wizard .select-chevron {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--muted-foreground); pointer-events: none;
+}
+
+/* ============ Combobox (select avec recherche) ============ */
+.stalmail-wizard .combobox { position: relative; }
+.stalmail-wizard .combobox-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; height: 36px;
+  border: 1px solid var(--input); border-radius: calc(var(--radius) - 1px);
+  background: var(--card); color: var(--foreground);
+  padding: 0 10px 0 11px; font-size: 13.5px; font-family: var(--font-sans);
+  text-align: left; cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.stalmail-wizard .combobox-trigger:focus-visible { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
+.stalmail-wizard .combobox-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stalmail-wizard .combobox-value.is-placeholder { color: var(--muted-foreground); opacity: 0.8; }
+.stalmail-wizard .combobox-chevron { color: var(--muted-foreground); flex-shrink: 0; }
+.stalmail-wizard .combobox-pop {
+  position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 40;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.13), 0 2px 6px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+.stalmail-wizard .combobox-search {
+  display: flex; align-items: center; gap: 8px; padding: 0 11px;
+  border-bottom: 1px solid var(--border); color: var(--muted-foreground);
+}
+.stalmail-wizard .combobox-search-input {
+  flex: 1; height: 38px; min-width: 0;
+  border: none; background: transparent; outline: none;
+  font-family: var(--font-sans); font-size: 13.5px; color: var(--foreground);
+}
+.stalmail-wizard .combobox-search-input::placeholder { color: var(--muted-foreground); opacity: 0.7; }
+.stalmail-wizard .combobox-list { max-height: 216px; overflow-y: auto; padding: 5px; }
+.stalmail-wizard .combobox-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 9px; border-radius: 7px;
+  font-size: 13.5px; color: var(--foreground); cursor: pointer;
+}
+.stalmail-wizard .combobox-item.is-active { background: var(--muted); }
+.stalmail-wizard .combobox-item.is-selected { font-weight: 500; }
+.stalmail-wizard .combobox-item svg { color: var(--primary); flex-shrink: 0; }
+.stalmail-wizard .combobox-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stalmail-wizard .combobox-empty { padding: 16px 10px; font-size: 13px; color: var(--muted-foreground); text-align: center; }
+.stalmail-wizard .combobox-footer { border-top: 1px solid var(--border); padding: 5px; background: var(--muted); }
+.stalmail-wizard .combobox-item-sticky { justify-content: flex-start; padding: 7px 8px; }
+.stalmail-wizard .combobox-item-sticky.is-active { background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+.stalmail-wizard .combobox-sticky-icon {
+  width: 28px; height: 28px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--input); border-radius: 7px;
+  background: var(--card); color: var(--muted-foreground);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.stalmail-wizard .combobox-item-sticky.is-active .combobox-sticky-icon,
+.stalmail-wizard .combobox-item-sticky.is-selected .combobox-sticky-icon { color: var(--primary); border-color: var(--primary); }
+.stalmail-wizard .combobox-sticky-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.stalmail-wizard .combobox-item-sticky .combobox-item-label { font-weight: 500; }
+.stalmail-wizard .combobox-sticky-hint { font-size: 11.5px; color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============ Carte / alertes / badges ============ */
+.stalmail-wizard .card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px); box-shadow: var(--shadow-card);
+}
+.stalmail-wizard .alert {
+  display: flex; gap: 10px; align-items: flex-start;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 11px 13px; font-size: 13px;
+}
+.stalmail-wizard .alert-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.stalmail-wizard .alert-title { font-weight: 600; font-size: 13px; }
+.stalmail-wizard .alert-desc { color: var(--muted-foreground); }
+.stalmail-wizard .alert-info { background: var(--muted); color: var(--foreground); }
+.stalmail-wizard .alert-info .alert-desc { color: var(--muted-foreground); }
+.stalmail-wizard .alert-warning {
+  border-color: color-mix(in oklab, var(--warning) 35%, transparent);
+  background: color-mix(in oklab, var(--warning) 9%, var(--card));
+  color: var(--warning);
+}
+.stalmail-wizard .alert-warning .alert-desc { color: color-mix(in oklab, var(--warning) 80%, var(--foreground)); }
+.stalmail-wizard .alert-destructive {
+  border-color: color-mix(in oklab, var(--destructive) 35%, transparent);
+  background: color-mix(in oklab, var(--destructive) 8%, var(--card));
+  color: var(--destructive);
+}
+.stalmail-wizard .alert-destructive .alert-desc { color: color-mix(in oklab, var(--destructive) 75%, var(--foreground)); }
+.stalmail-wizard .alert-success {
+  border-color: color-mix(in oklab, var(--success) 35%, transparent);
+  background: color-mix(in oklab, var(--success) 8%, var(--card));
+  color: var(--success);
+}
+
+.stalmail-wizard .badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; line-height: 1;
+  border-radius: 999px; padding: 4px 9px 4px 7px;
+  border: 1px solid var(--border); background: var(--muted); color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.stalmail-wizard .badge-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; flex-shrink: 0; }
+.stalmail-wizard .badge-spinner {
+  width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0;
+  border: 1.5px solid color-mix(in oklab, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  animation: spin 0.8s linear infinite;
+}
+.stalmail-wizard .badge-success {
+  color: var(--success);
+  background: color-mix(in oklab, var(--success) 10%, var(--card));
+  border-color: color-mix(in oklab, var(--success) 30%, transparent);
+}
+.stalmail-wizard .badge-destructive {
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 10%, var(--card));
+  border-color: color-mix(in oklab, var(--destructive) 30%, transparent);
+}
+.stalmail-wizard .badge-pending {
+  color: var(--warning);
+  background: color-mix(in oklab, var(--warning) 10%, var(--card));
+  border-color: color-mix(in oklab, var(--warning) 30%, transparent);
+}
+
+.stalmail-wizard .separator { height: 1px; background: var(--border); }
+
+/* ============ Progress / spinner ============ */
+.stalmail-wizard .progress { height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.stalmail-wizard .progress-bar { height: 100%; border-radius: 999px; background: var(--primary); transition: width 0.4s ease; }
+.stalmail-wizard .progress-indeterminate .progress-bar { width: 38%; animation: indet 1.3s ease-in-out infinite; }
+@keyframes indet { 0% { margin-left: -38%; } 100% { margin-left: 100%; } }
+.stalmail-wizard .spinner {
+  display: inline-block; border-radius: 999px;
+  border: 2px solid var(--border); border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============ Steppers ============ */
+.stalmail-wizard .stepper-h { display: flex; align-items: flex-start; gap: 18px; justify-content: center; }
+.stalmail-wizard .stepper-h-group { display: flex; flex-direction: column; gap: 7px; align-items: center; }
+.stalmail-wizard .stepper-h-group-sep { border-left: 1px solid var(--border); padding-left: 18px; }
+.stalmail-wizard .stepper-h-glabel {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.stalmail-wizard .stepper-h-glabel.is-current { color: var(--primary); }
+.stalmail-wizard .stepper-h-dots { display: flex; align-items: center; gap: 6px; }
+.stalmail-wizard .step-dot {
+  width: 26px; height: 26px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 500;
+  border: 1px solid var(--border); color: var(--muted-foreground); background: var(--card);
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.stalmail-wizard .step-dot-done { background: color-mix(in oklab, var(--primary) 12%, var(--card)); border-color: color-mix(in oklab, var(--primary) 35%, transparent); color: var(--primary); }
+.stalmail-wizard .step-dot-current { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); box-shadow: 0 0 0 4px var(--ring); }
+
+/* ============ Corps d'étape ============ */
+.stalmail-wizard .step-header { display: flex; flex-direction: column; gap: 6px; }
+.stalmail-wizard .step-title { font-size: 21px; font-weight: 600; letter-spacing: -0.015em; }
+.stalmail-wizard .step-sub { font-size: 13.5px; color: var(--muted-foreground); text-wrap: pretty; }
+.stalmail-wizard .step-body { display: flex; flex-direction: column; gap: 18px; }
+.stalmail-wizard .step-welcome { align-items: center; text-align: center; gap: 22px; }
+.stalmail-wizard .step-welcome .step-sub { max-width: 380px; }
+.stalmail-wizard .step-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.stalmail-wizard .inline-status { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--muted-foreground); }
+.stalmail-wizard .inline-status-ok { color: var(--success); }
+
+.stalmail-wizard .need-box {
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+  background: var(--muted); border-radius: var(--radius);
+  padding: 13px 16px; width: 100%; max-width: 320px; text-align: left;
+}
+.stalmail-wizard .need-title { font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
+.stalmail-wizard .need-item { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+
+.stalmail-wizard .strength { display: flex; align-items: center; gap: 12px; margin-top: -8px; }
+.stalmail-wizard .strength-bars { display: flex; gap: 4px; flex: 1; max-width: 220px; }
+.stalmail-wizard .strength-bar { height: 4px; flex: 1; border-radius: 999px; transition: background 0.25s ease; }
+.stalmail-wizard .strength-label { font-size: 12px; font-weight: 500; }
+
+.stalmail-wizard .recap { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.stalmail-wizard .recap-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; background: var(--card);
+}
+.stalmail-wizard .recap-row + .recap-row { border-top: 1px solid var(--border); }
+.stalmail-wizard .recap-label { font-size: 12.5px; color: var(--muted-foreground); width: 120px; flex-shrink: 0; }
+.stalmail-wizard .recap-value { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stalmail-wizard .recap-value.mono { font-size: 12.5px; }
+.stalmail-wizard .recap-edit {
+  background: none; border: none; cursor: pointer; font-family: var(--font-sans);
+  font-size: 12.5px; color: var(--primary); padding: 2px 4px; border-radius: 5px;
+}
+.stalmail-wizard .recap-edit:hover { background: var(--muted); }
+
+/* ============ Redémarrage ============ */
+.stalmail-wizard .step-restart { align-items: center; text-align: center; gap: 20px; padding: 18px 0; }
+.stalmail-wizard .step-restart .step-sub { max-width: 360px; }
+.stalmail-wizard .restart-spinner { padding-top: 6px; }
+.stalmail-wizard .poll-log { display: flex; flex-direction: column; gap: 3px; min-height: 72px; width: 100%; max-width: 360px; }
+.stalmail-wizard .poll-line { font-size: 11.5px; color: var(--muted-foreground); opacity: 0.8; }
+.stalmail-wizard .poll-line-ok { color: var(--success); opacity: 1; }
+
+/* ============ Copie ============ */
+.stalmail-wizard .copy-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--input); border-radius: 7px;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--foreground);
+  padding: 5px 10px; cursor: pointer; transition: background 0.15s ease;
+}
+.stalmail-wizard .copy-btn:hover { background: var(--muted); }
+.stalmail-wizard .copy-btn-sm { font-size: 11.5px; padding: 4px 9px; }
+
+/* ============ Shells ============ */
+.stalmail-wizard .shell { min-height: 100vh; }
+.stalmail-wizard .shell-caption { font-size: 12px; color: var(--muted-foreground); text-align: center; }
+
+/* — Carte centrée — */
+.stalmail-wizard .shell-card { display: flex; justify-content: center; padding: 36px 20px 48px; }
+.stalmail-wizard .shell-card-col { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 640px; }
+.stalmail-wizard .shell-card-top { display: flex; align-items: center; justify-content: space-between; }
+.stalmail-wizard .shell-card-main { padding: 30px 32px 26px; }
+
+/* ============ Actions d'en-tête : langue + thème ============ */
+.stalmail-wizard .shell-top-actions { display: flex; align-items: center; gap: 8px; }
+.stalmail-wizard .lang-select {
+  position: relative; display: inline-flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--card); color: var(--muted-foreground);
+  transition: border-color 0.15s ease;
+}
+.stalmail-wizard .lang-select:hover { border-color: var(--input); }
+.stalmail-wizard .lang-select:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
+.stalmail-wizard .lang-select-el {
+  appearance: none; border: none; background: transparent; outline: none;
+  font-family: var(--font-sans); font-size: 13px; font-weight: 500;
+  color: var(--foreground); padding: 0 22px 0 0; cursor: pointer;
+  min-width: 86px;
+}
+.stalmail-wizard .lang-select-el option { background: var(--card); color: var(--foreground); font-size: 13.5px; padding: 6px 10px; }
+.stalmail-wizard .lang-select-chevron { position: absolute; right: 10px; pointer-events: none; color: var(--muted-foreground); }
+.stalmail-wizard .theme-toggle {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--card); color: var(--muted-foreground); cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.stalmail-wizard .theme-toggle:hover { background: var(--muted); color: var(--foreground); }
+.stalmail-wizard .theme-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* ============ Animation d'étape ============ */
+@media (prefers-reduced-motion: no-preference) {
+  .stalmail-wizard .step-anim { animation: stepIn 0.3s ease both; }
+  @keyframes stepIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media (max-width: 760px) {
+  .stalmail-wizard .shell-card-main { padding: 22px 18px; }
+}
