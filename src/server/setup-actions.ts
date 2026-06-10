@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import type { BootstrapInput } from './stalwart-bootstrap'
 import type { DnsProvider } from './stalwart-dns'
+import type { AcmeStatus } from './stalwart-acme'
 import { DNS_PROVIDERS } from './stalwart-dns'
 import { domainSchema } from '@/components/setup/schemas'
 
@@ -105,3 +106,32 @@ export const getStep = createServerFn({ method: 'GET' }).handler(getStepHandler)
 export const submitBootstrapFn = createServerFn({ method: 'POST' })
   .validator((d: BootstrapInput) => domainSchema.parse(d))
   .handler(submitBootstrapHandler)
+
+export async function configureAcmeHandler(
+  { data }: { data: { hostname: string; contactEmail: string } },
+): Promise<{ ok: true }> {
+  const { getPrimaryDomain } = await import('./stalwart-domain')
+  const { configureAcme } = await import('./stalwart-acme')
+  const domain = await getPrimaryDomain()
+  if (!domain) throw new Error('No primary domain found')
+  await configureAcme({ domainId: domain.id, hostname: data.hostname, contactEmail: data.contactEmail })
+  return { ok: true }
+}
+
+export async function acmeStatusHandler(): Promise<{ status: AcmeStatus }> {
+  const { getAcmeStatus } = await import('./stalwart-acme')
+  return { status: await getAcmeStatus() }
+}
+
+export async function finishSetupHandler(): Promise<{ ok: true }> {
+  const { markSetupComplete } = await import('./setup-flag')
+  markSetupComplete()
+  return { ok: true }
+}
+
+export const configureAcmeFn = createServerFn({ method: 'POST' })
+  .validator((d: { hostname: string; contactEmail: string }) =>
+    z.object({ hostname: z.string().min(1), contactEmail: z.string().min(1) }).parse(d))
+  .handler(configureAcmeHandler)
+export const acmeStatusFn = createServerFn({ method: 'GET' }).handler(acmeStatusHandler)
+export const finishSetupFn = createServerFn({ method: 'POST' }).handler(finishSetupHandler)

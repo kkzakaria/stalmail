@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { submitBootstrap } from './stalwart-bootstrap'
 import { requestStalwartRestart } from './stalwart-restart'
-import { getStepHandler, submitBootstrapHandler, createAdminAccountHandler, createDnsServerHandler, setDnsManagementHandler, dnsGridStatusHandler } from './setup-actions'
+import { getStepHandler, submitBootstrapHandler, createAdminAccountHandler, createDnsServerHandler, setDnsManagementHandler, dnsGridStatusHandler, configureAcmeHandler, acmeStatusHandler, finishSetupHandler } from './setup-actions'
 import type * as StalwartAccountModule from './stalwart-account'
 import type * as StalwartDomainModule from './stalwart-domain'
 import type * as StalwartDnsModule from './stalwart-dns'
 import type * as DnsZoneModule from './dns-zone'
 import type * as DnsResolveModule from './dns-resolve'
+import type * as StalwartAcmeModule from './stalwart-acme'
+import type * as SetupFlagModule from './setup-flag'
 
 vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({ validator: () => ({ handler: (fn: unknown) => fn }), handler: (fn: unknown) => fn }),
@@ -35,6 +37,15 @@ vi.mock('./dns-resolve', async (importActual) => ({
   ...(await importActual<typeof DnsResolveModule>()),
   resolveRecordStatus: vi.fn(async () => 'verified'),
 }))
+vi.mock('./stalwart-acme', async (importActual) => ({
+  ...(await importActual<typeof StalwartAcmeModule>()),
+  configureAcme: vi.fn(async () => 'prov-1'),
+  getAcmeStatus: vi.fn(async () => 'pending'),
+}))
+vi.mock('./setup-flag', async (importActual) => ({
+  ...(await importActual<typeof SetupFlagModule>()),
+  markSetupComplete: vi.fn(),
+}))
 
 // eslint-disable-next-line import/first
 import { getPrimaryDomain, setDnsManagementAutomatic } from './stalwart-domain'
@@ -46,6 +57,10 @@ import { createDnsServer } from './stalwart-dns'
 import { parseZoneFile } from './dns-zone'
 // eslint-disable-next-line import/first
 import { resolveRecordStatus } from './dns-resolve'
+// eslint-disable-next-line import/first
+import { configureAcme, getAcmeStatus } from './stalwart-acme'
+// eslint-disable-next-line import/first
+import { markSetupComplete } from './setup-flag'
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -155,5 +170,38 @@ describe('dnsGridStatusHandler', () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce({ id: 'dom-1', name: 'example.com' })
     const result = await dnsGridStatusHandler()
     expect(result).toEqual({ origin: 'example.com', records: [] })
+  })
+})
+
+describe('configureAcmeHandler', () => {
+  it('resolves the domain and calls configureAcme with correct args, returns {ok:true}', async () => {
+    vi.mocked(getPrimaryDomain).mockResolvedValueOnce({ id: 'dom-1', name: 'example.com' })
+    vi.mocked(configureAcme).mockResolvedValueOnce('prov-1')
+    const result = await configureAcmeHandler({ data: { hostname: 'mail.example.com', contactEmail: 'admin@example.com' } })
+    expect(configureAcme).toHaveBeenCalledWith({ domainId: 'dom-1', hostname: 'mail.example.com', contactEmail: 'admin@example.com' })
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('throws when getPrimaryDomain returns null', async () => {
+    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+    await expect(
+      configureAcmeHandler({ data: { hostname: 'mail.example.com', contactEmail: 'admin@example.com' } }),
+    ).rejects.toThrow('No primary domain found')
+  })
+})
+
+describe('acmeStatusHandler', () => {
+  it('returns {status} from getAcmeStatus', async () => {
+    vi.mocked(getAcmeStatus).mockResolvedValueOnce('pending')
+    const result = await acmeStatusHandler()
+    expect(result).toEqual({ status: 'pending' })
+  })
+})
+
+describe('finishSetupHandler', () => {
+  it('calls markSetupComplete and returns {ok:true}', async () => {
+    const result = await finishSetupHandler()
+    expect(markSetupComplete).toHaveBeenCalled()
+    expect(result).toEqual({ ok: true })
   })
 })
