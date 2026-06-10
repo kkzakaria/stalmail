@@ -7,6 +7,29 @@
 
 * compose multi-service architecture (stock Stalwart behind Caddy) ([#12](https://github.com/kkzakaria/stalmail/issues/12)) ([e3d2add](https://github.com/kkzakaria/stalmail/commit/e3d2add2268bce15c53a31db3fa6bb7972c2405a))
 
+  Remplace le conteneur tout-en-un (Caddy + Stalwart + app dans un seul namespace
+  réseau, en conflit sur le port 443) par une stack `docker compose` à trois services
+  où **Stalwart reste l'image stock** — le modèle reverse-proxy documenté par Stalwart.
+  Chaque service ayant son propre namespace réseau, le conflit de port disparaît.
+  - **Stalwart stock** : image `stalwartlabs/stalwart:v0.16` inchangée (binaire,
+    config, listeners) ; seul l'entrypoint est remplacé par un superviseur qui lance
+    le binaire avec `--config` (corrige le lancement nu qui affichait l'aide et
+    quittait) et le redémarre à la demande.
+  - **Redémarrage bootstrap→normal inter-conteneurs** porté par une sentinelle sur
+    volume partagé (`/shared`) : le BFF l'écrit, le superviseur Stalwart la consomme
+    et relance le binaire (validé de bout en bout par le smoke compose).
+  - **Service `app`** : webmail/BFF TanStack Start (build bun → runtime node), serveur
+    **non-root** (uid 2000, aligné sur Stalwart pour le volume partagé), dépendances de
+    production uniquement, adaptateur fetch→`node:http` qui **streame** les corps de
+    requête (pas de bufferisation OOM) et émet correctement les `Set-Cookie` multiples.
+  - **Service `caddy`** : TLS public + reverse-proxy (`443`/`80`), route les chemins
+    publics de Stalwart vers `:8080`, le reste vers l'app.
+  - **Installeur** `docker compose up -d` avec validation du démarrage des services ;
+    CI publiant les deux images (matrice) ; **décommission complète** du modèle
+    mono-conteneur (Dockerfile/entrypoint).
+  - Couverture : 84 tests unitaires + test du superviseur (stub) + smoke compose de
+    bout en bout (redémarrage inter-conteneurs vérifié).
+
 ## [0.1.3](https://github.com/kkzakaria/stalmail/compare/v0.1.2...v0.1.3) (2026-06-09)
 
 
