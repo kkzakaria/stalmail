@@ -395,7 +395,7 @@ export function StepNav({
   return (
     <div className="step-nav">
       {onBack ? (
-        <Button variant="ghost" onClick={onBack}>
+        <Button variant="ghost" onClick={onBack} disabled={busy}>
           <IconArrowL size={15} />
           {backLabel}
         </Button>

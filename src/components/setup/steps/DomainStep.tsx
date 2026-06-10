@@ -13,7 +13,10 @@ interface Props {
 // Le nom d'hôte est-il hors de la zone du domaine par défaut ? (ex. mail.autre.fr vs dupont.fr)
 function isExternalHost(hostname: string, domain: string): boolean {
   if (!hostname || !domain) return false
-  return hostname !== domain && !hostname.endsWith('.' + domain)
+  // Hostnames are case-insensitive — compare in lower case.
+  const host = hostname.toLowerCase()
+  const base = domain.toLowerCase()
+  return host !== base && !host.endsWith('.' + base)
 }
 
 function hostZone(hostname: string): string {
@@ -64,7 +67,6 @@ export function DomainStep({ defaults, onNext, onBack }: Props) {
                 placeholder={t('wizard.domain.hostnamePlaceholder')}
                 invalid={showError}
                 onChange={(v) => field.handleChange(v.trim())}
-                onEnter={() => void form.handleSubmit()}
               />
             </Field>
           )
@@ -91,7 +93,6 @@ export function DomainStep({ defaults, onNext, onBack }: Props) {
                 placeholder={t('wizard.domain.domainPlaceholder')}
                 invalid={showError}
                 onChange={(v) => field.handleChange(v.trim())}
-                onEnter={() => void form.handleSubmit()}
               />
             </Field>
           )
