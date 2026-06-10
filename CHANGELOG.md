@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/kkzakaria/stalmail/compare/v0.1.7...v0.1.8) (2026-06-10)
+
+
+### Features
+
+* wizard 2b-ii Stage B — SSL/ACME + Done steps ([#22](https://github.com/kkzakaria/stalmail/issues/22)) ([9bcaaa9](https://github.com/kkzakaria/stalmail/commit/9bcaaa9a8e0ff3da4066037b8355bace5046d6e7))
+
 ## [0.1.7](https://github.com/kkzakaria/stalmail/compare/v0.1.6...v0.1.7) (2026-06-10)
 
 
