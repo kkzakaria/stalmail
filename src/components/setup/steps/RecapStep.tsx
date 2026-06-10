@@ -33,7 +33,7 @@ export function RecapStep({ data, onSubmit, onBack }: Props) {
         <Row label={t('wizard.recap.hostname')} value={data.serverHostname} />
         <Row label={t('wizard.recap.domain')} value={data.defaultDomain} />
         <Row label={t('wizard.recap.dns')} value={data.provider} />
-        <Row label={t('wizard.recap.account')} value={`${data.name ?? ''}@${data.defaultDomain ?? ''}`} />
+        <Row label={t('wizard.recap.account')} value={data.name && data.defaultDomain ? `${data.name}@${data.defaultDomain}` : '—'} />
       </dl>
       {error && (
         <div role="alert" className="border-destructive text-destructive rounded-md border p-3 text-sm">

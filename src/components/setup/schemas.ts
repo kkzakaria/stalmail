@@ -4,7 +4,7 @@ import { DNS_PROVIDERS } from '@/server/stalwart-dns'
 const hostname = z
   .string()
   .min(1)
-  .regex(/^(?=.{1,253}$)([a-z0-9-]+\.)+[a-z]{2,}$/i, 'invalid hostname')
+  .regex(/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i, 'invalid hostname')
 
 export const domainSchema = z.object({
   serverHostname: hostname,
@@ -15,7 +15,7 @@ export type DomainValues = z.infer<typeof domainSchema>
 export const dnsProviderSchema = z
   .object({
     provider: z.enum(DNS_PROVIDERS),
-    secret: z.string(),
+    secret: z.string().transform((s) => s.trim()),
   })
   .refine((v) => v.provider === 'Manual' || v.secret.trim().length > 0, {
     message: 'secret required',

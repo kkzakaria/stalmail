@@ -8,6 +8,7 @@ const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n('fr')}>{ui}</I18nextProvider>)
 
 const data = { serverHostname: 'mail.exemple.fr', defaultDomain: 'exemple.fr', provider: 'Manual', name: 'koffi' }
+const dataNoName = { serverHostname: 'mail.exemple.fr', defaultDomain: 'exemple.fr', provider: 'Manual' }
 
 describe('RecapStep', () => {
   it('calls onSubmit (which submits the bootstrap) and surfaces success', async () => {
@@ -23,5 +24,11 @@ describe('RecapStep', () => {
     wrap(<RecapStep data={data} onSubmit={onSubmit} onBack={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Configurer' }))
     await waitFor(() => expect(screen.getByText('Réessayer')).toBeInTheDocument())
+  })
+
+  it('does not render an "@domain" string when name is missing', () => {
+    wrap(<RecapStep data={dataNoName} onSubmit={vi.fn().mockResolvedValue(undefined)} onBack={vi.fn()} />)
+    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/@exemple/)
   })
 })

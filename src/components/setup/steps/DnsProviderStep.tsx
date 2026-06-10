@@ -7,6 +7,7 @@ import { DNS_PROVIDERS } from '@/server/stalwart-dns'
 import type { DnsProvider } from '@/server/stalwart-dns'
 import type { DnsProviderValues } from '../schemas'
 import { dnsProviderSchema } from '../schemas'
+import { FieldError } from '../FieldError'
 
 interface Props {
   defaults: Partial<DnsProviderValues>
@@ -71,13 +72,7 @@ export function DnsProviderStep({ defaults, onNext, onBack }: Props) {
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
                   <p className="text-muted-foreground text-xs">{t('wizard.dns.secretHint')}</p>
-                  {!field.state.meta.isValid && (
-                    <p className="text-destructive text-sm">
-                      {field.state.meta.errors
-                        .map((e) => (e as { message?: string }).message ?? String(e))
-                        .join(', ')}
-                    </p>
-                  )}
+                  <FieldError field={field} />
                 </div>
               )}
             />

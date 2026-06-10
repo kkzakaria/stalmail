@@ -8,7 +8,9 @@ export function WelcomeStep({ onNext }: { onNext: () => void }) {
   const setLang = (lng: string) => {
     void i18n.changeLanguage(lng)
     if (typeof document !== 'undefined') {
-      document.cookie = `${LANG_COOKIE}=${lng}; path=/; max-age=31536000`
+      const secure =
+        typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie = `${LANG_COOKIE}=${lng}; path=/; max-age=31536000; SameSite=Lax${secure}`
     }
   }
 

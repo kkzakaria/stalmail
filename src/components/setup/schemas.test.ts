@@ -10,6 +10,21 @@ describe('domainSchema', () => {
   it('rejects a hostname without a dot', () => {
     expect(domainSchema.safeParse({ serverHostname: 'mail', defaultDomain: 'exemple.fr' }).success).toBe(false)
   })
+  it('rejects labels with a leading hyphen (RFC 1123)', () => {
+    expect(
+      domainSchema.safeParse({ serverHostname: '-mail.exemple.fr', defaultDomain: 'exemple.fr' }).success,
+    ).toBe(false)
+  })
+  it('rejects labels with a trailing hyphen (RFC 1123)', () => {
+    expect(
+      domainSchema.safeParse({ serverHostname: 'mail-.exemple.fr', defaultDomain: 'exemple.fr' }).success,
+    ).toBe(false)
+  })
+  it('still accepts a well-formed hostname (regression)', () => {
+    expect(
+      domainSchema.safeParse({ serverHostname: 'mail.exemple.fr', defaultDomain: 'exemple.fr' }).success,
+    ).toBe(true)
+  })
 })
 
 describe('dnsProviderSchema', () => {
@@ -19,6 +34,14 @@ describe('dnsProviderSchema', () => {
   })
   it('allows an empty secret for Manual', () => {
     expect(dnsProviderSchema.safeParse({ provider: 'Manual', secret: '' }).success).toBe(true)
+  })
+  it('trims the secret value before storing', () => {
+    const result = dnsProviderSchema.safeParse({ provider: 'Cloudflare', secret: '  tok  ' })
+    expect(result.success).toBe(true)
+    expect(result.success && result.data.secret).toBe('tok')
+  })
+  it('rejects a whitespace-only secret for Cloudflare', () => {
+    expect(dnsProviderSchema.safeParse({ provider: 'Cloudflare', secret: '   ' }).success).toBe(false)
   })
 })
 

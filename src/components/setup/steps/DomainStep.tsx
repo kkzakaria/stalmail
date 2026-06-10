@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { DomainValues } from '../schemas'
 import { domainSchema } from '../schemas'
+import { FieldError } from '../FieldError'
 
 interface Props {
   defaults: Partial<DomainValues>
@@ -44,11 +45,7 @@ export function DomainStep({ defaults, onNext, onBack }: Props) {
               onChange={(e) => field.handleChange(e.target.value)}
               placeholder={t('wizard.domain.hostnameHint')}
             />
-            {!field.state.meta.isValid && (
-              <p className="text-destructive text-sm">
-                {field.state.meta.errors.map((e) => (e as { message?: string }).message ?? String(e)).join(', ')}
-              </p>
-            )}
+            <FieldError field={field} />
           </div>
         )}
       />
@@ -64,11 +61,7 @@ export function DomainStep({ defaults, onNext, onBack }: Props) {
               onChange={(e) => field.handleChange(e.target.value)}
               placeholder={t('wizard.domain.domainHint')}
             />
-            {!field.state.meta.isValid && (
-              <p className="text-destructive text-sm">
-                {field.state.meta.errors.map((e) => (e as { message?: string }).message ?? String(e)).join(', ')}
-              </p>
-            )}
+            <FieldError field={field} />
           </div>
         )}
       />

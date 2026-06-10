@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import type { AdminAccountValues } from '../schemas'
 import { adminAccountSchema } from '../schemas'
 import { scorePassword } from '../password-strength'
+import { FieldError } from '../FieldError'
 
 interface Props {
   defaults: Partial<AdminAccountValues>
@@ -44,15 +45,9 @@ export function AdminAccountStep({ defaults, domain, onNext, onBack }: Props) {
             />
             <p className="text-muted-foreground text-sm">
               {t('wizard.account.email')}:{' '}
-              <span>{`${field.state.value || 'admin'}@${domain}`}</span>
+              <span>{`${field.state.value.trim() || 'admin'}@${domain}`}</span>
             </p>
-            {!field.state.meta.isValid && (
-              <p className="text-destructive text-sm">
-                {field.state.meta.errors
-                  .map((e) => (e as { message?: string }).message ?? String(e))
-                  .join(', ')}
-              </p>
-            )}
+            <FieldError field={field} />
           </div>
         )}
       />
@@ -70,13 +65,7 @@ export function AdminAccountStep({ defaults, domain, onNext, onBack }: Props) {
             {field.state.value && (
               <p className="text-sm">{t(`wizard.account.strength.${scorePassword(field.state.value)}`)}</p>
             )}
-            {!field.state.meta.isValid && (
-              <p className="text-destructive text-sm">
-                {field.state.meta.errors
-                  .map((e) => (e as { message?: string }).message ?? String(e))
-                  .join(', ')}
-              </p>
-            )}
+            <FieldError field={field} />
           </div>
         )}
       />
