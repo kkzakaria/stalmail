@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/kkzakaria/stalmail/compare/v0.1.5...v0.1.6) (2026-06-10)
+
+
+### Features
+
+* wizard UI redesign — collect phase (design handoff) ([#16](https://github.com/kkzakaria/stalmail/issues/16)) ([857fe1a](https://github.com/kkzakaria/stalmail/commit/857fe1a00feb2dea4cb0c79c17baa10686124914))
+
 ## [0.1.5](https://github.com/kkzakaria/stalmail/compare/v0.1.4...v0.1.5) (2026-06-10)
 
 
