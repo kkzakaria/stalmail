@@ -10,9 +10,12 @@ import { DomainStep } from './steps/DomainStep'
 import { DnsProviderStep } from './steps/DnsProviderStep'
 import { AdminAccountStep } from './steps/AdminAccountStep'
 import { RecapStep } from './steps/RecapStep'
+import { AccountStep } from './steps/AccountStep'
+import { DnsStep } from './steps/DnsStep'
 import { RestartScreen } from './RestartScreen'
 import type { DomainValues, DnsProviderValues, AdminAccountValues } from './schemas'
 import type { Theme } from '@/server/setup-theme'
+import type { CreateAccountResult, DnsGridRecord } from '@/server/setup-actions'
 import './wizard.css'
 
 type CollectScreen = 'welcome' | 'domain' | 'dns' | 'account' | 'recap' | 'restarting'
@@ -22,6 +25,10 @@ interface Props {
   initialTheme: Theme
   submitBootstrap: (input: DomainValues) => Promise<void>
   pollStep: () => Promise<{ step: string }>
+  createAccount: (input: { name: string; password: string }) => Promise<CreateAccountResult>
+  createDnsServer: (input: { provider: string; secret: string }) => Promise<{ dnsServerId: string }>
+  setDnsManagement: (input: { dnsServerId: string }) => Promise<{ ok: true }>
+  gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
 }
 
 export function SetupWizard(props: Props) {
@@ -32,7 +39,16 @@ export function SetupWizard(props: Props) {
   )
 }
 
-function WizardInner({ initialStep, initialTheme, submitBootstrap, pollStep }: Props) {
+function WizardInner({
+  initialStep,
+  initialTheme,
+  submitBootstrap,
+  pollStep,
+  createAccount,
+  createDnsServer,
+  setDnsManagement,
+  gridStatus,
+}: Props) {
   const { t } = useTranslation()
   const { data, setData } = useWizard()
   const [theme, setTheme] = useState<Theme>(initialTheme)
@@ -64,11 +80,41 @@ function WizardInner({ initialStep, initialTheme, submitBootstrap, pollStep }: P
     recap: 5,
     restarting: 6,
   }
-  const current = screenToCurrent[screen]
-  const caption = t('wizard.common.stepOf', { n: current <= 5 ? current : 6 })
+  const monitorToCurrent: Record<string, number> = {
+    account: 6,
+    dns: 7,
+    ssl: 8,
+    done: 9,
+  }
+  const current = monitorStep
+    ? (monitorToCurrent[monitorStep] ?? 6)
+    : screenToCurrent[screen]
+  const caption = monitorStep
+    ? t('wizard.common.stepOf', { n: current })
+    : t('wizard.common.stepOf', { n: current <= 5 ? current : 6 })
 
-  // Monitoring phase is implemented in Plan 2b-ii; here we render a placeholder.
-  const content = monitorStep ? (
+  // Monitoring phase: account + DNS are live (Plan 2b-ii Stage A); ssl/done stay placeholder.
+  const content = monitorStep === 'account' ? (
+    <AccountStep
+      name={data.name ?? ''}
+      password={data.password ?? ''}
+      domain={data.defaultDomain ?? ''}
+      createAccount={createAccount}
+      onPasswordChange={(pw) => setData({ password: pw })}
+      onNext={() => setMonitorStep('dns')}
+    />
+  ) : monitorStep === 'dns' ? (
+    <DnsStep
+      provider={data.provider ?? 'Manual'}
+      secret={data.secret ?? ''}
+      hostname={data.serverHostname ?? ''}
+      domain={data.defaultDomain ?? ''}
+      createDnsServer={createDnsServer}
+      setDnsManagement={setDnsManagement}
+      gridStatus={gridStatus}
+      onNext={() => setMonitorStep('ssl')}
+    />
+  ) : monitorStep ? (
     <p data-testid="monitor-step" className="step-body" style={{ textAlign: 'center' }}>
       {monitorStep}
     </p>
