@@ -8,10 +8,50 @@ const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n('fr')}>{ui}</I18nextProvider>)
 
 describe('SetupWizard', () => {
+  it('renders the card shell: welcome screen, header lang/theme, and a 9-dot stepper', () => {
+    const { container } = wrap(
+      <SetupWizard
+        initialStep="collect"
+        initialTheme="light"
+        submitBootstrap={vi.fn()}
+        pollStep={vi.fn()}
+      />,
+    )
+    // Welcome screen
+    expect(screen.getByText('Bienvenue sur Stalmail')).toBeInTheDocument()
+    // Header: language select + theme toggle
+    expect(screen.getByLabelText('Langue')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Passer au thème sombre' })).toBeInTheDocument()
+    // Stepper renders all 9 dots
+    expect(container.querySelectorAll('.step-dot')).toHaveLength(9)
+  })
+
+  it('flips the wizard root data-theme when the theme toggle is clicked', () => {
+    const { container } = wrap(
+      <SetupWizard
+        initialStep="collect"
+        initialTheme="light"
+        submitBootstrap={vi.fn()}
+        pollStep={vi.fn()}
+      />,
+    )
+    const root = container.querySelector('.stalmail-wizard') as HTMLElement
+    expect(root.getAttribute('data-theme')).toBe('light')
+    fireEvent.click(screen.getByRole('button', { name: 'Passer au thème sombre' }))
+    expect(root.getAttribute('data-theme')).toBe('dark')
+  })
+
   it('walks the collect phase and submits the bootstrap', async () => {
     const submitBootstrap = vi.fn().mockResolvedValue(undefined)
     const poll = vi.fn().mockResolvedValue({ step: 'account' })
-    wrap(<SetupWizard initialStep="collect" submitBootstrap={submitBootstrap} pollStep={poll} />)
+    wrap(
+      <SetupWizard
+        initialStep="collect"
+        initialTheme="light"
+        submitBootstrap={submitBootstrap}
+        pollStep={poll}
+      />,
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Commencer' }))
     fireEvent.change(screen.getByLabelText('Nom d’hôte du serveur'), { target: { value: 'mail.exemple.fr' } })
@@ -41,7 +81,14 @@ describe('SetupWizard', () => {
   })
 
   it('starts directly in the monitoring placeholder when initialStep is account', () => {
-    wrap(<SetupWizard initialStep="account" submitBootstrap={vi.fn()} pollStep={vi.fn()} />)
+    wrap(
+      <SetupWizard
+        initialStep="account"
+        initialTheme="light"
+        submitBootstrap={vi.fn()}
+        pollStep={vi.fn()}
+      />,
+    )
     expect(screen.getByTestId('monitor-step').textContent).toBe('account')
   })
 })

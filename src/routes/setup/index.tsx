@@ -1,24 +1,27 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { getStep, submitBootstrapFn } from '@/server/setup-actions'
+import { getServerTheme } from '@/server/setup-theme'
 import { SetupWizard } from '@/components/setup/SetupWizard'
 
 export const Route = createFileRoute('/setup/')({
-  loader: async () => await getStep(),
+  loader: async () => {
+    const [{ step }, { theme }] = await Promise.all([getStep(), getServerTheme()])
+    return { step, theme }
+  },
   component: SetupPage,
   errorComponent: SetupError,
 })
 
 function SetupPage() {
-  const { step } = Route.useLoaderData()
+  const { step, theme } = Route.useLoaderData()
   return (
-    <main className="flex min-h-svh flex-col bg-muted/30 px-4">
-      <SetupWizard
-        initialStep={step}
-        submitBootstrap={(data) => submitBootstrapFn({ data }).then(() => undefined)}
-        pollStep={() => getStep()}
-      />
-    </main>
+    <SetupWizard
+      initialStep={step}
+      initialTheme={theme}
+      submitBootstrap={(data) => submitBootstrapFn({ data }).then(() => undefined)}
+      pollStep={() => getStep()}
+    />
   )
 }
 

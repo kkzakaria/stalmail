@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Card } from '@/components/ui/card'
-import { Stepper } from './Stepper'
+import { Brand } from './ui/primitives'
+import { LangSelect } from './ui/LangSelect'
+import { ThemeToggle } from './ui/ThemeToggle'
+import { StepperH } from './ui/StepperH'
 import { WizardProvider, useWizard } from './wizard-context'
 import { WelcomeStep } from './steps/WelcomeStep'
 import { DomainStep } from './steps/DomainStep'
@@ -10,11 +12,14 @@ import { AdminAccountStep } from './steps/AdminAccountStep'
 import { RecapStep } from './steps/RecapStep'
 import { RestartScreen } from './RestartScreen'
 import type { DomainValues, DnsProviderValues, AdminAccountValues } from './schemas'
+import type { Theme } from '@/server/setup-theme'
+import './wizard.css'
 
 type CollectScreen = 'welcome' | 'domain' | 'dns' | 'account' | 'recap' | 'restarting'
 
 interface Props {
   initialStep: string
+  initialTheme: Theme
   submitBootstrap: (input: DomainValues) => Promise<void>
   pollStep: () => Promise<{ step: string }>
 }
@@ -27,9 +32,10 @@ export function SetupWizard(props: Props) {
   )
 }
 
-function WizardInner({ initialStep, submitBootstrap, pollStep }: Props) {
+function WizardInner({ initialStep, initialTheme, submitBootstrap, pollStep }: Props) {
   const { t } = useTranslation()
   const { data, setData } = useWizard()
+  const [theme, setTheme] = useState<Theme>(initialTheme)
   // In bootstrap mode we drive the collect phase locally; otherwise jump to monitoring.
   const [screen, setScreen] = useState<CollectScreen>(
     initialStep === 'collect' ? 'welcome' : 'restarting',
@@ -38,79 +44,108 @@ function WizardInner({ initialStep, submitBootstrap, pollStep }: Props) {
     initialStep === 'collect' ? '' : initialStep,
   )
 
-  const collectLabels = [
-    t('wizard.steps.welcome'),
-    t('wizard.steps.domain'),
-    t('wizard.steps.dns'),
-    t('wizard.steps.account'),
-    t('wizard.steps.recap'),
+  const steps = [
+    { n: 1, label: t('wizard.steps.welcome'), group: 'config' as const },
+    { n: 2, label: t('wizard.steps.domain'), group: 'config' as const },
+    { n: 3, label: t('wizard.steps.dnsProvider'), group: 'config' as const },
+    { n: 4, label: t('wizard.steps.admin'), group: 'config' as const },
+    { n: 5, label: t('wizard.steps.recap'), group: 'config' as const },
+    { n: 6, label: t('wizard.steps.account'), group: 'activation' as const },
+    { n: 7, label: t('wizard.steps.dnsRecords'), group: 'activation' as const },
+    { n: 8, label: t('wizard.steps.ssl'), group: 'activation' as const },
+    { n: 9, label: t('wizard.steps.done'), group: 'activation' as const },
   ]
-  const order: CollectScreen[] = ['welcome', 'domain', 'dns', 'account', 'recap']
-  const activeIndex = Math.max(0, order.indexOf(screen))
+
+  const screenToCurrent: Record<CollectScreen, number> = {
+    welcome: 1,
+    domain: 2,
+    dns: 3,
+    account: 4,
+    recap: 5,
+    restarting: 6,
+  }
+  const current = screenToCurrent[screen]
+  const caption = t('wizard.common.stepOf', { n: current <= 5 ? current : 6 })
 
   // Monitoring phase is implemented in Plan 2b-ii; here we render a placeholder.
-  if (monitorStep) {
-    return (
-      <Card className="mx-auto mt-16 max-w-lg p-8">
-        <p data-testid="monitor-step" className="text-muted-foreground text-center text-sm">
-          {monitorStep}
-        </p>
-      </Card>
-    )
-  }
+  const content = monitorStep ? (
+    <p data-testid="monitor-step" className="step-body" style={{ textAlign: 'center' }}>
+      {monitorStep}
+    </p>
+  ) : screen === 'welcome' ? (
+    <WelcomeStep onNext={() => setScreen('domain')} />
+  ) : screen === 'domain' ? (
+    <DomainStep
+      defaults={data}
+      onBack={() => setScreen('welcome')}
+      onNext={(v: DomainValues) => {
+        setData(v)
+        setScreen('dns')
+      }}
+    />
+  ) : screen === 'dns' ? (
+    <DnsProviderStep
+      defaults={data as Partial<DnsProviderValues> & { defaultDomain?: string }}
+      onBack={() => setScreen('domain')}
+      onNext={(v: DnsProviderValues) => {
+        setData(v)
+        setScreen('account')
+      }}
+    />
+  ) : screen === 'account' ? (
+    <AdminAccountStep
+      defaults={data}
+      domain={data.defaultDomain ?? ''}
+      onBack={() => setScreen('dns')}
+      onNext={(v: AdminAccountValues) => {
+        setData(v)
+        setScreen('recap')
+      }}
+    />
+  ) : screen === 'recap' ? (
+    <RecapStep
+      data={data}
+      goTo={(target) => setScreen(target)}
+      onBack={() => setScreen('account')}
+      onSubmit={async () => {
+        await submitBootstrap({
+          serverHostname: data.serverHostname ?? '',
+          defaultDomain: data.defaultDomain ?? '',
+        })
+        setScreen('restarting')
+      }}
+    />
+  ) : (
+    <RestartScreen poll={pollStep} onReady={(step) => setMonitorStep(step)} />
+  )
 
   return (
-    <Card className="mx-auto mt-16 max-w-lg p-8">
-      {screen !== 'restarting' && <Stepper labels={collectLabels} activeIndex={activeIndex} />}
-      {screen === 'welcome' && <WelcomeStep onNext={() => setScreen('domain')} />}
-      {screen === 'domain' && (
-        <DomainStep
-          defaults={data}
-          onBack={() => setScreen('welcome')}
-          onNext={(v: DomainValues) => {
-            setData(v)
-            setScreen('dns')
-          }}
-        />
-      )}
-      {screen === 'dns' && (
-        <DnsProviderStep
-          defaults={data as Partial<DnsProviderValues> & { defaultDomain?: string }}
-          onBack={() => setScreen('domain')}
-          onNext={(v: DnsProviderValues) => {
-            setData(v)
-            setScreen('account')
-          }}
-        />
-      )}
-      {screen === 'account' && (
-        <AdminAccountStep
-          defaults={data}
-          domain={data.defaultDomain ?? ''}
-          onBack={() => setScreen('dns')}
-          onNext={(v: AdminAccountValues) => {
-            setData(v)
-            setScreen('recap')
-          }}
-        />
-      )}
-      {screen === 'recap' && (
-        <RecapStep
-          data={data}
-          goTo={(target) => setScreen(target)}
-          onBack={() => setScreen('account')}
-          onSubmit={async () => {
-            await submitBootstrap({
-              serverHostname: data.serverHostname ?? '',
-              defaultDomain: data.defaultDomain ?? '',
-            })
-            setScreen('restarting')
-          }}
-        />
-      )}
-      {screen === 'restarting' && (
-        <RestartScreen poll={pollStep} onReady={(step) => setMonitorStep(step)} />
-      )}
-    </Card>
+    <div className="stalmail-wizard" data-theme={theme}>
+      <div className="shell shell-card">
+        <div className="shell-card-col">
+          <div className="shell-card-top">
+            <Brand size={24} />
+            <div className="shell-top-actions">
+              <LangSelect />
+              <ThemeToggle theme={theme} onChange={setTheme} />
+            </div>
+          </div>
+          <StepperH
+            steps={steps}
+            current={current}
+            groupLabels={{
+              config: t('wizard.groups.config'),
+              activation: t('wizard.groups.activation'),
+            }}
+          />
+          <div className="card shell-card-main">
+            <div key={screen} className="step-anim">
+              {content}
+            </div>
+          </div>
+          <p className="shell-caption">{caption}</p>
+        </div>
+      </div>
+    </div>
   )
 }
