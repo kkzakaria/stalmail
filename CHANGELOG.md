@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.7](https://github.com/kkzakaria/stalmail/compare/v0.1.6...v0.1.7) (2026-06-10)
+
+
+### Features
+
+* **Wizard 2b-ii — étape A : monitoring compte + DNS** ([#18](https://github.com/kkzakaria/stalmail/issues/18)) ([3520bc2](https://github.com/kkzakaria/stalmail/commit/3520bc28fbc42afee1bffd8df12f7269acc88b53))
+
+  Première moitié de la phase monitoring du wizard (livraison étagée 1/3), câblée au
+  backend du Plan 2a via de nouvelles server functions — aucun changement de
+  comportement serveur. Les étapes 8 (SSL/ACME) et 9 (Terminé) restent un placeholder
+  (étape B), le durcissement recovery-admin est l'étape C.
+  - **Étape 6 — Compte administrateur** : `createAdminAccountFn` résout le domaine et
+    crée le compte ; **résultat discriminé** `ok`/`weak` (mappe `WeakPasswordError`)
+    pilotant un retour saisie inline avec mètre de force.
+  - **Étape 7 — Enregistrements DNS** : mode **automatique** (création `DnsServer`,
+    bascule `dnsManagement=Automatic`, **grille par-record live** reconstruite côté BFF
+    via `parseZoneFile` + `resolveRecordStatus`, polling 5 s) et mode **manuel** (table
+    sectionnée par type, boutons copier + téléchargement du fichier de zone) ; badge de
+    tâche dérivé des statuts ; alerte « zone externe » par enregistrement.
+  - Primitives `StatusBadge` / `CopyIconBtn` / `DownloadButton`, CSS grille DNS scopé
+    sous `.stalmail-wizard`, i18n FR/EN du monitoring (parité stricte).
+  - Routage `deriveSetupStep` qui distingue l'admin **système** (généré au bootstrap)
+    de l'admin **utilisateur**, et navigation monitoring **locale** (gère le mode
+    manuel). Couverture : 171 tests. Limites de reload/hydratation tracées (#19, #20).
+
 ## [0.1.6](https://github.com/kkzakaria/stalmail/compare/v0.1.5...v0.1.6) (2026-06-10)
 
 
