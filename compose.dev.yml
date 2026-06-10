@@ -16,10 +16,25 @@ services:
       - stalmail-dev-shared:/shared
     networks: [stalmail]
 
+  # One-shot installer on the HOST network. The Docker bridge (veth/NAT) on WSL2
+  # corrupts bun's high-concurrency downloads (IntegrityCheckFailed/hang); bypassing
+  # it with the host network makes `bun install` reliable. It populates the shared
+  # node_modules volume, then exits — the app reuses it.
+  # See docs/troubleshooting/wsl2-docker-bun-install-network-corruption.md
+  installer:
+    image: oven/bun:1
+    network_mode: host
+    working_dir: /app
+    command: sh -c "bun install"
+    volumes:
+      - .:/app
+      - stalmail-dev-modules:/app/node_modules
+
   app:
     image: oven/bun:1
     working_dir: /app
-    command: sh -c "bun install && bun run dev --host"
+    # No install here — the installer already populated node_modules. Just run Vite.
+    command: sh -c "bun run dev --host"
     environment:
       STALWART_URL: http://stalwart:8080
       STALWART_RECOVERY_ADMIN: "stalmail-admin:dev-insecure-secret"
@@ -31,7 +46,11 @@ services:
       - stalmail-dev-shared:/shared
     ports:
       - "3000:3000"
-    depends_on: [stalwart]
+    depends_on:
+      stalwart:
+        condition: service_started
+      installer:
+        condition: service_completed_successfully
     networks: [stalmail]
 
   caddy:
