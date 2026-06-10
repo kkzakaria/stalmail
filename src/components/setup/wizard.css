@@ -398,3 +398,82 @@
 @media (max-width: 760px) {
   .stalmail-wizard .shell-card-main { padding: 22px 18px; }
 }
+
+/* ============ Grille DNS / zone ============ */
+.stalmail-wizard .step-body-wide { max-width: none; }
+.stalmail-wizard .dns-table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.stalmail-wizard .dns-table { width: 100%; border-collapse: collapse; background: var(--card); table-layout: fixed; }
+.stalmail-wizard .dns-table th {
+  text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted-foreground); background: var(--muted);
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.stalmail-wizard .dns-table th:first-child { width: 64px; }
+.stalmail-wizard .dns-table th:last-child { width: 110px; }
+.stalmail-wizard .dns-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; vertical-align: middle; }
+.stalmail-wizard .dns-table tr:last-child td { border-bottom: none; }
+.stalmail-wizard .dns-table .rec-type { font-size: 11.5px; font-weight: 500; color: var(--muted-foreground); }
+.stalmail-wizard .dns-table .rec-name,
+.stalmail-wizard .dns-table .rec-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stalmail-wizard .rec-tag {
+  display: inline-block; vertical-align: 1px; margin-left: 7px;
+  font-family: var(--font-sans); font-size: 10px; font-weight: 500; line-height: 1;
+  letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 3px 6px; border-radius: 999px;
+  background: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.stalmail-wizard .dns-table .rec-value { color: var(--muted-foreground); }
+.stalmail-wizard .dns-table .row-error td { background: color-mix(in oklab, var(--destructive) 5%, var(--card)); }
+.stalmail-wizard .task-line { display: flex; align-items: center; gap: 10px; }
+.stalmail-wizard .task-label { font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
+
+.stalmail-wizard .zonefile-wrap { display: flex; flex-direction: column; gap: 8px; }
+.stalmail-wizard .zonefile-head { display: flex; align-items: center; justify-content: space-between; }
+.stalmail-wizard .zonefile {
+  margin: 0; background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; font-size: 11.5px; line-height: 1.7; overflow-x: auto;
+  color: var(--foreground);
+}
+
+/* ============ Vue manuelle : table unique sectionnée par type ============ */
+.stalmail-wizard .dns-manual { display: flex; flex-direction: column; gap: 10px; }
+.stalmail-wizard .dns-sect td {
+  background: var(--muted);
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.stalmail-wizard .dns-sect:not(:first-child) td { border-top: 1px solid var(--border); }
+.stalmail-wizard .dns-sect-line { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.stalmail-wizard .rec-type-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; height: 19px; padding: 0 7px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 5px; background: var(--card);
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+.stalmail-wizard .dns-sect-title { font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.stalmail-wizard .dns-sect-desc {
+  font-size: 11.5px; color: var(--muted-foreground);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.stalmail-wizard .dns-table-manual td { padding: 6px 12px; }
+.stalmail-wizard .dns-table-manual .rec-name-cell { width: 38%; }
+.stalmail-wizard .dns-table-manual .rec-status-cell { width: 118px; }
+.stalmail-wizard .cell-copy { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.stalmail-wizard .cell-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stalmail-wizard .rec-value-cell .cell-text { color: var(--muted-foreground); }
+.stalmail-wizard .copy-icon-btn {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card); color: var(--muted-foreground); cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.stalmail-wizard .copy-icon-btn:hover { color: var(--foreground); background: var(--muted); }
+.stalmail-wizard .copy-icon-btn.is-ok {
+  color: var(--success);
+  border-color: color-mix(in oklab, var(--success) 40%, transparent);
+  background: color-mix(in oklab, var(--success) 8%, var(--card));
+}
+.stalmail-wizard .zonefile-actions { display: flex; align-items: center; gap: 8px; }
