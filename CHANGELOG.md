@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/kkzakaria/stalmail/compare/v0.1.6...v0.1.7) (2026-06-10)
+
+
+### Features
+
+* wizard 2b-ii Stage A — account + DNS monitoring steps ([#18](https://github.com/kkzakaria/stalmail/issues/18)) ([3520bc2](https://github.com/kkzakaria/stalmail/commit/3520bc28fbc42afee1bffd8df12f7269acc88b53))
+
 ## [0.1.6](https://github.com/kkzakaria/stalmail/compare/v0.1.5...v0.1.6) (2026-06-10)
 
 
