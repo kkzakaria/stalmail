@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.1.6](https://github.com/kkzakaria/stalmail/compare/v0.1.5...v0.1.6) (2026-06-10)
+
+
+### Features
+
+* **Refonte UI du wizard (phase collecte)** ([#16](https://github.com/kkzakaria/stalmail/issues/16)) ([857fe1a](https://github.com/kkzakaria/stalmail/commit/857fe1a00feb2dea4cb0c79c17baa10686124914))
+
+  Refonte de l'UI des 5 étapes de collecte + écran de redémarrage pour coller au
+  design handoff fourni, le tout câblé au backend existant (`getStep` /
+  `submitBootstrapFn`) — aucun changement de comportement serveur.
+  - **Shell carte centrée** avec en-tête : marque, **sélecteur de langue** (déroulant,
+    extensible) et **switch de thème clair/sombre** (cookie SSR-seedé, anti-flash).
+  - **Stepper groupé** Configuration / Activation (9 points numérotés ; les 4 points
+    d'activation sont inertes — phase monitoring différée au Plan 2b-ii).
+  - **Étapes re-skinnées** (TanStack Form + Zod conservés) : Bienvenue, Domaine (avec
+    alerte « zone externe » quand le nom d'hôte sort du domaine par défaut), Fournisseur
+    DNS (**combobox avec recherche** + option « Manuel » épinglée + clé API conditionnelle),
+    Compte admin (e-mail dérivé + mètre de force), Récapitulatif (lignes éditables,
+    erreur inline) ; écran de redémarrage avec journal de poll.
+  - **Système visuel** porté en CSS scopé sous `.stalmail-wizard` (tokens shadcn zinc +
+    accent bleu, polices **Geist / Geist Mono**) — zéro impact sur le reste de l'app.
+  - i18n FR/EN complet pour la phase collecte (parité de clés stricte) ; cookie de thème
+    SSR (`src/server/setup-theme.ts`). Couverture : 149 tests.
+
 ## [0.1.5](https://github.com/kkzakaria/stalmail/compare/v0.1.4...v0.1.5) (2026-06-10)
 
 
