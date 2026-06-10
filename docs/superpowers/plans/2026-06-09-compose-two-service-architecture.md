@@ -54,7 +54,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 ENTRY="${HERE}/docker/stalwart/entrypoint.sh"
 TMP="$(mktemp -d)"
-trap 'rm -rf "${TMP}"; kill "${ENTRY_PID}" 2>/dev/null || true' EXIT
+ENTRY_PID=""
+trap 'rm -rf "${TMP}"; [ -n "${ENTRY_PID}" ] && kill "${ENTRY_PID}" 2>/dev/null || true' EXIT
 
 # Fake stalwart: append a line on each start, then sleep forever (until TERM).
 cat > "${TMP}/stalwart" <<'STUB'
