@@ -1,6 +1,5 @@
 export const fr = {
   wizard: {
-    nav: { back: 'Retour', next: 'Suivant' }, // legacy — existing step components; keep values until step tasks migrate
     common: {
       back: 'Retour',
       next: 'Continuer',
@@ -13,10 +12,9 @@ export const fr = {
     steps: {
       welcome: 'Bienvenue',
       domain: 'Domaine',
-      dns: 'DNS', // legacy label (old step key)
       dnsProvider: 'Fournisseur DNS',
       admin: 'Administrateur',
-      account: 'Compte', // legacy label (old step key)
+      account: 'Compte',
       recap: 'Récapitulatif',
       dnsRecords: 'Enregistrements DNS',
       ssl: 'SSL',
@@ -33,7 +31,7 @@ export const fr = {
       need1: 'un nom de domaine qui vous appartient',
       need2: "l'accès à la zone DNS de ce domaine",
       start: 'Commencer',
-      language: 'Langue', // legacy, removed in cleanup
+      language: 'Langue',
     },
     domain: {
       title: 'Votre domaine',
@@ -49,9 +47,6 @@ export const fr = {
       invalidDomain: 'Format de domaine invalide.',
       extTitle: "Nom d'hôte hors du domaine par défaut",
       ext: "{{host}} appartient à la zone {{zone}}, distincte de {{domain}}. Son enregistrement A (et le certificat SSL) relèvent de cette zone — l'automatisation DNS ne couvrira que {{domain}}.",
-      hostnameHint: 'ex. mail.exemple.fr', // legacy
-      domainHint: 'ex. exemple.fr', // legacy
-      dnsWarning: "Ce nom d'hôte ne pointe pas encore vers ce serveur.", // legacy
     },
     dns: {
       title: 'Fournisseur DNS',
@@ -69,7 +64,6 @@ export const fr = {
       secretHelp: "Créez un jeton avec accès en écriture à la zone {{domain}}.",
       secretRequired: 'La clé API est requise.',
       required: 'Choisissez un fournisseur ou le mode manuel.',
-      secretHint: 'Jamais affichée après validation.', // legacy
     },
     account: {
       title: 'Compte administrateur',
@@ -118,13 +112,11 @@ type DeepRecord<T> = {
 
 export const en: DeepRecord<typeof fr> = {
   wizard: {
-    nav: { back: 'Back', next: 'Next' },
     common: { back: 'Back', next: 'Continue', retry: 'Retry', copy: 'Copy', copied: 'Copied', stepOf: 'Step {{n}} of 9' },
     groups: { config: 'Configuration', activation: 'Activation' },
     steps: {
       welcome: 'Welcome',
       domain: 'Domain',
-      dns: 'DNS',
       dnsProvider: 'DNS provider',
       admin: 'Administrator',
       account: 'Account',
@@ -158,9 +150,6 @@ export const en: DeepRecord<typeof fr> = {
       invalidDomain: 'Invalid domain format.',
       extTitle: 'Hostname outside the default domain',
       ext: '{{host}} belongs to the {{zone}} zone, distinct from {{domain}}. Its A record (and the SSL certificate) live in that zone — DNS automation will only cover {{domain}}.',
-      hostnameHint: 'e.g. mail.example.com',
-      domainHint: 'e.g. example.com',
-      dnsWarning: 'This hostname does not point to this server yet.',
     },
     dns: {
       title: 'DNS provider',
@@ -176,7 +165,6 @@ export const en: DeepRecord<typeof fr> = {
       secretHelp: 'Create a token with write access to the {{domain}} zone.',
       secretRequired: 'The API key is required.',
       required: 'Choose a provider or manual mode.',
-      secretHint: 'Never shown after you continue.',
     },
     account: {
       title: 'Administrator account',
