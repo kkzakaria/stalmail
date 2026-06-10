@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/kkzakaria/stalmail/compare/v0.1.3...v0.1.4) (2026-06-10)
+
+
+### Features
+
+* compose multi-service architecture (stock Stalwart behind Caddy) ([#12](https://github.com/kkzakaria/stalmail/issues/12)) ([e3d2add](https://github.com/kkzakaria/stalmail/commit/e3d2add2268bce15c53a31db3fa6bb7972c2405a))
+
 ## [0.1.3](https://github.com/kkzakaria/stalmail/compare/v0.1.2...v0.1.3) (2026-06-09)
 
 
