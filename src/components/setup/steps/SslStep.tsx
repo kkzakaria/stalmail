@@ -36,6 +36,11 @@ export function SslStep({
   const mountedRef = useRef(true)
   const ranRef = useRef(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Keep the latest poll callbacks so the phase-keyed interval never calls stale props.
+  const acmeStatusRef = useRef(acmeStatus)
+  acmeStatusRef.current = acmeStatus
+  const onStatusChangeRef = useRef(onStatusChange)
+  onStatusChangeRef.current = onStatusChange
 
   useEffect(() => {
     mountedRef.current = true
@@ -71,11 +76,12 @@ export function SslStep({
   useEffect(() => {
     if (phase !== 'monitor') return
     const fetchStatus = () => {
-      acmeStatus()
+      acmeStatusRef
+        .current()
         .then((res) => {
           if (!mountedRef.current) return
           setStatus(res.status)
-          onStatusChange(res.status)
+          onStatusChangeRef.current(res.status)
         })
         .catch(() => {
           // Transient errors are ignored; the next tick retries.
