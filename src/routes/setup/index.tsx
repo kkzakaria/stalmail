@@ -7,6 +7,9 @@ import {
   createDnsServerFn,
   setDnsManagementFn,
   dnsGridStatusFn,
+  configureAcmeFn,
+  acmeStatusFn,
+  finishSetupFn,
 } from '@/server/setup-actions'
 import { getServerTheme } from '@/server/setup-theme'
 import { SetupWizard } from '@/components/setup/SetupWizard'
@@ -32,6 +35,9 @@ function SetupPage() {
       createDnsServer={(input) => createDnsServerFn({ data: input })}
       setDnsManagement={(input) => setDnsManagementFn({ data: input })}
       gridStatus={() => dnsGridStatusFn()}
+      configureAcme={(input) => configureAcmeFn({ data: input })}
+      acmeStatus={() => acmeStatusFn()}
+      finishSetup={() => finishSetupFn()}
     />
   )
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { createContext, useContext, useState } from 'react'
+import type { AcmeStatus } from '@/server/stalwart-acme'
 
 export interface WizardData {
   serverHostname?: string
@@ -8,6 +9,7 @@ export interface WizardData {
   secret?: string
   name?: string
   password?: string
+  sslStatus?: AcmeStatus
 }
 
 interface WizardCtx {
