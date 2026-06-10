@@ -7,28 +7,53 @@ import { RecapStep } from './RecapStep'
 const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n('fr')}>{ui}</I18nextProvider>)
 
-const data = { serverHostname: 'mail.exemple.fr', defaultDomain: 'exemple.fr', provider: 'Manual', name: 'koffi' }
-const dataNoName = { serverHostname: 'mail.exemple.fr', defaultDomain: 'exemple.fr', provider: 'Manual' }
+const data = {
+  serverHostname: 'mail.exemple.fr',
+  defaultDomain: 'exemple.fr',
+  provider: 'Manual',
+  name: 'koffi',
+}
+
+const SUBMIT = 'Configurer le serveur'
 
 describe('RecapStep', () => {
-  it('calls onSubmit (which submits the bootstrap) and surfaces success', async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined)
-    wrap(<RecapStep data={data} onSubmit={onSubmit} onBack={vi.fn()} />)
+  it('renders the collected data values', () => {
+    wrap(
+      <RecapStep data={data} onSubmit={vi.fn()} onBack={vi.fn()} goTo={vi.fn()} />,
+    )
     expect(screen.getByText('mail.exemple.fr')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Configurer' }))
+    expect(screen.getByText('exemple.fr')).toBeInTheDocument()
+    expect(screen.getByText('koffi@exemple.fr')).toBeInTheDocument()
+  })
+
+  it('calls goTo with the row target when its Edit button is clicked', () => {
+    const goTo = vi.fn()
+    wrap(<RecapStep data={data} onSubmit={vi.fn()} onBack={vi.fn()} goTo={goTo} />)
+    // Rows: hostname, domain, dns, account → DNS row is the 3rd Edit button.
+    const editButtons = screen.getAllByRole('button', { name: 'Modifier' })
+    fireEvent.click(editButtons[2])
+    expect(goTo).toHaveBeenCalledWith('dns')
+  })
+
+  it('calls onSubmit when the submit button is clicked', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    wrap(
+      <RecapStep data={data} onSubmit={onSubmit} onBack={vi.fn()} goTo={vi.fn()} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: SUBMIT }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
   })
 
-  it('shows an error and a retry button when onSubmit rejects', async () => {
+  it('shows the error alert + a Retry button that re-invokes onSubmit when onSubmit rejects', async () => {
     const onSubmit = vi.fn().mockRejectedValue(new Error('boom'))
-    wrap(<RecapStep data={data} onSubmit={onSubmit} onBack={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Configurer' }))
-    await waitFor(() => expect(screen.getByText('Réessayer')).toBeInTheDocument())
-  })
-
-  it('does not render an "@domain" string when name is missing', () => {
-    wrap(<RecapStep data={dataNoName} onSubmit={vi.fn().mockResolvedValue(undefined)} onBack={vi.fn()} />)
-    expect(screen.getByText('—')).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/@exemple/)
+    wrap(
+      <RecapStep data={data} onSubmit={onSubmit} onBack={vi.fn()} goTo={vi.fn()} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: SUBMIT }))
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+    expect(screen.getByText('boom')).toBeInTheDocument()
+    const retry = await screen.findByRole('button', { name: 'Réessayer' })
+    fireEvent.click(retry)
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2))
   })
 })

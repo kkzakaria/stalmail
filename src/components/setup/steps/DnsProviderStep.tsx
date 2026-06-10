@@ -1,19 +1,19 @@
 import { useForm } from '@tanstack/react-form'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { DNS_PROVIDERS } from '@/server/stalwart-dns'
 import type { DnsProvider } from '@/server/stalwart-dns'
 import type { DnsProviderValues } from '../schemas'
 import { dnsProviderSchema } from '../schemas'
-import { FieldError } from '../FieldError'
+import { Alert, Field, StepHeader, StepNav, TextInput } from '../ui/primitives'
+import { Combobox } from '../ui/Combobox'
 
 interface Props {
-  defaults: Partial<DnsProviderValues>
+  defaults: Partial<DnsProviderValues> & { defaultDomain?: string }
   onNext: (v: DnsProviderValues) => void
   onBack: () => void
 }
+
+const PROVIDER_OPTIONS = DNS_PROVIDERS.filter((p) => p !== 'Manual')
 
 export function DnsProviderStep({ defaults, onNext, onBack }: Props) {
   const { t } = useTranslation()
@@ -28,34 +28,49 @@ export function DnsProviderStep({ defaults, onNext, onBack }: Props) {
 
   return (
     <form
-      className="space-y-6"
+      className="step-body"
       onSubmit={(e) => {
         e.preventDefault()
         void form.handleSubmit()
       }}
     >
-      <h2 className="text-xl font-semibold">{t('wizard.dns.title')}</h2>
+      <StepHeader
+        title={t('wizard.dns.title')}
+        sub={t('wizard.dns.subtitle')}
+      />
+
       <form.Field
         name="provider"
         children={(field) => (
-          <div className="space-y-1">
-            <Label htmlFor={field.name}>{t('wizard.dns.provider')}</Label>
-            <select
+          <Field
+            label={t('wizard.dns.provider')}
+            htmlFor={field.name}
+            error={
+              !field.state.meta.isValid ? t('wizard.dns.required') : undefined
+            }
+          >
+            <Combobox
               id={field.name}
-              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
               value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value as DnsProvider)}
-            >
-              <option value="Manual">{t('wizard.dns.manual')}</option>
-              {DNS_PROVIDERS.filter((p) => p !== 'Manual').map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
+              invalid={!field.state.meta.isValid}
+              options={PROVIDER_OPTIONS}
+              stickyOption={{
+                value: 'Manual',
+                label: t('wizard.dns.manual'),
+                hint: t('wizard.dns.manualHint'),
+              }}
+              placeholder={t('wizard.dns.placeholder')}
+              searchPlaceholder={t('wizard.dns.search')}
+              emptyText={t('wizard.dns.empty')}
+              onChange={(v) => {
+                field.handleChange(v as DnsProvider)
+                form.setFieldValue('secret', '')
+              }}
+            />
+          </Field>
         )}
       />
+
       <form.Subscribe
         selector={(s) => s.values.provider}
         children={(provider) =>
@@ -63,28 +78,41 @@ export function DnsProviderStep({ defaults, onNext, onBack }: Props) {
             <form.Field
               name="secret"
               children={(field) => (
-                <div className="space-y-1">
-                  <Label htmlFor={field.name}>{t('wizard.dns.secret')}</Label>
-                  <Input
+                <Field
+                  label={t('wizard.dns.secret')}
+                  htmlFor={field.name}
+                  help={t('wizard.dns.secretHelp', {
+                    domain: defaults.defaultDomain ?? '',
+                  })}
+                  error={
+                    !field.state.meta.isValid
+                      ? t('wizard.dns.secretRequired')
+                      : undefined
+                  }
+                >
+                  <TextInput
                     id={field.name}
                     type="password"
+                    mono
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    invalid={!field.state.meta.isValid}
+                    onChange={(v) => field.handleChange(v)}
                   />
-                  <p className="text-muted-foreground text-xs">{t('wizard.dns.secretHint')}</p>
-                  <FieldError field={field} />
-                </div>
+                </Field>
               )}
             />
-          ) : null
+          ) : (
+            <Alert variant="info">{t('wizard.dns.manualNote')}</Alert>
+          )
         }
       />
-      <div className="flex justify-between">
-        <Button type="button" variant="outline" onClick={onBack}>
-          {t('wizard.nav.back')}
-        </Button>
-        <Button type="submit">{t('wizard.nav.next')}</Button>
-      </div>
+
+      <StepNav
+        onBack={onBack}
+        onNext={() => void form.handleSubmit()}
+        backLabel={t('wizard.common.back')}
+        nextLabel={t('wizard.common.next')}
+      />
     </form>
   )
 }

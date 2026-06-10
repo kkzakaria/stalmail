@@ -7,24 +7,57 @@ import { DomainStep } from './DomainStep'
 const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n('fr')}>{ui}</I18nextProvider>)
 
+const HOSTNAME_LABEL = 'Nom d’hôte du serveur'
+const DOMAIN_LABEL = 'Domaine par défaut'
+const NEXT_LABEL = 'Continuer'
+const EXT_TITLE = "Nom d'hôte hors du domaine par défaut"
+
 describe('DomainStep', () => {
-  it('submits valid hostname + domain via onNext', async () => {
+  it('shows the invalid hostname error on submit and does not call onNext', async () => {
     const onNext = vi.fn()
     wrap(<DomainStep defaults={{}} onNext={onNext} onBack={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('Nom d’hôte public'), { target: { value: 'mail.exemple.fr' } })
-    fireEvent.change(screen.getByLabelText('Domaine email'), { target: { value: 'exemple.fr' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Suivant' }))
+    fireEvent.change(screen.getByLabelText(HOSTNAME_LABEL), {
+      target: { value: 'nope' },
+    })
+    fireEvent.change(screen.getByLabelText(DOMAIN_LABEL), {
+      target: { value: 'exemple.fr' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: NEXT_LABEL }))
     await waitFor(() =>
-      expect(onNext).toHaveBeenCalledWith({ serverHostname: 'mail.exemple.fr', defaultDomain: 'exemple.fr' }),
+      expect(
+        screen.getByText("Format de nom d'hôte invalide."),
+      ).toBeInTheDocument(),
     )
+    expect(onNext).not.toHaveBeenCalled()
   })
 
-  it('does not advance with an invalid hostname', async () => {
+  it('renders the external-zone warning when the host is outside the domain', () => {
+    wrap(<DomainStep defaults={{}} onNext={vi.fn()} onBack={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(HOSTNAME_LABEL), {
+      target: { value: 'mail.autre.fr' },
+    })
+    fireEvent.change(screen.getByLabelText(DOMAIN_LABEL), {
+      target: { value: 'dupont.fr' },
+    })
+    expect(screen.getByText(EXT_TITLE)).toBeInTheDocument()
+  })
+
+  it('submits valid same-zone values via onNext', async () => {
     const onNext = vi.fn()
     wrap(<DomainStep defaults={{}} onNext={onNext} onBack={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('Nom d’hôte public'), { target: { value: 'nope' } })
-    fireEvent.change(screen.getByLabelText('Domaine email'), { target: { value: 'exemple.fr' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Suivant' }))
-    await waitFor(() => expect(onNext).not.toHaveBeenCalled())
+    fireEvent.change(screen.getByLabelText(HOSTNAME_LABEL), {
+      target: { value: 'mail.dupont.fr' },
+    })
+    fireEvent.change(screen.getByLabelText(DOMAIN_LABEL), {
+      target: { value: 'dupont.fr' },
+    })
+    expect(screen.queryByText(EXT_TITLE)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: NEXT_LABEL }))
+    await waitFor(() =>
+      expect(onNext).toHaveBeenCalledWith({
+        serverHostname: 'mail.dupont.fr',
+        defaultDomain: 'dupont.fr',
+      }),
+    )
   })
 })
