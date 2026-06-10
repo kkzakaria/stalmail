@@ -96,7 +96,7 @@ export const fr = {
       dnsManual: 'Manuel',
       account: 'Administrateur',
       edit: 'Modifier',
-      submit: 'Configurer', // legacy value kept for existing tests/components
+      submit: 'Configurer le serveur',
       note: 'Stalwart écrira sa configuration puis redémarrera.',
     },
     restart: {
@@ -202,7 +202,7 @@ export const en: DeepRecord<typeof fr> = {
       dnsManual: 'Manual',
       account: 'Administrator',
       edit: 'Edit',
-      submit: 'Set up',
+      submit: 'Configure the server',
       note: 'Stalwart will write its configuration, then restart.',
     },
     restart: {

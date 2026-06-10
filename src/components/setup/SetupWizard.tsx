@@ -97,6 +97,7 @@ function WizardInner({ initialStep, submitBootstrap, pollStep }: Props) {
       {screen === 'recap' && (
         <RecapStep
           data={data}
+          goTo={(target) => setScreen(target)}
           onBack={() => setScreen('account')}
           onSubmit={async () => {
             await submitBootstrap({
