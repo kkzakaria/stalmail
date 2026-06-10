@@ -327,11 +327,12 @@ export function CopyButton({ text, label, copiedLabel, small }: CopyButtonProps)
   const [ok, setOk] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const doCopy = () => {
-    try {
-      void navigator.clipboard.writeText(text)
-    } catch {
-      // clipboard may be unavailable (e.g. insecure context); ignore.
-    }
+    // writeText is called synchronously; Promise.resolve normalizes its result so the
+    // async rejection (denied permission / unavailable clipboard) is caught and never
+    // becomes an unhandled rejection.
+    void Promise.resolve(navigator.clipboard.writeText(text)).catch(() => {
+      // ignore.
+    })
     setOk(true)
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setOk(false), 1600)

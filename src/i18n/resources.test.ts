@@ -13,11 +13,18 @@ describe('i18n resources', () => {
   it('fr and en have identical key paths', () => {
     expect(keyPaths(en)).toEqual(keyPaths(fr))
   })
-  it('interpolation placeholders match between fr and en', () => {
-    const frFlat = Object.fromEntries(keyPaths(fr).map((p) => [p, p]))
-    // spot-check a couple of interpolated keys exist
-    expect(frFlat['wizard.domain.ext']).toBeDefined()
-    expect(fr.wizard.recap.dnsAuto).toContain('{{provider}}')
-    expect(en.wizard.recap.dnsAuto).toContain('{{provider}}')
+  it('interpolation placeholders match between fr and en for every key', () => {
+    const extractPlaceholders = (str: string): string[] =>
+      Array.from(str.matchAll(/\{\{(\w+)\}\}/g), (m) => m[1]).sort()
+    const getValue = (obj: Record<string, unknown>, path: string): string =>
+      path
+        .split('.')
+        .reduce<unknown>((o, k) => (o as Record<string, unknown>)[k], obj) as string
+
+    for (const path of keyPaths(fr)) {
+      expect(extractPlaceholders(getValue(en, path)), `placeholders mismatch at ${path}`).toEqual(
+        extractPlaceholders(getValue(fr, path)),
+      )
+    }
   })
 })

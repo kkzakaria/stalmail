@@ -20,6 +20,6 @@ The design medium is **HTML/CSS/JS** — these are prototypes, not production co
 
 ## Bundle contents
 
-- `stalmail-wizard/README.md` — this file
+- `stalmail-wizard/HANDOFF-README.md` — this file
 - `stalmail-wizard/chats/` — conversation transcripts (read these!)
 - `stalmail-wizard/project/` — the `stalmail-wizard` project files (HTML prototypes, assets, components)

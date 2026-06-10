@@ -120,7 +120,7 @@ function WizardInner({ initialStep, initialTheme, submitBootstrap, pollStep }: P
   )
 
   return (
-    <div className="stalmail-wizard" data-theme={theme}>
+    <main className="stalmail-wizard" data-theme={theme}>
       <div className="shell shell-card">
         <div className="shell-card-col">
           <div className="shell-card-top">
@@ -146,6 +146,6 @@ function WizardInner({ initialStep, initialTheme, submitBootstrap, pollStep }: P
           <p className="shell-caption">{caption}</p>
         </div>
       </div>
-    </div>
+    </main>
   )
 }
