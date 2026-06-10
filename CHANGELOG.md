@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/kkzakaria/stalmail/compare/v0.1.4...v0.1.5) (2026-06-10)
+
+
+### Features
+
+* Plan 2b-i — Setup Wizard UI (i18n, collect phase, TanStack Form) ([#10](https://github.com/kkzakaria/stalmail/issues/10)) ([27572f1](https://github.com/kkzakaria/stalmail/commit/27572f1f899f9dcd4107dfdc9e94a3e3106b8c73))
+
 ## [0.1.4](https://github.com/kkzakaria/stalmail/compare/v0.1.3...v0.1.4) (2026-06-10)
 
 
