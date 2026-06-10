@@ -428,13 +428,7 @@
 .stalmail-wizard .task-line { display: flex; align-items: center; gap: 10px; }
 .stalmail-wizard .task-label { font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
 
-.stalmail-wizard .zonefile-wrap { display: flex; flex-direction: column; gap: 8px; }
 .stalmail-wizard .zonefile-head { display: flex; align-items: center; justify-content: space-between; }
-.stalmail-wizard .zonefile {
-  margin: 0; background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 12px 14px; font-size: 11.5px; line-height: 1.7; overflow-x: auto;
-  color: var(--foreground);
-}
 
 /* ============ Vue manuelle : table unique sectionnée par type ============ */
 .stalmail-wizard .dns-manual { display: flex; flex-direction: column; gap: 10px; }

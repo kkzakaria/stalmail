@@ -79,7 +79,6 @@ export const fr = {
         status: 'Statut',
         extTag: 'zone externe',
         extNote: "L'enregistrement A se trouve dans la zone {{zone}}, hors de la zone {{domain}} gérée via {{provider}} — créez-le manuellement chez le gestionnaire de cette zone.",
-        errorHint: 'Introuvable lors de la dernière résolution. Nouvel essai dans 60 s.',
         background: 'La vérification continue en arrière-plan — vous pouvez poursuivre.',
         allOk: 'Tous les enregistrements sont vérifiés.',
         groups: {
@@ -225,7 +224,6 @@ export const en: DeepRecord<typeof fr> = {
         status: 'Status',
         extTag: 'external zone',
         extNote: "The A record lives in the {{zone}} zone, outside the {{domain}} zone managed via {{provider}} — create it manually at that zone's manager.",
-        errorHint: 'Not found at last resolution. Retrying in 60 s.',
         background: 'Verification keeps running in the background — you can move on.',
         allOk: 'All records are verified.',
         groups: {

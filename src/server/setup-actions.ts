@@ -1,6 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import type { BootstrapInput } from './stalwart-bootstrap'
+import type { DnsProvider } from './stalwart-dns'
+import { DNS_PROVIDERS } from './stalwart-dns'
 import { domainSchema } from '@/components/setup/schemas'
 
 // The setup-state / stalwart-bootstrap / stalwart-restart modules reach `node:fs`
@@ -55,7 +57,7 @@ export async function createDnsServerHandler(
   { data }: { data: { provider: string; secret: string } },
 ): Promise<{ dnsServerId: string }> {
   const { createDnsServer } = await import('./stalwart-dns')
-  const id = await createDnsServer({ provider: data.provider as never, secret: data.secret })
+  const id = await createDnsServer({ provider: data.provider as DnsProvider, secret: data.secret })
   return { dnsServerId: id }
 }
 
@@ -91,7 +93,7 @@ export async function dnsGridStatusHandler(): Promise<{ origin: string; records:
 
 export const createDnsServerFn = createServerFn({ method: 'POST' })
   .validator((d: { provider: string; secret: string }) =>
-    z.object({ provider: z.string().min(1), secret: z.string() }).parse(d))
+    z.object({ provider: z.enum(DNS_PROVIDERS), secret: z.string() }).parse(d))
   .handler(createDnsServerHandler)
 export const setDnsManagementFn = createServerFn({ method: 'POST' })
   .validator((d: { dnsServerId: string }) => z.object({ dnsServerId: z.string().min(1) }).parse(d))
