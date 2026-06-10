@@ -14,9 +14,9 @@ describe('SetupWizard', () => {
     wrap(<SetupWizard initialStep="collect" submitBootstrap={submitBootstrap} pollStep={poll} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Commencer' }))
-    fireEvent.change(screen.getByLabelText('Nom d’hôte public'), { target: { value: 'mail.exemple.fr' } })
-    fireEvent.change(screen.getByLabelText('Domaine email'), { target: { value: 'exemple.fr' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Suivant' }))
+    fireEvent.change(screen.getByLabelText('Nom d’hôte du serveur'), { target: { value: 'mail.exemple.fr' } })
+    fireEvent.change(screen.getByLabelText('Domaine par défaut'), { target: { value: 'exemple.fr' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
     // DNS step (Manual default) → Next
     await screen.findByText('Fournisseur DNS')
     fireEvent.click(screen.getByRole('button', { name: 'Suivant' }))

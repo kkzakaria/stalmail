@@ -39,10 +39,10 @@ export const fr = {
       title: 'Votre domaine',
       subtitle:
         "Le nom d'hôte identifie ce serveur ; le domaine porte vos adresses e-mail.",
-      hostname: "Nom d’hôte public", // legacy value kept for existing tests/components
+      hostname: 'Nom d’hôte du serveur',
       hostnameHelp: 'Le nom DNS public de cette machine.',
       hostnamePlaceholder: 'mail.exemple.fr',
-      domain: 'Domaine email', // legacy value kept for existing tests/components
+      domain: 'Domaine par défaut',
       domainHelp: 'Vos adresses seront de la forme nom@{{domain}}.',
       domainPlaceholder: 'exemple.fr',
       invalidHostname: "Format de nom d'hôte invalide.",
@@ -148,10 +148,10 @@ export const en: DeepRecord<typeof fr> = {
     domain: {
       title: 'Your domain',
       subtitle: 'The hostname identifies this server; the domain carries your email addresses.',
-      hostname: 'Public hostname',
+      hostname: 'Server hostname',
       hostnameHelp: 'The public DNS name of this machine.',
       hostnamePlaceholder: 'mail.example.com',
-      domain: 'Email domain',
+      domain: 'Default domain',
       domainHelp: 'Your addresses will look like name@{{domain}}.',
       domainPlaceholder: 'example.com',
       invalidHostname: 'Invalid hostname format.',

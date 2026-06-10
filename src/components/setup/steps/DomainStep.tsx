@@ -1,16 +1,24 @@
 import { useForm } from '@tanstack/react-form'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import type { DomainValues } from '../schemas'
 import { domainSchema } from '../schemas'
-import { FieldError } from '../FieldError'
+import { Alert, Field, StepHeader, StepNav, TextInput } from '../ui/primitives'
 
 interface Props {
   defaults: Partial<DomainValues>
   onNext: (v: DomainValues) => void
   onBack: () => void
+}
+
+// Le nom d'hôte est-il hors de la zone du domaine par défaut ? (ex. mail.autre.fr vs dupont.fr)
+function isExternalHost(hostname: string, domain: string): boolean {
+  if (!hostname || !domain) return false
+  return hostname !== domain && !hostname.endsWith('.' + domain)
+}
+
+function hostZone(hostname: string): string {
+  const parts = (hostname || '').split('.')
+  return parts.length > 2 ? parts.slice(1).join('.') : hostname
 }
 
 export function DomainStep({ defaults, onNext, onBack }: Props) {
@@ -26,51 +34,91 @@ export function DomainStep({ defaults, onNext, onBack }: Props) {
 
   return (
     <form
-      className="space-y-6"
+      className="step-body"
       onSubmit={(e) => {
         e.preventDefault()
         void form.handleSubmit()
       }}
     >
-      <h2 className="text-xl font-semibold">{t('wizard.domain.title')}</h2>
+      <StepHeader
+        title={t('wizard.domain.title')}
+        sub={t('wizard.domain.subtitle')}
+      />
+
       <form.Field
         name="serverHostname"
-        children={(field) => (
-          <div className="space-y-1">
-            <Label htmlFor={field.name}>{t('wizard.domain.hostname')}</Label>
-            <Input
-              id={field.name}
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(e) => field.handleChange(e.target.value)}
-              placeholder={t('wizard.domain.hostnameHint')}
-            />
-            <FieldError field={field} />
-          </div>
-        )}
+        children={(field) => {
+          const showError = field.state.meta.errors.length > 0
+          return (
+            <Field
+              label={t('wizard.domain.hostname')}
+              htmlFor={field.name}
+              help={t('wizard.domain.hostnameHelp')}
+              error={showError ? t('wizard.domain.invalidHostname') : undefined}
+            >
+              <TextInput
+                id={field.name}
+                value={field.state.value}
+                mono
+                autoFocus
+                placeholder={t('wizard.domain.hostnamePlaceholder')}
+                invalid={showError}
+                onChange={(v) => field.handleChange(v.trim())}
+                onEnter={() => void form.handleSubmit()}
+              />
+            </Field>
+          )
+        }}
       />
+
       <form.Field
         name="defaultDomain"
-        children={(field) => (
-          <div className="space-y-1">
-            <Label htmlFor={field.name}>{t('wizard.domain.domain')}</Label>
-            <Input
-              id={field.name}
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(e) => field.handleChange(e.target.value)}
-              placeholder={t('wizard.domain.domainHint')}
-            />
-            <FieldError field={field} />
-          </div>
-        )}
+        children={(field) => {
+          const showError = field.state.meta.errors.length > 0
+          return (
+            <Field
+              label={t('wizard.domain.domain')}
+              htmlFor={field.name}
+              help={t('wizard.domain.domainHelp', {
+                domain: field.state.value || 'exemple.fr',
+              })}
+              error={showError ? t('wizard.domain.invalidDomain') : undefined}
+            >
+              <TextInput
+                id={field.name}
+                value={field.state.value}
+                mono
+                placeholder={t('wizard.domain.domainPlaceholder')}
+                invalid={showError}
+                onChange={(v) => field.handleChange(v.trim())}
+                onEnter={() => void form.handleSubmit()}
+              />
+            </Field>
+          )
+        }}
       />
-      <div className="flex justify-between">
-        <Button type="button" variant="outline" onClick={onBack}>
-          {t('wizard.nav.back')}
-        </Button>
-        <Button type="submit">{t('wizard.nav.next')}</Button>
-      </div>
+
+      <form.Subscribe
+        selector={(s) => s.values}
+        children={(v) =>
+          isExternalHost(v.serverHostname, v.defaultDomain) ? (
+            <Alert variant="warning" title={t('wizard.domain.extTitle')}>
+              {t('wizard.domain.ext', {
+                host: v.serverHostname,
+                zone: hostZone(v.serverHostname),
+                domain: v.defaultDomain,
+              })}
+            </Alert>
+          ) : null
+        }
+      />
+
+      <StepNav
+        onBack={onBack}
+        onNext={() => void form.handleSubmit()}
+        backLabel={t('wizard.common.back')}
+        nextLabel={t('wizard.common.next')}
+      />
     </form>
   )
 }
