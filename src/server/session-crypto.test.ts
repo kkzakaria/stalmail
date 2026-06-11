@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { encryptToken, decryptToken } from './session-crypto'
 
 beforeEach(() => {
   process.env.STALMAIL_SECRET = 'test-install-secret-32-chars-min!!'
+})
+
+afterEach(() => {
+  delete process.env.STALMAIL_SECRET
 })
 
 describe('session-crypto', () => {
@@ -34,5 +38,15 @@ describe('session-crypto', () => {
     expect(() => encryptToken('x', 'a')).toThrow(/STALMAIL_SECRET/)
     process.env.STALMAIL_SECRET = 'too-short'
     expect(() => encryptToken('x', 'a')).toThrow(/STALMAIL_SECRET/)
+  })
+
+  it('rejects truncated payload as too short', () => {
+    expect(() => decryptToken(Buffer.alloc(10).toString('base64'), 'a')).toThrow(/too short/)
+  })
+
+  it('fails to decrypt when the root secret changes', () => {
+    const enc = encryptToken('secret', 'a')
+    process.env.STALMAIL_SECRET = 'different-secret-32-chars-min!!'
+    expect(() => decryptToken(enc, 'a')).toThrow()
   })
 })

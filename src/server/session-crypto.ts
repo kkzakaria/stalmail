@@ -14,7 +14,7 @@ function rootSecret(): string {
 }
 
 function deriveKey(info: string): Buffer {
-  return Buffer.from(hkdfSync('sha256', rootSecret(), new Uint8Array(0), info, 32))
+  return Buffer.from(hkdfSync('sha256', rootSecret(), new Uint8Array(0), info, 32)) // empty salt: RFC 5869 §2.2 compliant — the info string provides domain separation
 }
 
 // Layout: base64( iv(12) | tag(16) | ciphertext ). `aad` binds the ciphertext to its
@@ -29,6 +29,8 @@ export function encryptToken(plaintext: string, aad: string): string {
 
 export function decryptToken(payload: string, aad: string): string {
   const buf = Buffer.from(payload, 'base64')
+  if (buf.length < 29)
+    throw new Error('session-crypto: payload too short to be a valid ciphertext')
   const iv = buf.subarray(0, 12)
   const tag = buf.subarray(12, 28)
   const ct = buf.subarray(28)
