@@ -118,19 +118,21 @@ async function freshAccessToken(sidHash: string, now: number): Promise<string | 
     store.deleteSession(sidHash)
     return null
   }
-  if (now < r.accessExp - REFRESH_SKEW_MS) return decryptToken(r.encAccess, sidHash)
-  if (!r.encRefresh) return decryptToken(r.encAccess, sidHash)
+  // Decrypt failure (corrupt record or rotated STALMAIL_SECRET) self-heals by dropping the session.
   try {
+    if (now < r.accessExp - REFRESH_SKEW_MS) return decryptToken(r.encAccess, sidHash)
+    if (!r.encRefresh) return decryptToken(r.encAccess, sidHash)
     const tokens = await refreshTokens({ refreshToken: decryptToken(r.encRefresh, sidHash), clientId: CLIENT_ID })
     store.updateSession(sidHash, {
       encAccess: encryptToken(tokens.accessToken, sidHash),
       // Stalwart rotates the refresh token only in its last 4 days — persist when present.
       encRefresh: tokens.refreshToken ? encryptToken(tokens.refreshToken, sidHash) : r.encRefresh,
+      // accessExp uses pre-roundtrip `now` (conservative — refreshes slightly early on next call).
       accessExp: now + tokens.expiresIn * 1000,
     })
     return tokens.accessToken
   } catch {
-    store.deleteSession(sidHash) // refresh failed → force re-login
+    store.deleteSession(sidHash) // decrypt failure or refresh failure → force re-login
     return null
   }
 }

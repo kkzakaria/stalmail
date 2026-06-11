@@ -141,4 +141,13 @@ describe('logout / withFreshAccessToken', () => {
     expect(await withFreshAccessToken(res.sid, 1000 + 3600_000)).toBeNull()
     expect(store.getSession(hashSid(res.sid))).toBeUndefined()
   })
+
+  it('drops the session and returns null when the record cannot be decrypted', async () => {
+    mockSuccess()
+    const res = await login({ ...baseLogin, now: 1000 })
+    if (!res.ok) throw new Error('login failed')
+    store.updateSession(hashSid(res.sid), { encAccess: 'AAAA' + 'A'.repeat(60) })
+    expect(await withFreshAccessToken(res.sid, 2000)).toBeNull()
+    expect(store.getSession(hashSid(res.sid))).toBeUndefined()
+  })
 })
