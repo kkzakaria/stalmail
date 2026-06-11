@@ -1207,7 +1207,7 @@ export function clientIp(): string | undefined {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/server/session-cookie.test.ts`
-Expected: PASS (8 tests).
+Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
