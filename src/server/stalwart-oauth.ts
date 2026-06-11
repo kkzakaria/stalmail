@@ -41,9 +41,16 @@ export async function postApiAuth(input: {
   })
   // /api/auth always answers 200 with the business status in `type`.
   if (!res.ok) throw new OAuthError(`/api/auth HTTP ${res.status}`)
-  const body = (await res.json()) as { type?: string; client_code?: string }
-  if (body.type === 'authenticated' && body.client_code)
+  let body: { type?: string; client_code?: string }
+  try {
+    body = (await res.json()) as { type?: string; client_code?: string }
+  } catch {
+    throw new OAuthError(`/api/auth: non-JSON body (status ${res.status})`)
+  }
+  if (body.type === 'authenticated') {
+    if (!body.client_code) throw new OAuthError('authenticated response missing client_code')
     return { type: 'authenticated', clientCode: body.client_code }
+  }
   if (body.type === 'mfaRequired') return { type: 'mfaRequired' }
   return { type: 'failure' }
 }
@@ -62,10 +69,19 @@ async function tokenRequest(form: Record<string, string>): Promise<TokenSet> {
     body: new URLSearchParams(form).toString(),
   })
   if (!res.ok) throw new OAuthError(`/auth/token HTTP ${res.status}`)
-  const body = (await res.json()) as {
+  let body: {
     access_token?: string
     refresh_token?: string
     expires_in?: number
+  }
+  try {
+    body = (await res.json()) as {
+      access_token?: string
+      refresh_token?: string
+      expires_in?: number
+    }
+  } catch {
+    throw new OAuthError(`/auth/token: non-JSON body (status ${res.status})`)
   }
   if (!body.access_token) throw new OAuthError('no access_token in token response')
   return {

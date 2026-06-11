@@ -33,6 +33,28 @@ describe('postApiAuth', () => {
     fetchMock.mockResolvedValue(okJson({ type: 'failure' }))
     expect(await postApiAuth({ accountName: 'a', accountSecret: 'b', clientId: 'stalmail', redirectUri: 'r', codeChallenge: 'c' })).toEqual({ type: 'failure' })
   })
+
+  it('sends mfaToken in the JSON body when provided', async () => {
+    fetchMock.mockResolvedValue(okJson({ type: 'mfaRequired' }))
+    await postApiAuth({
+      accountName: 'alice@probe.test', accountSecret: 'pw', clientId: 'stalmail',
+      redirectUri: 'http://h/login', codeChallenge: 'CH', mfaToken: 'TOTP',
+    })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as Record<string, string>).body)
+    expect(sent.mfaToken).toBe('TOTP')
+  })
+
+  it('rejects on 502 error status with non-JSON body', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 502 })
+    await expect(postApiAuth({ accountName: 'a', accountSecret: 'b', clientId: 'stalmail', redirectUri: 'r', codeChallenge: 'c' }))
+      .rejects.toThrow(/502/)
+  })
+
+  it('rejects when authenticated response is missing client_code', async () => {
+    fetchMock.mockResolvedValue(okJson({ type: 'authenticated' }))
+    await expect(postApiAuth({ accountName: 'a', accountSecret: 'b', clientId: 'stalmail', redirectUri: 'r', codeChallenge: 'c' }))
+      .rejects.toThrow(/missing client_code/)
+  })
 })
 
 describe('exchangeCode / refreshTokens', () => {
@@ -55,5 +77,17 @@ describe('exchangeCode / refreshTokens', () => {
     const tokens = await refreshTokens({ refreshToken: 'RT', clientId: 'stalmail' })
     expect(tokens).toEqual({ accessToken: 'AT2', refreshToken: null, expiresIn: 3600 })
     expect(new URLSearchParams((fetchMock.mock.calls[0][1].body as string)).get('grant_type')).toBe('refresh_token')
+  })
+
+  it('rejects on non-JSON response body during token exchange', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => { throw new SyntaxError('x') } })
+    await expect(exchangeCode({ code: 'CODE', codeVerifier: 'VER', clientId: 'stalmail', redirectUri: 'http://h/login' }))
+      .rejects.toThrow(/non-JSON/)
+  })
+
+  it('rejects when token response has no access_token', async () => {
+    fetchMock.mockResolvedValue(okJson({}))
+    await expect(exchangeCode({ code: 'CODE', codeVerifier: 'VER', clientId: 'stalmail', redirectUri: 'http://h/login' }))
+      .rejects.toThrow(/no access_token/)
   })
 })
