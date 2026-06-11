@@ -43,7 +43,7 @@ Le flux retenu s'appuie donc sur `/api/auth` (custom form → code) puis `/auth/
    §10 : Stalwart v0.16 traite le client comme public et **rejette** un `client_secret` ;
    PKCE S256 est *enforced*). La reco initiale d'un client confidentiel est donc infirmée.
 3. **Session** : pattern BFF / token-handler — **cookie opaque httpOnly** + **store
-   serveur** (`bun:sqlite`), **tokens chiffrés au repos**. Révocation instantanée.
+   serveur** (fichier JSON via `node:fs`, cf. §6), **tokens chiffrés au repos**. Révocation instantanée.
 4. **2FA** : la machine d'état gère `mfaRequired` dès maintenant (pas de crash, message
    clair) ; **l'écran de saisie TOTP est différé** tant que le wizard n'expose pas
    l'enrôlement 2FA.
@@ -130,7 +130,8 @@ src/server/
   oauth-pkce.ts            → génération verifier/challenge S256 + state (node:crypto).
   session-crypto.ts        → dérivation de clés (HKDF depuis STALMAIL_SECRET) +
                              chiffrement/déchiffrement AES-256-GCM des tokens.
-  session-store.ts         → store bun:sqlite : create/get/touch/delete/refresh.
+  session-store.ts         → store fichier node:fs (Map + write-through atomique) :
+                             create/get/touch/delete/deleteAllForAccount/sweepExpired.
   session.ts               → couche métier : login(), logout(),
                              logoutAllForAccount() (déconnexion partout),
                              currentSession(), withFreshAccessToken() (refresh transparent,
@@ -153,31 +154,36 @@ src/routes/mail/$folder.tsx, src/routes/index.tsx
 ```
 
 Chaque module est testable isolément (interfaces étroites) : PKCE pur, crypto pur, store
-contre une sqlite temporaire, client OAuth contre un fetch mocké.
+contre un répertoire temporaire (`STALMAIL_DATA_DIR`), client OAuth contre un fetch mocké.
 
 ## 6. Modèle de session et stockage
 
-**Store : `bun:sqlite`** (natif Bun, zéro dépendance) dans un volume de données app
-**dédié** (cf. §13). Schéma minimal :
+**Store : fichier JSON via `node:fs`** (PAS `bun:sqlite`) — la prod tourne sous **Node 24**
+(`docker/app/Dockerfile` : Bun ne sert qu'au build, le serveur est `node …`) et les tests
+sous **vitest/node** ; un module `bun:*` casserait les deux. Le store est donc une **Map en
+mémoire** (working set au runtime) avec **persistance write-through** dans un fichier sur un
+volume de données app **dédié** (cf. §13), écrit atomiquement (fichier temporaire + `rename`),
+rechargé au démarrage. Zéro dépendance native, portable, conforme à l'idiome `node:fs` déjà
+employé (`setup-flag.ts`, `setup-state.ts`). Enregistrement par session :
 
 ```
-sessions(
-  sid            TEXT PRIMARY KEY,   -- 256 bits aléatoires, opaque (base64url)
-  account_id     TEXT NOT NULL,      -- accountId JMAP / principal
-  account_name   TEXT NOT NULL,      -- email, pour l'affichage
-  enc_access     BLOB NOT NULL,      -- access_token chiffré (AES-256-GCM)
-  enc_refresh    BLOB,               -- refresh_token chiffré (si émis)
-  access_exp     INTEGER NOT NULL,   -- epoch s d'expiration de l'access token
-  created_at     INTEGER NOT NULL,
-  last_seen_at   INTEGER NOT NULL
-)
+SessionRecord {
+  sid:          string   // 256 bits aléatoires, opaque (base64url) — la clé de la Map
+  accountId:    string   // accountId JMAP / principal
+  accountName:  string   // email, pour l'affichage
+  encAccess:    string   // access_token chiffré (AES-256-GCM, base64)
+  encRefresh:   string|null  // refresh_token chiffré (si émis)
+  accessExp:    number   // epoch s d'expiration de l'access token
+  createdAt:    number
+  lastSeenAt:   number
+}
 ```
 
-**Chiffrement au repos** : `enc_access`/`enc_refresh` chiffrés en AES-256-GCM avec une
-clé dérivée par **HKDF-SHA256 depuis `STALMAIL_SECRET`** (`info="stalmail/session-enc"`).
-Un vol du seul fichier sqlite ne livre donc pas de tokens exploitables. (Pas de nouvelle
-variable d'env : on dérive des sous-clés distinctes du secret unique déjà présent ;
-introduire un `STALMAIL_SESSION_KEY` dédié reste une option future.)
+**Chiffrement au repos** : `encAccess`/`encRefresh` chiffrés en AES-256-GCM avec une clé
+dérivée par **HKDF-SHA256 depuis `STALMAIL_SECRET`** (`info="stalmail/session-enc"`). Un vol
+du seul fichier ne livre donc pas de tokens exploitables. (Pas de nouvelle variable d'env :
+on dérive une sous-clé du secret unique déjà présent ; un `STALMAIL_SESSION_KEY` dédié reste
+une option future.)
 
 **Expiration / nettoyage** : durée de vie de session bornée — **idle TTL 7 j** + **absolu
 30 j** (aligné sur `refreshTokenExpiry`=30 j pour que la session ne survive jamais au
@@ -268,7 +274,7 @@ des formes de données mail (réservées au Plan 4).
 
 - **Nouveau volume de données app dédié** : le service `app` ne monte aujourd'hui que
   `stalmail-shared:/shared` (coordination inter-containers). Ajouter
-  `stalmail-app-data:/var/lib/stalmail` (app-only) pour le store de session sqlite.
+  `stalmail-app-data:/var/lib/stalmail` (app-only) pour le fichier du store de session.
 - **Nouvelle env** : `STALMAIL_DATA_DIR` (défaut `/var/lib/stalmail`) pour localiser la
   base de session. `STALMAIL_SECRET` (déjà présent) sert de racine HKDF pour la **clé de
   chiffrement des tokens en session** (le client OAuth public n'a pas de secret à dériver).
@@ -280,7 +286,8 @@ des formes de données mail (réservées au Plan 4).
 - `oauth-pkce` : verifier/challenge conformes RFC 7636 (longueurs, S256).
 - `session-crypto` : round-trip chiffrement/déchiffrement ; déchiffrement échoue avec une
   mauvaise clé ; clés HKDF distinctes par `info`.
-- `session-store` : CRUD contre sqlite temporaire ; expiration ; révocation.
+- `session-store` : CRUD contre un `STALMAIL_DATA_DIR` temporaire ; persistance
+  rechargée après recreation du store ; expiration ; `deleteAllForAccount`.
 - `stalwart-oauth` : construction des requêtes `/api/auth` et `/auth/token` ; parsing des
   unions taguées (`authenticated`/`mfaRequired`/`failure`) ; fetch mocké.
 - `session` : login crée une session + cookie ; refresh transparent ; logout révoque.
