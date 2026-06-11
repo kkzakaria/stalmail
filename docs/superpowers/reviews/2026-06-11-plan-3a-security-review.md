@@ -67,27 +67,29 @@ script de quelques secondes.
 > strict tant que la divergence n'est pas éclaircie.
 
 La doc HTTP API est explicite : `redirectUri` « **must use `https://` unless the server
-is in recovery or dev mode** ». Or la capture du 2026-06-09 a été réalisée contre un
-serveur **en mode bootstrap/recovery** (« Server started in bootstrap mode », listener
-`http-recovery`). Le verdict §16/#7 de la spec (« http accepté ») décrit donc le
-comportement du mode recovery, pas celui d'une instance de production.
+is in recovery or dev mode** ». Or la capture du 2026-06-09 (§10, réalisée contre un
+serveur **en mode normal**, v0.16.8) a observé `http://` **accepté**. Le verdict §16/#7
+de la spec (« http accepté ») entre donc en **divergence avec la doc**, qui exige
+`https://` hors modes recovery/dev — à clarifier avant la mise en service.
 
 Risques induits :
-- En prod, un `redirect_uri` http sera vraisemblablement **rejeté** → login cassé en
-  dev-compose si le BFF envoie `http://…`, et surtout comportement non testé en prod.
+- Comportement incertain : si la doc dit vrai (https exigé), un `redirect_uri` http
+  casserait le login en prod ; si la capture dit vrai, une contrainte documentée n'est
+  pas appliquée par le serveur. Dans les deux cas, ne pas bâtir le flux sur `http://`.
 - `loginHandler` **dérive `redirectUri` des headers** (`x-forwarded-proto` avec fallback
   `'http'`, `x-forwarded-host`/`host` avec fallback `'localhost'`). C'est fragile
   (dépend de la chaîne proxy) et inutile : dans ce flux, l'URI n'est jamais utilisée pour
   rediriger — c'est un paramètre de liaison OAuth.
 
 **Exigences :**
-- Re-valider les verdicts de la capture **hors mode bootstrap** (au moins : client
-  public, http accepté, rotation RT). La doc corrobore le client public
+- **Clarifier la divergence doc ↔ capture** : re-test ciblé en mode normal de
+  l'acceptation/du rejet d'un `redirect_uri` http (et, selon le résultat, issue upstream
+  Stalwart ou correction de la spec). La doc corrobore par ailleurs le client public
   (`requireClientRegistration: false` par défaut), mais c'est une config par défaut, pas
   une garantie structurelle.
 - Remplacer la dérivation par headers par une **URL publique fixe en configuration**
-  (ex. `STALMAIL_PUBLIC_URL`, https en prod), utilisée à l'identique pour `/api/auth` et
-  `/auth/token`.
+  (ex. `STALMAIL_PUBLIC_URL`, https en prod — le cas le plus strict), utilisée à
+  l'identique pour `/api/auth` et `/auth/token`.
 
 ---
 
@@ -155,7 +157,7 @@ création de session).
 `logoutAllForAccount` existe mais n'est branché nulle part, et il n'est **pas vérifié**
 que Stalwart invalide les access/refresh tokens lors d'un changement de mot de passe ou
 d'une désactivation de compte. Si non, une session (RT 30 j) survit des semaines à une
-rotation de credential. À vérifier empiriquement (hors mode bootstrap) et à tracer comme
+rotation de credential. À vérifier empiriquement (en mode normal) et à tracer comme
 exigence du flux « changement de mot de passe » (Plan 4 / wizard).
 
 ### M4 — CSRF : Origin absent = accepté, pas de fallback Referer, confiance en `x-forwarded-host`
