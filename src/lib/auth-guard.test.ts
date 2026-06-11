@@ -19,10 +19,12 @@ describe('requireAuth', () => {
     vi.mocked(sessionStatusFn).mockResolvedValue({ authenticated: true, accountName: 'a@x' })
     expect(await requireAuth()).toEqual({ accountName: 'a@x' })
     expect(mockRedirect).not.toHaveBeenCalled()
+    expect(vi.mocked(sessionStatusFn)).toHaveBeenCalledOnce()
   })
 
   it('throws a redirect to /login when unauthenticated', async () => {
     vi.mocked(sessionStatusFn).mockResolvedValue({ authenticated: false })
     await expect(requireAuth()).rejects.toMatchObject({ __redirect: { to: '/login' } })
+    expect(vi.mocked(sessionStatusFn)).toHaveBeenCalledOnce()
   })
 })

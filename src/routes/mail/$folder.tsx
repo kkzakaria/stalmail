@@ -1,4 +1,3 @@
-// src/routes/mail/$folder.tsx
 import { createFileRoute } from '@tanstack/react-router'
 import { requireAuth } from '@/lib/auth-guard'
 
