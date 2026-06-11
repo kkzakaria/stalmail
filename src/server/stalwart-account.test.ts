@@ -56,4 +56,13 @@ describe('createAdminAccount', () => {
       createAdminAccount({ name: 'admin', domainId: 'b', password: 'correct horse battery staple' }),
     ).rejects.toThrow('username already in use')
   })
+
+  it('falls back to the generic error for a primaryKeyViolation on another field', async () => {
+    mj.mockResolvedValue([
+      ['x:Account/set', { notCreated: { u1: { type: 'primaryKeyViolation', properties: ['name'] } } }, '0'],
+    ])
+    await expect(
+      createAdminAccount({ name: 'x', domainId: 'b', password: 'correct horse battery staple' }),
+    ).rejects.toThrow('account creation rejected')
+  })
 })
