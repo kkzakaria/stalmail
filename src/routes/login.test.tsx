@@ -64,4 +64,14 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Trop de tentatives')
   })
+
+  it('shows the generic error on network failure', async () => {
+    vi.mocked(loginFn).mockRejectedValue(new Error('network'))
+    wrap()
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'a@x.fr' } })
+    fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'pw' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(navigate).not.toHaveBeenCalled()
+  })
 })

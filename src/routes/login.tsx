@@ -40,8 +40,9 @@ export function LoginPage() {
       )
     } catch {
       setError(t('login.error'))
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
   }
 
   return (
@@ -65,6 +66,7 @@ export function LoginPage() {
             value={email}
             placeholder={t('login.emailPlaceholder')}
             onChange={(e) => setEmail(e.target.value)}
+            required
           />
         </div>
         <div className="space-y-1.5">
@@ -75,6 +77,7 @@ export function LoginPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            required
           />
         </div>
         <Button type="submit" className="w-full" disabled={busy}>
