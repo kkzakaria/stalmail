@@ -24,7 +24,11 @@
 >   flag posé (**durcissement v0.1.9**).
 > - **Flag first-run** = `${STALMAIL_RUN_DIR}/.stalmail-configured` (= `/shared/...`, le
 >   volume partagé entre conteneurs) — et non `/var/lib/stalwart/...`.
-> - Le **wizard compte 9 étapes** (et non 6) — voir le design du wizard.
+> - Le wizard a été **porté à 9 étapes** au Plan 2b (la **§6** ci-dessous décrit le
+>   découpage initial en 6 étapes) — voir
+>   [`2026-06-09-setup-wizard-design.md`](2026-06-09-setup-wizard-design.md) et
+>   [`2026-06-09-setup-wizard-ui-design.md`](2026-06-09-setup-wizard-ui-design.md). Le
+>   flag `.stalmail-configured` est posé à la dernière étape (Terminé), non à « l'étape 6 ».
 >
 > Le reste du document (vision, modèle de données/volumes, sécurité applicative,
 > structure des routes/server functions) reste pertinent.
@@ -184,6 +188,11 @@ Toast             → feedback actions (archive, snooze, label…)
 ---
 
 ## 6. Setup Wizard (6 étapes)
+
+> ℹ️ Découpage **initial** (6 étapes). Le wizard implémenté en **9 étapes** (Bienvenue,
+> Domaine, Fournisseur DNS, Administrateur, Récapitulatif, Compte, Enregistrements DNS,
+> SSL, Terminé) est décrit dans les specs du Plan 2b
+> ([fonctionnel](2026-06-09-setup-wizard-design.md) · [UI](2026-06-09-setup-wizard-ui-design.md)).
 
 Linéaire, une seule décision par écran. Repris-able : si le browser se ferme en cours, la progression est persistée côté serveur.
 
