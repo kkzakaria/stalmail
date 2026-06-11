@@ -36,14 +36,14 @@ describe('markSetupComplete', () => {
     )
   })
 
-  it('respects STALMAIL_DATA_DIR env variable for the path', () => {
-    process.env.STALMAIL_DATA_DIR = '/custom/data'
+  it('respects STALMAIL_RUN_DIR env variable for the path', () => {
+    process.env.STALMAIL_RUN_DIR = '/custom/run'
     markSetupComplete()
     expect(writeFileSync).toHaveBeenCalledWith(
-      '/custom/data/.stalmail-configured',
+      '/custom/run/.stalmail-configured',
       expect.any(String),
       'utf-8',
     )
-    delete process.env.STALMAIL_DATA_DIR
+    delete process.env.STALMAIL_RUN_DIR
   })
 })

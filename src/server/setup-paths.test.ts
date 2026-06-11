@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 // In the compose deployment the app (BFF) and the stalwart service share a volume:
-// the BFF writes the restart sentinel under STALMAIL_RUN_DIR and the setup-complete
-// flag under STALMAIL_DATA_DIR; the Stalwart supervisor watches the sentinel. These
-// tests pin that the modules honour those env vars (default /run/stalmail and
-// /var/lib/stalwart) so compose can repoint them at the shared volume (/shared).
+// the BFF writes BOTH the restart sentinel and the setup-complete flag under
+// STALMAIL_RUN_DIR (the shared coordination dir); the Stalwart supervisor watches the
+// sentinel and reads the flag. These tests pin that the modules honour that env var
+// (default /run/stalmail) so compose can repoint it at the shared volume (/shared).
 describe('cross-container coordination paths', () => {
   const saved = { ...process.env }
   let dir: string
@@ -27,8 +27,8 @@ describe('cross-container coordination paths', () => {
     expect(existsSync(join(dir, 'restart-stalwart'))).toBe(true)
   })
 
-  it('markSetupComplete writes the flag under STALMAIL_DATA_DIR; isSetupComplete reads it', async () => {
-    process.env.STALMAIL_DATA_DIR = dir
+  it('markSetupComplete writes the flag under STALMAIL_RUN_DIR; isSetupComplete reads it', async () => {
+    process.env.STALMAIL_RUN_DIR = dir
     const { markSetupComplete, isSetupComplete } = await import('./setup-flag')
     expect(isSetupComplete()).toBe(false)
     markSetupComplete()

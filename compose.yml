@@ -42,7 +42,6 @@ services:
       STALWART_URL: http://stalwart:8080
       STALWART_RECOVERY_ADMIN: "stalmail-admin:${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
       STALMAIL_RUN_DIR: /shared
-      STALMAIL_DATA_DIR: /shared
     volumes:
       - stalmail-shared:/shared
     depends_on:

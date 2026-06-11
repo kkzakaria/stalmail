@@ -10,9 +10,11 @@ STALWART_CONFIG="${STALWART_CONFIG:-/etc/stalwart/config.json}"
 STALWART_DATA_DIR="${STALWART_DATA_DIR:-/var/lib/stalwart}"
 RUN_DIR="${STALMAIL_RUN_DIR:-/shared}"
 SENTINEL="${RUN_DIR}/restart-stalwart"
-# Recovery-admin hardening: the wizard writes this flag (markSetupComplete) into the
-# shared volume on finalize. Its presence at (re)start makes us drop the permanent
-# STALWART_RECOVERY_ADMIN credential — see start_stalwart.
+# Recovery-admin hardening: on finalize the wizard's markSetupComplete() writes this
+# flag into STALMAIL_RUN_DIR — the SAME shared coordination dir as the sentinel above,
+# so both containers agree on the path (src/server/setup-flag.ts resolves it identically).
+# Its presence at (re)start makes us drop the permanent STALWART_RECOVERY_ADMIN
+# credential — see start_stalwart.
 CONFIGURED_FLAG="${STALMAIL_CONFIGURED_FLAG:-${RUN_DIR}/.stalmail-configured}"
 mkdir -p "${RUN_DIR}"
 
