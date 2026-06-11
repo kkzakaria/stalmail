@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/kkzakaria/stalmail/compare/v0.1.9...v0.1.10) (2026-06-11)
+
+
+### Bug Fixes
+
+* **wizard:** reserve admin username + dev reset script ([#26](https://github.com/kkzakaria/stalmail/issues/26)) ([7896782](https://github.com/kkzakaria/stalmail/commit/7896782cfd4fe92130cf3e76265ebabe3d21f746))
+
 ## [0.1.9](https://github.com/kkzakaria/stalmail/compare/v0.1.8...v0.1.9) (2026-06-11)
 
 
