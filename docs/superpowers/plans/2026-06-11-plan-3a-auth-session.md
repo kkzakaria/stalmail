@@ -4,7 +4,7 @@
 
 **Goal:** Permettre à un utilisateur de se connecter via le formulaire Stalmail (email + mot de passe), établir une session sécurisée (cookie opaque httpOnly + store serveur, tokens OAuth chiffrés au repos), protéger les routes `/mail/*`, et se déconnecter.
 
-**Architecture:** Pattern BFF / token-handler. Le BFF rate-limite les tentatives (par compte + IP), relaie les identifiants à `POST /api/auth` (Stalwart v0.16, client public PKCE `stalmail`), échange le code à `POST /auth/token` (`redirect_uri` = `STALMAIL_PUBLIC_URL` fixe, jamais dérivé des headers), et garde les tokens **côté serveur** (Map en mémoire + write-through fichier `node:fs` mode 0600, AES-256-GCM avec AAD, store indexé par `SHA-256(sid)`). Le navigateur ne détient qu'un `sid` opaque. JMAP user via `Authorization: Bearer`. Logout = purge côté BFF (pas d'endpoint de révocation Stalwart). `useXForwarded` est activé côté Stalwart au finalize du wizard (`x:Http/set`) — condition de mise en service du login (auto-ban par IP). Voir spec `docs/superpowers/specs/2026-06-11-plan-3a-auth-session-design.md`, revue sécurité `docs/superpowers/reviews/2026-06-11-plan-3a-security-review.md` et capture `docs/superpowers/specs/2026-06-09-stalwart-api-capture.md` §10 (⚠️ réalisée en mode bootstrap — re-valider les verdicts sensibles au mode avant mise en service).
+**Architecture:** Pattern BFF / token-handler. Le BFF rate-limite les tentatives (par compte + IP), relaie les identifiants à `POST /api/auth` (Stalwart v0.16, client public PKCE `stalmail`), échange le code à `POST /auth/token` (`redirect_uri` = `STALMAIL_PUBLIC_URL` fixe, jamais dérivé des headers), et garde les tokens **côté serveur** (Map en mémoire + write-through fichier `node:fs` mode 0600, AES-256-GCM avec AAD, store indexé par `SHA-256(sid)`). Le navigateur ne détient qu'un `sid` opaque. JMAP user via `Authorization: Bearer`. Logout = purge côté BFF (pas d'endpoint de révocation Stalwart). `useXForwarded` est activé côté Stalwart au finalize du wizard (`x:Http/set`) — condition de mise en service du login (auto-ban par IP). Voir spec `docs/superpowers/specs/2026-06-11-plan-3a-auth-session-design.md`, revue sécurité `docs/superpowers/reviews/2026-06-11-plan-3a-security-review.md` et capture `docs/superpowers/specs/2026-06-09-stalwart-api-capture.md` §10 (capturé en **mode normal** ; ⚠️ divergence doc ↔ capture sur l'exigence https du `redirect_uri` — on retient https, à éclaircir avant mise en service, cf. spec §16).
 
 **Tech Stack:** TanStack Start (server functions, cookies via `@tanstack/react-start/server`), React 19, `node:crypto` (HKDF + AES-256-GCM + PKCE), `node:fs` (store), Zod, Vitest, i18next.
 
@@ -439,7 +439,7 @@ git commit -m "feat(auth): file-backed session store keyed by SHA-256(sid), mode
 - Create: `src/server/stalwart-oauth.ts`
 - Test: `src/server/stalwart-oauth.test.ts`
 
-Comportements ancrés sur la capture §10 : `/api/auth` renvoie toujours 200, statut dans `type`, clé `client_code`; `/auth/token` en `x-www-form-urlencoded`, **sans** secret client.
+Comportements ancrés sur la capture §10 (mode normal, v0.16.8) : `/api/auth` renvoie toujours 200, statut dans `type`, clé `client_code`; `/auth/token` en `x-www-form-urlencoded`, **sans** secret client. ⚠️ Rappel (spec §7/§16) : le `redirect_uri` est toujours l'URL https fixe `STALMAIL_PUBLIC_URL` — la doc Stalwart exige https hors recovery/dev même si la capture a observé http accepté (divergence à éclaircir).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1229,6 +1229,8 @@ git commit -m "feat(auth): session cookie helpers + CSRF Origin/Referer check + 
 Le rate-limiting BFF est une exigence de la spec §9 : il amortit le bruteforce **avant**
 `/api/auth` pour que les échecs ne s'accumulent pas sur l'IP du BFF côté Stalwart
 (auto-ban `authBanRate` = 100 échecs/jour par IP source) et limite l'oracle `mfaRequired`.
+⚠️ Rappel (spec §7/§16) : `redirectUri` vient exclusivement de `STALMAIL_PUBLIC_URL`
+(https en prod) — jamais des headers de la requête.
 
 - [ ] **Step 1: Write the failing rate-limit test**
 
@@ -1985,7 +1987,7 @@ Under the top-level `volumes:` block, add:
 
 - [ ] **Step 7: Mirror in `compose.dev.yml`**
 
-Add the same `STALMAIL_SECRET` and `STALMAIL_DATA_DIR: /var/lib/stalmail` env to the dev `app` service, plus `STALMAIL_PUBLIC_URL: http://localhost:3000` (http toléré en dev uniquement — Stalwart n'exige https qu'hors modes recovery/dev), the `- stalmail-app-data:/var/lib/stalmail` volume and the top-level `stalmail-app-data:` volume. Do **not** set `NODE_ENV: production` in dev (cookies stay non-`__Host-`/non-Secure over http, per `session-cookie.ts`).
+Add the same `STALMAIL_SECRET` and `STALMAIL_DATA_DIR: /var/lib/stalmail` env to the dev `app` service, plus `STALMAIL_PUBLIC_URL: http://localhost:3000` (http toléré en dev uniquement ; en prod https, aligné sur la doc Stalwart — cf. spec §7/§16), the `- stalmail-app-data:/var/lib/stalmail` volume and the top-level `stalmail-app-data:` volume. Do **not** set `NODE_ENV: production` in dev (cookies stay non-`__Host-`/non-Secure over http, per `session-cookie.ts`).
 
 - [ ] **Step 8: Validate compose files parse**
 
@@ -2040,5 +2042,5 @@ git commit --allow-empty -m "chore(auth): Plan 3a complete — full suite + type
 - 2FA TOTP entry UI (only `mfaRequired` detection here) → deferred.
 - `logoutAllForAccount` trigger UI ("sign out everywhere") → Plan 4 / settings (the store helper exists, see `session.ts`).
 - Caddyfile : vérifier/documenter que Caddy écrase les `X-Forwarded-*` entrants (`trusted_proxies` — défaut sûr, à confirmer) → suivi infra (spec §8/§9).
-- **Re-validation empirique hors mode bootstrap** des verdicts de la capture §10 (redirect_uri https, client public, rotation RT) + question ouverte : Stalwart invalide-t-il les tokens au changement de mot de passe ? (spec §16) → avant mise en service / Plan 4.
+- **Éclaircir la divergence doc ↔ capture** sur l'exigence https du `redirect_uri` (capture §10 en mode normal : http accepté ; doc Stalwart : https exigé hors recovery/dev) + question ouverte : Stalwart invalide-t-il les tokens au changement de mot de passe ? (spec §16) → avant mise en service / Plan 4.
 - App Passwords, external OIDC, multi-account → later.

@@ -2,9 +2,10 @@
 
 > **Statut : constats intégrés** (2026-06-11). Tous les points C1–C2, H1–H3, M1–M5 et
 > L1–L6 ont été repris dans la spec et le plan (voir le tableau §6 pour le mapping).
-> Restent **à exécuter hors de ce repo / avant mise en service** : la re-validation de
-> la capture hors mode bootstrap, la vérification `trusted_proxies` du Caddyfile, et la
-> question de l'invalidation des tokens au changement de mot de passe (spec §16).
+> Restent **à exécuter hors de ce repo / avant mise en service** : l'éclaircissement de
+> la divergence doc ↔ capture sur l'exigence https du `redirect_uri` (cf. erratum C2),
+> la vérification `trusted_proxies` du Caddyfile, et la question de l'invalidation des
+> tokens au changement de mot de passe (spec §16).
 
 **Date :** 2026-06-11
 **Objets revus :**
@@ -53,7 +54,17 @@ script de quelques secondes.
   glissante en mémoire suffit pour un mono-process) avant l'appel `/api/auth`, comme la
   spec §9 l'exige.
 
-### C2 — Verdict « redirect_uri http accepté » obtenu en mode bootstrap : non transposable en prod
+### C2 — Verdict « redirect_uri http accepté » : divergence doc ↔ capture
+
+> **Erratum (post-review, suite au commentaire CodeRabbit sur la PR #29)** : le
+> constat initial affirmait que la capture §10 avait été réalisée « en mode
+> bootstrap/recovery ». C'est inexact : le log « Server started in bootstrap mode »
+> appartient au **§2** (cycle de vie bootstrap, Plan 2a) ; le **§10 OAuth a été capturé
+> en mode normal** (v0.16.8, en-tête explicite). Le constat requalifié est donc une
+> **divergence doc ↔ capture** : la doc exige `https://` hors modes recovery/dev, la
+> capture en mode normal a observé `http://` accepté. Les exigences ci-dessous
+> (`STALMAIL_PUBLIC_URL` https fixe) restent inchangées — on applique le cas le plus
+> strict tant que la divergence n'est pas éclaircie.
 
 La doc HTTP API est explicite : `redirectUri` « **must use `https://` unless the server
 is in recovery or dev mode** ». Or la capture du 2026-06-09 a été réalisée contre un
@@ -212,7 +223,7 @@ obligatoire (`:?`), mais le code doit l'imposer aussi : **fail-hard en productio
 | # | Sévérité | Action | Où |
 |---|---|---|---|
 | C1 | Critique | `use-x-forwarded` = condition de mise en service + tâche rate-limiting BFF | Plan (nouvelle tâche + Task 12/13) |
-| C2 | Critique | `STALMAIL_PUBLIC_URL` fixe (https) au lieu des headers ; re-valider la capture hors mode bootstrap | Task 8 + capture |
+| C2 | Critique | `STALMAIL_PUBLIC_URL` fixe (https) au lieu des headers ; éclaircir la divergence doc ↔ capture sur l'exigence https (cf. erratum) | Task 8 + capture |
 | H1 | Élevé | Stocker `hash(sid)`, fichier 0600 | Task 3/6 |
 | H2 | Élevé | Mutex de refresh par sid | Task 6 |
 | H3 | Élevé | Caddy écrase XFF (`trusted_proxies`), documenter/tester | Infra + Task 7 |

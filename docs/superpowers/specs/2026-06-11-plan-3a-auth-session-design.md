@@ -222,9 +222,11 @@ Stalwart v0.16 accepte un `client_id` arbitraire et traite le client comme **pub
   (Stalwart répond `invalid_client`). L'auth client se fait par `client_id` en form + PKCE.
 - `redirect_uri` : **URL publique fixe en configuration** (`STALMAIL_PUBLIC_URL`, cf.
   §13) — jamais dérivée des headers de la requête (pas de dépendance à la chaîne proxy,
-  pas d'injection de Host). ⚠️ Le « http accepté » observé dans la capture §10 l'a été
-  contre un serveur en **mode bootstrap/recovery** ; la doc Stalwart exige `https://`
-  hors modes recovery/dev. **https obligatoire en prod**, http toléré seulement en dev.
+  pas d'injection de Host). ⚠️ **Divergence doc ↔ capture** : la capture §10 (réalisée
+  en **mode normal**, v0.16.8) a observé `http://` accepté, alors que la doc Stalwart
+  exige `https://` hors modes recovery/dev. On s'aligne sur le cas le plus strict :
+  **https obligatoire en prod**, http toléré seulement en dev ; divergence à éclaircir
+  avant mise en service (cf. §16).
 - Le `client_id` n'est pas une frontière de sécurité ici : la garde réelle est le couple
   identifiants utilisateur (vérifiés par `/api/auth`, anonyme mais rate-limité) + PKCE +
   le fait que seul le BFF (réseau interne) atteint Stalwart.
@@ -365,15 +367,16 @@ Les 7 inconnues initiales ont été **levées empiriquement** contre Stalwart v0
 | 4 | Durées de vie | ✅ `access_token` = **3600 s** ; RT longue durée (réutilisable) |
 | 5 | Endpoint de révocation | ✅ **aucun** → logout BFF-only (cf. §4) |
 | 6 | `X-Forwarded-For` | ⚠️ non prouvable en boîte noire → activé via **`x:Http/set {useXForwarded:true}`** au finalize du wizard, **dans le périmètre 3a** (cf. §9) |
-| 7 | Contrainte `redirect_uri` | ⚠️ « http accepté » observé en **mode bootstrap/recovery** uniquement — la doc exige https hors recovery/dev → `STALMAIL_PUBLIC_URL` https en prod (cf. §7) |
+| 7 | Contrainte `redirect_uri` | ⚠️ **divergence doc ↔ capture** : capture (mode normal) → http accepté ; doc → https exigé hors recovery/dev. On retient **https** via `STALMAIL_PUBLIC_URL` (cf. §7) |
 
-⚠️ **Limite de la capture** : elle a été réalisée contre un serveur en **mode
-bootstrap/recovery** (« Server started in bootstrap mode », listener `http-recovery`).
-Les verdicts sensibles au mode (n° 7 surtout ; n° 1-3 corroborés par la doc —
-`requireClientRegistration: false` par défaut, `refreshTokenRenewal: 4d`) sont à
-**re-valider contre une instance en mode normal** avant la mise en service.
+⚠️ **Précision sur la capture** : elle comporte deux phases distinctes — le §2 (cycle de
+vie bootstrap, log « Server started in bootstrap mode », Plan 2a) et le **§10 OAuth,
+réalisé en mode normal** (v0.16.8, user `alice@probe.test`). Les verdicts n° 1-3 sont en
+outre corroborés par la doc (`requireClientRegistration: false` par défaut,
+`refreshTokenRenewal: 4d`). Reste la **divergence doc ↔ capture du n° 7** (https) à
+éclaircir avant la mise en service — d'ici là, le cas le plus strict (https) s'applique.
 
-**Questions ouvertes (à lever empiriquement, hors mode bootstrap)** :
+**Questions ouvertes (à lever empiriquement, en mode normal)** :
 - Stalwart invalide-t-il les access/refresh tokens lors d'un **changement de mot de
   passe** / désactivation du compte ? Si non, brancher `logoutAllForAccount` sur tout
   flux de rotation de credential (Plan 4 / settings) devient **obligatoire**, pas
