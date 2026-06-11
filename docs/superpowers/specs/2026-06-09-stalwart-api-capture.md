@@ -294,8 +294,15 @@ GET /jmap/session   Authorization: Bearer <access_token>   → 200
 POST /auth/token   grant_type=refresh_token&refresh_token=<RT>&client_id=stalmail
 → 200  {"access_token":"sw1.…","token_type":"bearer","expires_in":3600}
 ```
-- **Refresh NON-rotatif** : aucun nouveau `refresh_token` renvoyé ; le RT est **réutilisable**
-  (pas de détection de replay) ; l'**ancien access_token reste valide** après refresh.
+- **Refresh à renouvellement tardif** (et non « jamais rotaté ») : sur un RT loin de son
+  expiration, `/auth/token` ne renvoie **pas** de nouveau `refresh_token` et le même RT est
+  **réutilisable** ; mais d'après [`OidcProvider`](https://stalw.art/docs/ref/object/oidc-provider)
+  (`refreshTokenExpiry`=30 j, `refreshTokenRenewal`=4 j), quand le RT entre dans ses **4
+  derniers jours**, l'échange **renvoie un nouveau `refresh_token`**. ⚠️ Le BFF doit donc
+  **persister tout `refresh_token` renvoyé** par un refresh. L'**ancien access_token reste
+  valide** après refresh (pas de détection de replay).
+- TTL configurables via `OidcProvider` : `accessTokenExpiry`=1 h, `refreshTokenExpiry`=30 j,
+  `refreshTokenRenewal`=4 j, `authCodeExpiry`=10 min, `authCodeMaxAttempts`=3, `idTokenExpiry`=15 min.
 - **Aucun endpoint de révocation** (`/auth/revoke` → 404). → **logout = purge côté BFF
   uniquement** ; les tokens restent valides côté Stalwart jusqu'à expiration (AT 3600 s).
 - `/auth/introspect` existe mais **Bearer-protégé** (`token=<AT>` + `Authorization: Bearer <AT>`

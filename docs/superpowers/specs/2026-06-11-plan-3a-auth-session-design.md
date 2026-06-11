@@ -86,17 +86,35 @@ Navigateur                BFF (TanStack Start)                Stalwart
 `failure` (identifiants rejetés). Le BFF discrimine sur `type`, **jamais sur le code
 HTTP**. Voir §10 pour la MFA.
 
-**Refresh** : à l'approche de l'expiration de l'access token (`access_exp`, défaut 3600 s)
-ou sur 401 Stalwart, le BFF appelle `/auth/token` avec `grant_type=refresh_token`. Le
-refresh est **non-rotatif** (confirmé §10) : le même `refresh_token` est conservé, seul
-l'`access_token` est remplacé. Rafraîchissement sérialisé par session (pas de course de
-réécriture du store).
+**Refresh** : à l'approche de l'expiration de l'access token (`access_exp`, défaut 1 h) ou
+sur 401 Stalwart, le BFF appelle `/auth/token` avec `grant_type=refresh_token`. Le refresh
+est à **renouvellement tardif** (confirmé §10, `refreshTokenRenewal`=4 j) : la plupart du
+temps le même `refresh_token` est conservé et seul l'`access_token` est remplacé, **mais**
+quand le RT entre dans ses 4 derniers jours l'échange renvoie un **nouveau** `refresh_token`.
+⚠️ Le BFF **persiste donc tout `refresh_token` présent dans la réponse** (sinon les sessions
+casseraient vers J+26). Rafraîchissement sérialisé par session (pas de course de réécriture
+du store). Si le refresh échoue (RT expiré/invalide) → **logout propre + redirect `/login`**.
 
-**Logout** : Stalwart **n'expose aucun endpoint de révocation** (confirmé §10). Le logout
-est donc **purement côté BFF** : suppression de l'enregistrement de session (le cookie ne
-référence plus rien d'utilisable) + effacement du cookie. Les tokens restent
-techniquement valides côté Stalwart jusqu'à expiration naturelle — d'où l'importance de
-ne jamais les exposer hors du BFF et de garder des TTL d'access token courts.
+**Logout** — dans le pattern BFF/token-handler, le logout est **côté BFF par conception** :
+le navigateur ne détient qu'un cookie de session opaque (jamais de token), donc supprimer
+l'enregistrement de session **est** un logout complet. L'absence d'endpoint de révocation
+côté Stalwart (confirmé §10) est sans impact ici — les tokens sont des secrets internes au
+BFF, exposés à rien. Cinq partis actés :
+
+1. **Logout simple** : suppression de l'enregistrement de session (le cookie ne référence
+   plus rien) + `Set-Cookie` avec `Max-Age=0` (mêmes attributs que l'original).
+2. **CSRF sur l'action logout** : mutation POST protégée par vérification d'`Origin`
+   (cf. §8) — empêche un site tiers de forcer la déconnexion.
+3. **« Déconnexion partout »** : un helper `logoutAllForAccount(account_id)` supprime
+   **toutes** les sessions du compte (utile après changement de mot de passe / appareil
+   perdu). **Implémenté maintenant** côté store ; l'UI de déclenchement viendra plus tard
+   (Plan 4 / settings).
+4. **Alignement TTL session ↔ RT** : le TTL **absolu** de session (§6) est fixé à **≤ 30 j**
+   (`refreshTokenExpiry`), pour que la session ne survive jamais au refresh token ; tout
+   échec de refresh force un logout propre (cf. ci-dessus).
+5. **Durcissement optionnel (non retenu par défaut)** : `accessTokenExpiry` reste à **1 h** ;
+   on ne le raccourcit pas globalement via `x:OidcProvider/set` au vu du modèle de menace
+   (tokens internes au BFF). Tracé comme levier de durcissement disponible, non activé.
 
 ## 5. Modules et fichiers (BFF)
 
@@ -113,8 +131,10 @@ src/server/
   session-crypto.ts        → dérivation de clés (HKDF depuis STALMAIL_SECRET) +
                              chiffrement/déchiffrement AES-256-GCM des tokens.
   session-store.ts         → store bun:sqlite : create/get/touch/delete/refresh.
-  session.ts               → couche métier : login(), logout(), currentSession(),
-                             withFreshAccessToken() (refresh transparent).
+  session.ts               → couche métier : login(), logout(),
+                             logoutAllForAccount() (déconnexion partout),
+                             currentSession(), withFreshAccessToken() (refresh transparent,
+                             persiste un refresh_token renvoyé près de l'expiration).
   session-cookie.ts        → lecture/écriture du cookie __Host-stalmail_session.
   auth-actions.ts          → server functions : loginFn, logoutFn, sessionStatusFn.
   stalwart-user.ts         → stalwartUserFetch(path, accessToken, init) : appels
@@ -159,9 +179,11 @@ Un vol du seul fichier sqlite ne livre donc pas de tokens exploitables. (Pas de 
 variable d'env : on dérive des sous-clés distinctes du secret unique déjà présent ;
 introduire un `STALMAIL_SESSION_KEY` dédié reste une option future.)
 
-**Expiration / nettoyage** : durée de vie de session bornée (idle TTL ex. 7 j + absolu
-ex. 30 j — valeurs à confirmer) ; balayage paresseux des sessions expirées à l'accès +
-suppression à la révocation.
+**Expiration / nettoyage** : durée de vie de session bornée — **idle TTL 7 j** + **absolu
+30 j** (aligné sur `refreshTokenExpiry`=30 j pour que la session ne survive jamais au
+refresh token, cf. §4) ; balayage paresseux des sessions expirées à l'accès + suppression
+à la révocation. `logoutAllForAccount(account_id)` supprime toutes les sessions d'un compte
+(« déconnexion partout », cf. §4).
 
 **Persistance** : le store survit aux redémarrages/màj du container (volume dédié),
 évitant de délogger tout le monde à chaque déploiement.
@@ -192,9 +214,10 @@ initialement, et la dérivation d'un secret client (§13 simplifié en conséque
   durcit contre la fixation inter-sous-domaines). `SameSite=Lax` (pas `Strict`) pour ne
   pas délogger un utilisateur arrivant via un lien externe.
 - **Anti-fixation** : le `sid` est régénéré à chaque login réussi.
-- **CSRF** : les mutations passent par des server functions POST. Protection par
-  **vérification d'`Origin`/`Referer`** côté serveur (rejet si origine ≠ origine
-  attendue) en complément de `SameSite=Lax`. Documenter le mécanisme retenu dans le plan.
+- **CSRF** : les mutations passent par des server functions POST (**login et logout
+  inclus**). Protection par **vérification d'`Origin`/`Referer`** côté serveur (rejet si
+  origine ≠ origine attendue) en complément de `SameSite=Lax`. Documenter le mécanisme
+  retenu dans le plan.
 - **Transport** : seul Caddy (443, TLS) est exposé publiquement ; le BFF impose `Secure`
   sur les cookies. En dev (compose.dev, http), prévoir un assouplissement contrôlé du
   flag `Secure`/préfixe `__Host-`.
@@ -290,9 +313,9 @@ Les 7 inconnues initiales ont été **levées empiriquement** contre Stalwart v0
 | 7 | Contrainte `redirect_uri` | ✅ http accepté ; https en prod par hygiène |
 
 **Seul reliquat** : activer `server.http.use-x-forwarded` côté Stalwart (tâche infra, §9).
-Option de durcissement à considérer dans le plan : **raccourcir le TTL d'access token**
-via l'objet `OidcProvider` (le logout étant BFF-only, des AT courts limitent la fenêtre
-de validité résiduelle après logout).
+Levier de durcissement disponible mais **non retenu par défaut** (cf. §4, parti 5) :
+raccourcir `accessTokenExpiry` via `x:OidcProvider/set` ; laissé à 1 h au vu du modèle de
+menace (tokens internes au BFF).
 
 ## 17. Références
 
