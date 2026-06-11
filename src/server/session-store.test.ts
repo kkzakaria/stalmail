@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as store from './session-store'
@@ -15,7 +15,10 @@ beforeEach(() => {
   process.env.STALMAIL_DATA_DIR = dir
   store.__resetCacheForTest()
 })
-afterEach(() => rmSync(dir, { recursive: true, force: true }))
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+  delete process.env.STALMAIL_DATA_DIR
+})
 
 describe('session-store', () => {
   it('creates and reads a session', () => {
@@ -63,5 +66,16 @@ describe('session-store', () => {
     store.sweep((r) => r.sidHash === 'a')
     expect(store.getSession('a')).toBeUndefined()
     expect(store.getSession('b')?.sidHash).toBe('b')
+  })
+
+  it('tolerates a corrupt store file and starts empty', () => {
+    writeFileSync(join(dir, 'sessions.json'), '{NOT JSON', { mode: 0o600 })
+    store.__resetCacheForTest()
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(store.getSession('any')).toBeUndefined()
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

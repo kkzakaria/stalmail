@@ -32,8 +32,8 @@ function load(): Map<string, SessionRecord> {
   if (existsSync(p)) {
     try {
       for (const r of JSON.parse(readFileSync(p, 'utf8')) as SessionRecord[]) m.set(r.sidHash, r)
-    } catch {
-      // Corrupt store → start empty. Sessions are disposable; users re-login.
+    } catch (err) {
+      console.error('[session-store] corrupt sessions.json, starting empty:', err)
     }
   }
   cache = m
@@ -42,7 +42,7 @@ function load(): Map<string, SessionRecord> {
 
 function persist(m: Map<string, SessionRecord>): void {
   const dir = dataDir()
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
   const tmp = join(dir, `sessions.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify([...m.values()]), { encoding: 'utf8', mode: 0o600 })
   renameSync(tmp, storePath()) // atomic replace
@@ -74,14 +74,20 @@ export function deleteSession(sidHash: string): void {
 export function deleteAllForAccount(accountId: string): void {
   const m = load()
   let changed = false
-  for (const [k, r] of m) if (r.accountId === accountId) changed = m.delete(k) || changed
+  for (const [k, r] of m) if (r.accountId === accountId) {
+    m.delete(k)
+    changed = true
+  }
   if (changed) persist(m)
 }
 
 export function sweep(isExpired: (r: SessionRecord) => boolean): void {
   const m = load()
   let changed = false
-  for (const [k, r] of m) if (isExpired(r)) changed = m.delete(k) || changed
+  for (const [k, r] of m) if (isExpired(r)) {
+    m.delete(k)
+    changed = true
+  }
   if (changed) persist(m)
 }
 
