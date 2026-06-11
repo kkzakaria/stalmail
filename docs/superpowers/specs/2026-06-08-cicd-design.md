@@ -3,6 +3,16 @@
 **Date :** 2026-06-08  
 **Repo :** https://github.com/kkzakaria/stalmail
 
+> ⚠️ **Mise à jour — CD (depuis v0.1.4).** Avec la stack `docker compose` à trois
+> services, la CD ne publie plus **une seule** image Docker mais une **matrice de deux
+> images** :
+> - `ghcr.io/kkzakaria/stalmail-app` (BFF/webmail) ;
+> - `ghcr.io/kkzakaria/stalmail-stalwart` (Stalwart stock + superviseur).
+>
+> Référence courante : [`.github/workflows/cd.yml`](../../../.github/workflows/cd.yml)
+> (job `matrix` app/stalwart). Les sections ci-dessous qui parlent de « l'image Docker »
+> au singulier (ex. `stalmail:latest`) sont à lire au pluriel.
+
 ---
 
 ## 1. Vision

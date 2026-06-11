@@ -4,6 +4,35 @@
 **Stack :** TanStack Start · React 19 · Tailwind v4 · shadcn/ui  
 **Stalwart version cible :** v0.16.x
 
+> ⚠️ **Mise à jour — déploiement (depuis v0.1.4).** Le modèle « conteneur unique »
+> décrit en **§2** (une image Debian regroupant Stalwart + Node + Caddy, avec un
+> `entrypoint.sh` qui démarre tout) a été **remplacé par une stack `docker compose` à
+> trois services**, chacun dans son propre namespace réseau, derrière Caddy :
+> - **`stalwart`** — image **stock** `stalwartlabs/stalwart:v0.16` (seul l'entrypoint est
+>   un superviseur de redémarrage) ;
+> - **`app`** — webmail + BFF (TanStack Start, runtime node) ;
+> - **`caddy`** — TLS public + reverse-proxy (`:443`/`:80`).
+>
+> Référence courante : [`compose.yml`](../../../compose.yml) et le plan
+> [`2026-06-09-compose-two-service-architecture.md`](../plans/2026-06-09-compose-two-service-architecture.md).
+> Précisions du document ci-dessous devenues inexactes :
+> - **Installation** = `docker compose up -d` + un `.env` (`STALMAIL_SECRET`) généré par
+>   `install.sh` — plus de `docker run` mono-conteneur.
+> - **recovery-admin** = `STALWART_RECOVERY_ADMIN=stalmail-admin:<secret>` (et non
+>   `stalmail-internal`) ; il n'est pas seulement « plus utilisé » après le setup, il est
+>   **activement retiré** par le superviseur Stalwart au prochain démarrage une fois le
+>   flag posé (**durcissement v0.1.9**).
+> - **Flag first-run** = `${STALMAIL_RUN_DIR}/.stalmail-configured` (= `/shared/...`, le
+>   volume partagé entre conteneurs) — et non `/var/lib/stalwart/...`.
+> - Le wizard a été **porté à 9 étapes** au Plan 2b (la **§6** ci-dessous décrit le
+>   découpage initial en 6 étapes) — voir
+>   [`2026-06-09-setup-wizard-design.md`](2026-06-09-setup-wizard-design.md) et
+>   [`2026-06-09-setup-wizard-ui-design.md`](2026-06-09-setup-wizard-ui-design.md). Le
+>   flag `.stalmail-configured` est posé à la dernière étape (Terminé), non à « l'étape 6 ».
+>
+> Le reste du document (vision, modèle de données/volumes, sécurité applicative,
+> structure des routes/server functions) reste pertinent.
+
 ---
 
 ## 1. Vision
@@ -159,6 +188,11 @@ Toast             → feedback actions (archive, snooze, label…)
 ---
 
 ## 6. Setup Wizard (6 étapes)
+
+> ℹ️ Découpage **initial** (6 étapes). Le wizard implémenté en **9 étapes** (Bienvenue,
+> Domaine, Fournisseur DNS, Administrateur, Récapitulatif, Compte, Enregistrements DNS,
+> SSL, Terminé) est décrit dans les specs du Plan 2b
+> ([fonctionnel](2026-06-09-setup-wizard-design.md) · [UI](2026-06-09-setup-wizard-ui-design.md)).
 
 Linéaire, une seule décision par écran. Repris-able : si le browser se ferme en cours, la progression est persistée côté serveur.
 
