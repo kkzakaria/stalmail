@@ -43,7 +43,8 @@ Le flux retenu s'appuie donc sur `/api/auth` (custom form → code) puis `/auth/
    §10 : Stalwart v0.16 traite le client comme public et **rejette** un `client_secret` ;
    PKCE S256 est *enforced*). La reco initiale d'un client confidentiel est donc infirmée.
 3. **Session** : pattern BFF / token-handler — **cookie opaque httpOnly** + **store
-   serveur** (fichier JSON via `node:fs`, cf. §6), **tokens chiffrés au repos**. Révocation instantanée.
+   serveur** (fichier JSON via `node:fs`, indexé par **`SHA-256(sid)`** — le sid en clair
+   ne vit que dans le cookie, cf. §6), **tokens chiffrés au repos**. Révocation instantanée.
 4. **2FA** : la machine d'état gère `mfaRequired` dès maintenant (pas de crash, message
    clair) ; **l'écran de saisie TOTP est différé** tant que le wizard n'expose pas
    l'enrôlement 2FA.
@@ -92,8 +93,11 @@ est à **renouvellement tardif** (confirmé §10, `refreshTokenRenewal`=4 j) : l
 temps le même `refresh_token` est conservé et seul l'`access_token` est remplacé, **mais**
 quand le RT entre dans ses 4 derniers jours l'échange renvoie un **nouveau** `refresh_token`.
 ⚠️ Le BFF **persiste donc tout `refresh_token` présent dans la réponse** (sinon les sessions
-casseraient vers J+26). Rafraîchissement sérialisé par session (pas de course de réécriture
-du store). Si le refresh échoue (RT expiré/invalide) → **logout propre + redirect `/login`**.
+casseraient vers J+26). Rafraîchissement **sérialisé par session** : un **mutex par sid en
+mémoire** (Map sid → Promise) garantit qu'un seul échange refresh est en vol à la fois —
+sans lui, deux requêtes concurrentes pendant la fenêtre de rotation (4 derniers jours du RT)
+peuvent perdre le nouveau RT ou faire échouer le second échange → déconnexion intempestive.
+Si le refresh échoue (RT expiré/invalide) → **logout propre + redirect `/login`**.
 
 **Logout** — dans le pattern BFF/token-handler, le logout est **côté BFF par conception** :
 le navigateur ne détient qu'un cookie de session opaque (jamais de token), donc supprimer
@@ -137,6 +141,10 @@ src/server/
                              currentSession(), withFreshAccessToken() (refresh transparent,
                              persiste un refresh_token renvoyé près de l'expiration).
   session-cookie.ts        → lecture/écriture du cookie __Host-stalmail_session.
+  login-rate-limit.ts      → rate-limiting BFF des tentatives de login (fenêtre
+                             glissante en mémoire, par compte ET par IP) — cf. §9.
+  stalwart-hardening.ts    → enableXForwarded() : x:Http/set {useXForwarded:true}
+                             via l'admin JMAP, appelé au finalize du wizard — cf. §9.
   auth-actions.ts          → server functions : loginFn, logoutFn, sessionStatusFn.
   stalwart-user.ts         → stalwartUserFetch(path, accessToken, init) : appels
                              Bearer (parallèle à stalwartAdminFetch).
@@ -168,7 +176,9 @@ employé (`setup-flag.ts`, `setup-state.ts`). Enregistrement par session :
 
 ```
 SessionRecord {
-  sid:          string   // 256 bits aléatoires, opaque (base64url) — la clé de la Map
+  sidHash:      string   // SHA-256(sid) hex — la clé de la Map. Le sid (256 bits
+                         // aléatoires, base64url) n'existe en clair QUE dans le cookie :
+                         // le store ne permet pas de rejouer une session.
   accountId:    string   // accountId JMAP / principal
   accountName:  string   // email, pour l'affichage
   encAccess:    string   // access_token chiffré (AES-256-GCM, base64)
@@ -180,19 +190,25 @@ SessionRecord {
 ```
 
 **Chiffrement au repos** : `encAccess`/`encRefresh` chiffrés en AES-256-GCM avec une clé
-dérivée par **HKDF-SHA256 depuis `STALMAIL_SECRET`** (`info="stalmail/session-enc"`). Un vol
-du seul fichier ne livre donc pas de tokens exploitables. (Pas de nouvelle variable d'env :
-on dérive une sous-clé du secret unique déjà présent ; un `STALMAIL_SESSION_KEY` dédié reste
-une option future.)
+dérivée par **HKDF-SHA256 depuis `STALMAIL_SECRET`** (`info="stalmail/session-enc"`), avec
+**AAD = `sidHash`** (lie chaque ciphertext à son enregistrement — pas de swap de tokens
+entre sessions). Combiné aux clés `SHA-256(sid)`, un vol du seul fichier ne livre **ni**
+tokens exploitables **ni** identifiants de session rejouables. `STALMAIL_SECRET` est
+**obligatoire** (≥ 32 caractères) : le module crypto **échoue au démarrage** s'il est absent
+ou trop court — **aucun fallback** sur un autre credential (séparation des clés ; un
+`STALMAIL_SESSION_KEY` dédié reste une option future).
 
 **Expiration / nettoyage** : durée de vie de session bornée — **idle TTL 7 j** + **absolu
 30 j** (aligné sur `refreshTokenExpiry`=30 j pour que la session ne survive jamais au
-refresh token, cf. §4) ; balayage paresseux des sessions expirées à l'accès + suppression
-à la révocation. `logoutAllForAccount(account_id)` supprime toutes les sessions d'un compte
-(« déconnexion partout », cf. §4).
+refresh token, cf. §4) ; balayage paresseux à l'accès + **sweep global des sessions
+expirées à chaque login** (rien ne traîne indéfiniment sur disque) + suppression à la
+révocation. `logoutAllForAccount(account_id)` supprime toutes les sessions d'un compte
+(« déconnexion partout », cf. §4). Le `lastSeenAt` est persisté avec un **throttle**
+(au plus une écriture/minute/session) pour ne pas réécrire le fichier à chaque requête.
 
 **Persistance** : le store survit aux redémarrages/màj du container (volume dédié),
-évitant de délogger tout le monde à chaque déploiement.
+évitant de délogger tout le monde à chaque déploiement. Fichier écrit en mode **0600**
+(répertoire 0700) — défense en profondeur en plus du chiffrement et du hash des sids.
 
 ## 7. Client OAuth `stalmail` (public, aucun provisioning)
 
@@ -204,8 +220,11 @@ Stalwart v0.16 accepte un `client_id` arbitraire et traite le client comme **pub
   `invalid_grant`). C'est PKCE — et non un secret client — qui lie le code à l'échange.
 - ⚠️ Ne **jamais** envoyer de `Authorization: Basic` ni de `client_secret` à `/auth/token`
   (Stalwart répond `invalid_client`). L'auth client se fait par `client_id` en form + PKCE.
-- `redirect_uri` : verrouillé sur le callback Stalmail. http accepté par le serveur ;
-  on garde https en prod par hygiène, http toléré en dev.
+- `redirect_uri` : **URL publique fixe en configuration** (`STALMAIL_PUBLIC_URL`, cf.
+  §13) — jamais dérivée des headers de la requête (pas de dépendance à la chaîne proxy,
+  pas d'injection de Host). ⚠️ Le « http accepté » observé dans la capture §10 l'a été
+  contre un serveur en **mode bootstrap/recovery** ; la doc Stalwart exige `https://`
+  hors modes recovery/dev. **https obligatoire en prod**, http toléré seulement en dev.
 - Le `client_id` n'est pas une frontière de sécurité ici : la garde réelle est le couple
   identifiants utilisateur (vérifiés par `/api/auth`, anonyme mais rate-limité) + PKCE +
   le fait que seul le BFF (réseau interne) atteint Stalwart.
@@ -219,29 +238,45 @@ initialement, et la dérivation d'un secret client (§13 simplifié en conséque
   `SameSite=Lax`, `Path=/`, pas d'attribut `Domain` (le préfixe `__Host-` l'impose et
   durcit contre la fixation inter-sous-domaines). `SameSite=Lax` (pas `Strict`) pour ne
   pas délogger un utilisateur arrivant via un lien externe.
-- **Anti-fixation** : le `sid` est régénéré à chaque login réussi.
+- **Anti-fixation** : le `sid` est régénéré à chaque login réussi **et la session
+  précédente est supprimée** (un sid volé ne survit pas à un re-login).
 - **CSRF** : les mutations passent par des server functions POST (**login et logout
-  inclus**). Protection par **vérification d'`Origin`/`Referer`** côté serveur (rejet si
-  origine ≠ origine attendue) en complément de `SameSite=Lax`. Documenter le mécanisme
-  retenu dans le plan.
+  inclus**). Protection par **vérification d'`Origin`** côté serveur, avec **fallback
+  `Referer`** quand `Origin` est absent (rejet si origine ≠ origine attendue) en
+  complément de `SameSite=Lax`.
+- **Confiance dans les headers proxy** : la comparaison d'origine s'appuie sur
+  `X-Forwarded-Host` — **Caddy doit écraser** les `X-Forwarded-*` entrants (jamais
+  relayer ceux du client). Hypothèse documentée et vérifiée côté infra (cf. §9).
 - **Transport** : seul Caddy (443, TLS) est exposé publiquement ; le BFF impose `Secure`
   sur les cookies. En dev (compose.dev, http), prévoir un assouplissement contrôlé du
   flag `Secure`/préfixe `__Host-`.
 
 ## 9. Rate-limiting, Fail2Ban et IP réelle du client
 
-Risque spécifique au BFF : Stalwart applique rate-limiting et Fail2Ban **par IP source**,
-or toutes les requêtes `/api/auth` proviennent de l'IP du container BFF. Sans précaution,
-quelques échecs de login banniraient le BFF **pour tous les utilisateurs**.
+Risque spécifique au BFF : Stalwart bannit **par IP source** (`authBanRate`, défaut
+**100 échecs/jour**, cf. doc Auto-banning), or toutes les requêtes `/api/auth`
+proviennent de l'IP du container BFF. Sans précaution, ~100 mots de passe erronés soumis
+via le formulaire public suffisent à faire bannir l'IP du BFF → **panne totale
+d'authentification pour tous les utilisateurs**. C'est un DoS trivial : les deux
+mitigations ci-dessous sont donc **dans le périmètre du Plan 3a**, pas des follow-ups.
 
-- Le BFF transmet l'**IP réelle du client** à Stalwart (`X-Forwarded-For`, chaîne Caddy
-  → BFF → Stalwart), pour que les bans visent le vrai contrevenant. ⚠️ Stalwart ne prend
-  en compte `X-Forwarded-For` que si **`server.http.use-x-forwarded` est activé** côté
-  Stalwart (tâche de **configuration infra**, à câbler dans l'image/le bootstrap — cf.
-  capture §10, point non prouvable en boîte noire).
-- Le BFF applique en complément son **propre rate-limiting** des tentatives de login
-  (par compte et/ou par IP) avant d'appeler `/api/auth`, pour amortir le bruteforce et
-  ne pas dépendre uniquement de Stalwart.
+- **`useXForwarded` activé côté Stalwart = condition de mise en service du login.**
+  Stalwart ne prend en compte `X-Forwarded-For` que si `server.http.use-x-forwarded`
+  (champ `useXForwarded` du singleton `Http`) est activé. Le réglage est poussé via
+  **`x:Http/set {useXForwarded: true}`** (admin JMAP) au **finalize du wizard** —
+  obligatoirement *avant* `markSetupComplete()`, car l'admin recovery est désactivé au
+  redémarrage suivant. Le BFF transmet alors l'**IP réelle du client** à Stalwart
+  (`X-Forwarded-For`, chaîne Caddy → BFF → Stalwart) et les bans visent le vrai
+  contrevenant.
+- **Rate-limiting BFF** (`login-rate-limit.ts`) : fenêtre glissante en mémoire, **par
+  compte ET par IP**, vérifiée avant tout appel `/api/auth`. Amortit le bruteforce, ne
+  dépend pas du seul ban Stalwart, et limite l'oracle `mfaRequired` (qui confirme un mot
+  de passe valide).
+- ⚠️ **Anti-spoofing XFF** : le BFF relaie le **premier hop** de `X-Forwarded-For` ; ce
+  n'est sûr que si **Caddy écrase** le XFF entrant (comportement par défaut pour les
+  clients non listés dans `trusted_proxies` — ne jamais déclarer Internet de confiance).
+  Sinon un attaquant choisit l'IP vue par Stalwart : contournement de ban ou **bans
+  d'IP arbitraires** (DoS ciblé). Hypothèse à vérifier/documenter côté Caddyfile.
 
 ## 10. 2FA (détection maintenant, UI différée)
 
@@ -266,6 +301,11 @@ des formes de données mail (réservées au Plan 4).
 - `failure` de `/api/auth` → message générique « identifiants invalides » (pas de fuite
   d'information sur l'existence du compte).
 - Indisponibilité Stalwart / timeout → message de réessai, pas de session créée.
+- **Toute exception inattendue du handler de login est mappée sur un statut générique
+  `error`** — jamais de message d'erreur interne (`OAuthError`, codes HTTP Stalwart…)
+  dans la réponse réseau.
+- Tentatives au-delà du rate-limit BFF → statut `rateLimited`, message « trop de
+  tentatives, réessayez plus tard » (sans révéler la fenêtre exacte).
 - Échec d'échange `/auth/token` → login échoué, état propre, rien de persisté.
 - Token expiré + refresh échoué → session invalidée, redirect `/login`.
 - Session inconnue/expirée à l'accès d'une route protégée → redirect `/login`.
@@ -275,24 +315,32 @@ des formes de données mail (réservées au Plan 4).
 - **Nouveau volume de données app dédié** : le service `app` ne monte aujourd'hui que
   `stalmail-shared:/shared` (coordination inter-containers). Ajouter
   `stalmail-app-data:/var/lib/stalmail` (app-only) pour le fichier du store de session.
-- **Nouvelle env** : `STALMAIL_DATA_DIR` (défaut `/var/lib/stalmail`) pour localiser la
-  base de session. `STALMAIL_SECRET` (déjà présent) sert de racine HKDF pour la **clé de
-  chiffrement des tokens en session** (le client OAuth public n'a pas de secret à dériver).
+- **Nouvelles env** : `STALMAIL_DATA_DIR` (défaut `/var/lib/stalmail`) pour localiser la
+  base de session ; **`STALMAIL_PUBLIC_URL`** (ex. `https://mail.example.com`) — URL
+  publique canonique servant de base au `redirect_uri` OAuth (cf. §7), jamais dérivée
+  des headers. `STALMAIL_SECRET` (déjà présent) sert de racine HKDF pour la **clé de
+  chiffrement des tokens en session** — **obligatoire, ≥ 32 caractères, fail-hard**
+  (cf. §6 ; le client OAuth public n'a pas de secret à dériver).
 - `STALWART_URL` (déjà présent) sert aussi aux appels Bearer (même base que l'admin).
-- `compose.dev.yml` : assouplissements dev (cookies non-`Secure`, redirect_uri http).
+- `compose.dev.yml` : assouplissements dev (cookies non-`Secure`, `STALMAIL_PUBLIC_URL`
+  en http).
 
 ## 14. Tests
 
 - `oauth-pkce` : verifier/challenge conformes RFC 7636 (longueurs, S256).
 - `session-crypto` : round-trip chiffrement/déchiffrement ; déchiffrement échoue avec une
-  mauvaise clé ; clés HKDF distinctes par `info`.
+  mauvaise clé **ou un mauvais AAD** ; fail-hard si `STALMAIL_SECRET` absent/trop court.
 - `session-store` : CRUD contre un `STALMAIL_DATA_DIR` temporaire ; persistance
-  rechargée après recreation du store ; expiration ; `deleteAllForAccount`.
+  rechargée après recreation du store ; expiration ; `deleteAllForAccount` ; mode 0600.
+- `login-rate-limit` : blocage au-delà du seuil (par compte et par IP), fenêtre
+  glissante, déblocage après expiration.
 - `stalwart-oauth` : construction des requêtes `/api/auth` et `/auth/token` ; parsing des
   unions taguées (`authenticated`/`mfaRequired`/`failure`) ; fetch mocké.
-- `session` : login crée une session + cookie ; refresh transparent ; logout révoque.
+- `session` : login crée une session + cookie (et supprime la session précédente) ;
+  refresh transparent **sérialisé** (deux appels concurrents → un seul échange) ;
+  logout révoque ; sweep des sessions expirées au login.
 - `auth-guard` : redirige les non-authentifiés, laisse passer les sessions valides.
-- `login.tsx` : rendu du formulaire, soumission, états (checking/error/mfa), i18n.
+- `login.tsx` : rendu du formulaire, soumission, états (checking/error/mfa/rateLimited), i18n.
 - Suite complète + `typecheck` verts (porte de fin, comme les plans précédents).
 
 ## 15. Hors scope (Plan 3a)
@@ -316,10 +364,21 @@ Les 7 inconnues initiales ont été **levées empiriquement** contre Stalwart v0
 | 3 | Émission/rotation du `refresh_token` | ✅ émis par défaut, **non-rotatif**, réutilisable |
 | 4 | Durées de vie | ✅ `access_token` = **3600 s** ; RT longue durée (réutilisable) |
 | 5 | Endpoint de révocation | ✅ **aucun** → logout BFF-only (cf. §4) |
-| 6 | `X-Forwarded-For` | ⚠️ non prouvable en boîte noire → **config infra** `server.http.use-x-forwarded` (cf. §9) |
-| 7 | Contrainte `redirect_uri` | ✅ http accepté ; https en prod par hygiène |
+| 6 | `X-Forwarded-For` | ⚠️ non prouvable en boîte noire → activé via **`x:Http/set {useXForwarded:true}`** au finalize du wizard, **dans le périmètre 3a** (cf. §9) |
+| 7 | Contrainte `redirect_uri` | ⚠️ « http accepté » observé en **mode bootstrap/recovery** uniquement — la doc exige https hors recovery/dev → `STALMAIL_PUBLIC_URL` https en prod (cf. §7) |
 
-**Seul reliquat** : activer `server.http.use-x-forwarded` côté Stalwart (tâche infra, §9).
+⚠️ **Limite de la capture** : elle a été réalisée contre un serveur en **mode
+bootstrap/recovery** (« Server started in bootstrap mode », listener `http-recovery`).
+Les verdicts sensibles au mode (n° 7 surtout ; n° 1-3 corroborés par la doc —
+`requireClientRegistration: false` par défaut, `refreshTokenRenewal: 4d`) sont à
+**re-valider contre une instance en mode normal** avant la mise en service.
+
+**Questions ouvertes (à lever empiriquement, hors mode bootstrap)** :
+- Stalwart invalide-t-il les access/refresh tokens lors d'un **changement de mot de
+  passe** / désactivation du compte ? Si non, brancher `logoutAllForAccount` sur tout
+  flux de rotation de credential (Plan 4 / settings) devient **obligatoire**, pas
+  optionnel — sinon une session (RT 30 j) survit des semaines à la rotation.
+
 Levier de durcissement disponible mais **non retenu par défaut** (cf. §4, parti 5) :
 raccourcir `accessTokenExpiry` via `x:OidcProvider/set` ; laissé à 1 h au vu du modèle de
 menace (tokens internes au BFF).

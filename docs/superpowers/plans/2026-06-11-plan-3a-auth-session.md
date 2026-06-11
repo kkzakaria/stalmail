@@ -4,7 +4,7 @@
 
 **Goal:** Permettre à un utilisateur de se connecter via le formulaire Stalmail (email + mot de passe), établir une session sécurisée (cookie opaque httpOnly + store serveur, tokens OAuth chiffrés au repos), protéger les routes `/mail/*`, et se déconnecter.
 
-**Architecture:** Pattern BFF / token-handler. Le BFF relaie les identifiants à `POST /api/auth` (Stalwart v0.16, client public PKCE `stalmail`), échange le code à `POST /auth/token`, et garde les tokens **côté serveur** (Map en mémoire + write-through fichier `node:fs`, AES-256-GCM). Le navigateur ne détient qu'un `sid` opaque. JMAP user via `Authorization: Bearer`. Logout = purge côté BFF (pas d'endpoint de révocation Stalwart). Voir spec `docs/superpowers/specs/2026-06-11-plan-3a-auth-session-design.md` et capture `docs/superpowers/specs/2026-06-09-stalwart-api-capture.md` §10.
+**Architecture:** Pattern BFF / token-handler. Le BFF rate-limite les tentatives (par compte + IP), relaie les identifiants à `POST /api/auth` (Stalwart v0.16, client public PKCE `stalmail`), échange le code à `POST /auth/token` (`redirect_uri` = `STALMAIL_PUBLIC_URL` fixe, jamais dérivé des headers), et garde les tokens **côté serveur** (Map en mémoire + write-through fichier `node:fs` mode 0600, AES-256-GCM avec AAD, store indexé par `SHA-256(sid)`). Le navigateur ne détient qu'un `sid` opaque. JMAP user via `Authorization: Bearer`. Logout = purge côté BFF (pas d'endpoint de révocation Stalwart). `useXForwarded` est activé côté Stalwart au finalize du wizard (`x:Http/set`) — condition de mise en service du login (auto-ban par IP). Voir spec `docs/superpowers/specs/2026-06-11-plan-3a-auth-session-design.md`, revue sécurité `docs/superpowers/reviews/2026-06-11-plan-3a-security-review.md` et capture `docs/superpowers/specs/2026-06-09-stalwart-api-capture.md` §10 (⚠️ réalisée en mode bootstrap — re-valider les verdicts sensibles au mode avant mise en service).
 
 **Tech Stack:** TanStack Start (server functions, cookies via `@tanstack/react-start/server`), React 19, `node:crypto` (HKDF + AES-256-GCM + PKCE), `node:fs` (store), Zod, Vitest, i18next.
 
@@ -28,8 +28,12 @@ Créer :
   src/server/stalwart-user.test.ts
   src/server/session.ts               — login/logout/logoutAllForAccount/currentSession/withFreshAccessToken
   src/server/session.test.ts
-  src/server/session-cookie.ts        — cookie sid + CSRF Origin + IP client
+  src/server/session-cookie.ts        — cookie sid + CSRF Origin/Referer + IP client
   src/server/session-cookie.test.ts
+  src/server/login-rate-limit.ts      — rate-limiting BFF des tentatives (compte + IP)
+  src/server/login-rate-limit.test.ts
+  src/server/stalwart-hardening.ts    — enableXForwarded() via x:Http/set (wizard)
+  src/server/stalwart-hardening.test.ts
   src/server/auth-actions.ts          — server functions loginFn/logoutFn/sessionStatusFn
   src/server/auth-actions.test.ts
   src/lib/auth-guard.ts               — requireAuth() pour beforeLoad
@@ -40,7 +44,10 @@ Modifier :
   src/routes/login.tsx                — formulaire de connexion (remplace le placeholder)
   src/routes/mail/$folder.tsx         — beforeLoad: requireAuth()
   src/i18n/resources.ts               — namespace `login` (fr + en)
-  compose.yml, compose.dev.yml        — STALMAIL_DATA_DIR + STALMAIL_SECRET + volume app-data
+  src/server/setup-actions.ts         — finishSetupHandler appelle enableXForwarded()
+                                        AVANT markSetupComplete()
+  compose.yml, compose.dev.yml        — STALMAIL_DATA_DIR + STALMAIL_SECRET +
+                                        STALMAIL_PUBLIC_URL + volume app-data
 ```
 
 **Note de couverture :** la route `/` (`src/routes/index.tsx`) redirige déjà vers `/mail/$folder`; la garde sur `/mail` suffit donc à renvoyer un visiteur non authentifié vers `/login` (root → /mail → guard → /login). On ne modifie pas `index.tsx` (évite de coupler son test à `auth-actions`).
@@ -127,30 +134,42 @@ git commit -m "feat(auth): PKCE verifier/challenge helper"
 
 ```ts
 // src/server/session-crypto.test.ts
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { encryptToken, decryptToken } from './session-crypto'
 
-beforeAll(() => {
+beforeEach(() => {
   process.env.STALMAIL_SECRET = 'test-install-secret-32-chars-min!!'
 })
 
 describe('session-crypto', () => {
-  it('round-trips a token through encrypt/decrypt', () => {
+  it('round-trips a token through encrypt/decrypt with its AAD', () => {
     const plain = 'sw1.t10Ynnzx.abcdef'
-    const enc = encryptToken(plain)
+    const enc = encryptToken(plain, 'sid-hash-1')
     expect(enc).not.toContain(plain)
-    expect(decryptToken(enc)).toBe(plain)
+    expect(decryptToken(enc, 'sid-hash-1')).toBe(plain)
   })
 
   it('produces distinct ciphertexts for the same plaintext (random IV)', () => {
-    expect(encryptToken('same')).not.toBe(encryptToken('same'))
+    expect(encryptToken('same', 'a')).not.toBe(encryptToken('same', 'a'))
   })
 
   it('fails to decrypt tampered ciphertext', () => {
-    const enc = encryptToken('secret')
+    const enc = encryptToken('secret', 'a')
     const tampered = Buffer.from(enc, 'base64')
     tampered[tampered.length - 1] ^= 0xff
-    expect(() => decryptToken(tampered.toString('base64'))).toThrow()
+    expect(() => decryptToken(tampered.toString('base64'), 'a')).toThrow()
+  })
+
+  it('fails to decrypt with the wrong AAD (no cross-record token swap)', () => {
+    const enc = encryptToken('secret', 'sid-hash-1')
+    expect(() => decryptToken(enc, 'sid-hash-2')).toThrow()
+  })
+
+  it('refuses to run without a strong STALMAIL_SECRET (no fallback)', () => {
+    process.env.STALMAIL_SECRET = ''
+    expect(() => encryptToken('x', 'a')).toThrow(/STALMAIL_SECRET/)
+    process.env.STALMAIL_SECRET = 'too-short'
+    expect(() => encryptToken('x', 'a')).toThrow(/STALMAIL_SECRET/)
   })
 })
 ```
@@ -167,16 +186,15 @@ Expected: FAIL ("Cannot find module './session-crypto'").
 import { hkdfSync, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto'
 
 const KEY_INFO = 'stalmail/session-enc'
+const MIN_SECRET_CHARS = 32
 
-// Prod sets STALMAIL_SECRET; otherwise fall back to the secret half of
-// STALWART_RECOVERY_ADMIN ("user:secret") which the app container already holds.
+// Key separation: STALMAIL_SECRET is the ONLY accepted root. Never fall back to
+// another credential (e.g. the recovery-admin password) — a misconfigured prod must
+// fail hard, not silently encrypt with an admin secret.
 function rootSecret(): string {
-  const direct = process.env.STALMAIL_SECRET
-  if (direct) return direct
-  const ra = process.env.STALWART_RECOVERY_ADMIN ?? ''
-  const idx = ra.indexOf(':')
-  const secret = idx >= 0 ? ra.slice(idx + 1) : ra
-  if (!secret) throw new Error('session-crypto: no STALMAIL_SECRET to derive a key')
+  const secret = process.env.STALMAIL_SECRET ?? ''
+  if (secret.length < MIN_SECRET_CHARS)
+    throw new Error(`session-crypto: STALMAIL_SECRET must be set (>= ${MIN_SECRET_CHARS} chars)`)
   return secret
 }
 
@@ -184,20 +202,23 @@ function deriveKey(info: string): Buffer {
   return Buffer.from(hkdfSync('sha256', rootSecret(), new Uint8Array(0), info, 32))
 }
 
-// Layout: base64( iv(12) | tag(16) | ciphertext )
-export function encryptToken(plaintext: string): string {
+// Layout: base64( iv(12) | tag(16) | ciphertext ). `aad` binds the ciphertext to its
+// session record (sidHash): ciphertexts cannot be swapped between records.
+export function encryptToken(plaintext: string, aad: string): string {
   const iv = randomBytes(12)
   const cipher = createCipheriv('aes-256-gcm', deriveKey(KEY_INFO), iv)
+  cipher.setAAD(Buffer.from(aad, 'utf8'))
   const ct = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
   return Buffer.concat([iv, cipher.getAuthTag(), ct]).toString('base64')
 }
 
-export function decryptToken(payload: string): string {
+export function decryptToken(payload: string, aad: string): string {
   const buf = Buffer.from(payload, 'base64')
   const iv = buf.subarray(0, 12)
   const tag = buf.subarray(12, 28)
   const ct = buf.subarray(28)
   const decipher = createDecipheriv('aes-256-gcm', deriveKey(KEY_INFO), iv)
+  decipher.setAAD(Buffer.from(aad, 'utf8'))
   decipher.setAuthTag(tag)
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8')
 }
@@ -206,13 +227,13 @@ export function decryptToken(payload: string): string {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/server/session-crypto.test.ts`
-Expected: PASS (3 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/server/session-crypto.ts src/server/session-crypto.test.ts
-git commit -m "feat(auth): AES-256-GCM token encryption keyed by HKDF(STALMAIL_SECRET)"
+git commit -m "feat(auth): AES-256-GCM+AAD token encryption, fail-hard on weak STALMAIL_SECRET"
 ```
 
 ---
@@ -228,13 +249,13 @@ git commit -m "feat(auth): AES-256-GCM token encryption keyed by HKDF(STALMAIL_S
 ```ts
 // src/server/session-store.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as store from './session-store'
 
-const rec = (sid: string, accountId = 'c'): store.SessionRecord => ({
-  sid, accountId, accountName: 'alice@probe.test',
+const rec = (sidHash: string, accountId = 'c'): store.SessionRecord => ({
+  sidHash, accountId, accountName: 'alice@probe.test',
   encAccess: 'enc', encRefresh: 'encR', accessExp: 0, createdAt: 0, lastSeenAt: 0,
 })
 
@@ -255,7 +276,13 @@ describe('session-store', () => {
   it('persists across a cache reset (reloads from disk)', () => {
     store.createSession(rec('a'))
     store.__resetCacheForTest()
-    expect(store.getSession('a')?.sid).toBe('a')
+    expect(store.getSession('a')?.sidHash).toBe('a')
+  })
+
+  it('writes the store file with owner-only permissions (0600)', () => {
+    store.createSession(rec('a'))
+    const mode = statSync(join(dir, 'sessions.json')).mode & 0o777
+    expect(mode).toBe(0o600)
   })
 
   it('updates a record', () => {
@@ -277,15 +304,15 @@ describe('session-store', () => {
     store.deleteAllForAccount('c')
     expect(store.getSession('a')).toBeUndefined()
     expect(store.getSession('b')).toBeUndefined()
-    expect(store.getSession('d')?.sid).toBe('d')
+    expect(store.getSession('d')?.sidHash).toBe('d')
   })
 
   it('sweeps records matching a predicate', () => {
     store.createSession(rec('a'))
     store.createSession(rec('b'))
-    store.sweep((r) => r.sid === 'a')
+    store.sweep((r) => r.sidHash === 'a')
     expect(store.getSession('a')).toBeUndefined()
-    expect(store.getSession('b')?.sid).toBe('b')
+    expect(store.getSession('b')?.sidHash).toBe('b')
   })
 })
 ```
@@ -302,8 +329,10 @@ Expected: FAIL ("Cannot find module './session-store'").
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 
+// Keyed by SHA-256(sid): the cleartext sid only ever lives in the browser cookie, so
+// stealing this file does not allow replaying sessions (tokens are encrypted too).
 export interface SessionRecord {
-  sid: string
+  sidHash: string
   accountId: string
   accountName: string
   encAccess: string
@@ -330,7 +359,7 @@ function load(): Map<string, SessionRecord> {
   const p = storePath()
   if (existsSync(p)) {
     try {
-      for (const r of JSON.parse(readFileSync(p, 'utf8')) as SessionRecord[]) m.set(r.sid, r)
+      for (const r of JSON.parse(readFileSync(p, 'utf8')) as SessionRecord[]) m.set(r.sidHash, r)
     } catch {
       // Corrupt store → start empty. Sessions are disposable; users re-login.
     }
@@ -341,46 +370,46 @@ function load(): Map<string, SessionRecord> {
 
 function persist(m: Map<string, SessionRecord>): void {
   const dir = dataDir()
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   const tmp = join(dir, `sessions.${process.pid}.tmp`)
-  writeFileSync(tmp, JSON.stringify([...m.values()]), 'utf8')
+  writeFileSync(tmp, JSON.stringify([...m.values()]), { encoding: 'utf8', mode: 0o600 })
   renameSync(tmp, storePath()) // atomic replace
 }
 
 export function createSession(rec: SessionRecord): void {
   const m = load()
-  m.set(rec.sid, rec)
+  m.set(rec.sidHash, rec)
   persist(m)
 }
 
-export function getSession(sid: string): SessionRecord | undefined {
-  return load().get(sid)
+export function getSession(sidHash: string): SessionRecord | undefined {
+  return load().get(sidHash)
 }
 
-export function updateSession(sid: string, patch: Partial<SessionRecord>): void {
+export function updateSession(sidHash: string, patch: Partial<SessionRecord>): void {
   const m = load()
-  const cur = m.get(sid)
+  const cur = m.get(sidHash)
   if (!cur) return
-  m.set(sid, { ...cur, ...patch })
+  m.set(sidHash, { ...cur, ...patch })
   persist(m)
 }
 
-export function deleteSession(sid: string): void {
+export function deleteSession(sidHash: string): void {
   const m = load()
-  if (m.delete(sid)) persist(m)
+  if (m.delete(sidHash)) persist(m)
 }
 
 export function deleteAllForAccount(accountId: string): void {
   const m = load()
   let changed = false
-  for (const [sid, r] of m) if (r.accountId === accountId) changed = m.delete(sid) || changed
+  for (const [k, r] of m) if (r.accountId === accountId) changed = m.delete(k) || changed
   if (changed) persist(m)
 }
 
 export function sweep(isExpired: (r: SessionRecord) => boolean): void {
   const m = load()
   let changed = false
-  for (const [sid, r] of m) if (isExpired(r)) changed = m.delete(sid) || changed
+  for (const [k, r] of m) if (isExpired(r)) changed = m.delete(k) || changed
   if (changed) persist(m)
 }
 
@@ -393,13 +422,13 @@ export function __resetCacheForTest(): void {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/server/session-store.test.ts`
-Expected: PASS (6 tests).
+Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/server/session-store.ts src/server/session-store.test.ts
-git commit -m "feat(auth): file-backed session store (node:fs, atomic write-through)"
+git commit -m "feat(auth): file-backed session store keyed by SHA-256(sid), mode 0600"
 ```
 
 ---
@@ -740,7 +769,7 @@ import { fetchJmapAccount } from './stalwart-user'
 // eslint-disable-next-line import/first
 import * as store from './session-store'
 // eslint-disable-next-line import/first
-import { login, logout, currentSession, withFreshAccessToken, ABSOLUTE_TTL_MS } from './session'
+import { login, logout, currentSession, withFreshAccessToken, hashSid, ABSOLUTE_TTL_MS } from './session'
 
 const pa = vi.mocked(postApiAuth)
 const xc = vi.mocked(exchangeCode)
@@ -757,17 +786,41 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-const baseLogin = { accountName: 'alice@probe.test', accountSecret: 'pw', redirectUri: 'http://h/login' }
+const baseLogin = { accountName: 'alice@probe.test', accountSecret: 'pw', redirectUri: 'https://h/login' }
+
+const mockSuccess = () => {
+  pa.mockResolvedValue({ type: 'authenticated', clientCode: 'CC' })
+  xc.mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT', expiresIn: 3600 })
+  ja.mockResolvedValue({ accountId: 'c', accountName: 'alice@probe.test' })
+}
 
 describe('login', () => {
-  it('creates a session and returns a sid on success', async () => {
-    pa.mockResolvedValue({ type: 'authenticated', clientCode: 'CC' })
-    xc.mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT', expiresIn: 3600 })
-    ja.mockResolvedValue({ accountId: 'c', accountName: 'alice@probe.test' })
+  it('creates a session keyed by hashSid — the raw sid never keys the store', async () => {
+    mockSuccess()
     const res = await login(baseLogin)
     expect(res.ok).toBe(true)
     if (!res.ok) return
-    expect(store.getSession(res.sid)?.accountId).toBe('c')
+    expect(store.getSession(res.sid)).toBeUndefined()
+    expect(store.getSession(hashSid(res.sid))?.accountId).toBe('c')
+  })
+
+  it('deletes the previous session on re-login (a stolen sid does not survive)', async () => {
+    mockSuccess()
+    const first = await login(baseLogin)
+    if (!first.ok) throw new Error('login failed')
+    const second = await login({ ...baseLogin, previousSid: first.sid })
+    if (!second.ok) throw new Error('login failed')
+    expect(store.getSession(hashSid(first.sid))).toBeUndefined()
+    expect(store.getSession(hashSid(second.sid))).toBeDefined()
+  })
+
+  it('sweeps absolutely-expired sessions from the store on login', async () => {
+    mockSuccess()
+    const old = await login({ ...baseLogin, now: 0 })
+    if (!old.ok) throw new Error('login failed')
+    const fresh = await login({ ...baseLogin, now: ABSOLUTE_TTL_MS + 1 })
+    if (!fresh.ok) throw new Error('login failed')
+    expect(store.getSession(hashSid(old.sid))).toBeUndefined()
   })
 
   it('returns reason mfa / failure without creating a session', async () => {
@@ -782,40 +835,32 @@ describe('login', () => {
 describe('currentSession', () => {
   it('returns null for an unknown sid and resolves a valid one', async () => {
     expect(currentSession('nope')).toBeNull()
-    pa.mockResolvedValue({ type: 'authenticated', clientCode: 'CC' })
-    xc.mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT', expiresIn: 3600 })
-    ja.mockResolvedValue({ accountId: 'c', accountName: 'alice@probe.test' })
+    mockSuccess()
     const res = await login(baseLogin)
     if (!res.ok) throw new Error('login failed')
     expect(currentSession(res.sid)?.accountName).toBe('alice@probe.test')
   })
 
   it('drops and rejects an absolutely-expired session', async () => {
-    pa.mockResolvedValue({ type: 'authenticated', clientCode: 'CC' })
-    xc.mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT', expiresIn: 3600 })
-    ja.mockResolvedValue({ accountId: 'c', accountName: 'alice@probe.test' })
+    mockSuccess()
     const res = await login({ ...baseLogin, now: 0 })
     if (!res.ok) throw new Error('login failed')
     expect(currentSession(res.sid, ABSOLUTE_TTL_MS + 1)).toBeNull()
-    expect(store.getSession(res.sid)).toBeUndefined()
+    expect(store.getSession(hashSid(res.sid))).toBeUndefined()
   })
 })
 
 describe('logout / withFreshAccessToken', () => {
   it('logout removes the session', async () => {
-    pa.mockResolvedValue({ type: 'authenticated', clientCode: 'CC' })
-    xc.mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT', expiresIn: 3600 })
-    ja.mockResolvedValue({ accountId: 'c', accountName: 'alice@probe.test' })
+    mockSuccess()
     const res = await login(baseLogin)
     if (!res.ok) throw new Error('login failed')
     logout(res.sid)
-    expect(store.getSession(res.sid)).toBeUndefined()
+    expect(store.getSession(hashSid(res.sid))).toBeUndefined()
   })
 
   it('refreshes a near-expiry access token and persists a rotated refresh token', async () => {
-    pa.mockResolvedValue({ type: 'authenticated', clientCode: 'CC' })
-    xc.mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT', expiresIn: 3600 })
-    ja.mockResolvedValue({ accountId: 'c', accountName: 'alice@probe.test' })
+    mockSuccess()
     const res = await login({ ...baseLogin, now: 1000 })
     if (!res.ok) throw new Error('login failed')
     rt.mockResolvedValue({ accessToken: 'AT2', refreshToken: 'RT2', expiresIn: 3600 })
@@ -825,15 +870,28 @@ describe('logout / withFreshAccessToken', () => {
     expect(rt).toHaveBeenCalledOnce()
   })
 
+  it('serializes concurrent refreshes — a single token exchange in flight per sid', async () => {
+    mockSuccess()
+    const res = await login({ ...baseLogin, now: 1000 })
+    if (!res.ok) throw new Error('login failed')
+    rt.mockResolvedValue({ accessToken: 'AT2', refreshToken: null, expiresIn: 3600 })
+    const now = 1000 + 3600_000
+    const [a, b] = await Promise.all([
+      withFreshAccessToken(res.sid, now),
+      withFreshAccessToken(res.sid, now),
+    ])
+    expect(a).toBe('AT2')
+    expect(b).toBe('AT2')
+    expect(rt).toHaveBeenCalledOnce()
+  })
+
   it('drops the session and returns null when refresh fails', async () => {
-    pa.mockResolvedValue({ type: 'authenticated', clientCode: 'CC' })
-    xc.mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT', expiresIn: 3600 })
-    ja.mockResolvedValue({ accountId: 'c', accountName: 'alice@probe.test' })
+    mockSuccess()
     const res = await login({ ...baseLogin, now: 1000 })
     if (!res.ok) throw new Error('login failed')
     rt.mockRejectedValue(new Error('bad RT'))
     expect(await withFreshAccessToken(res.sid, 1000 + 3600_000)).toBeNull()
-    expect(store.getSession(res.sid)).toBeUndefined()
+    expect(store.getSession(hashSid(res.sid))).toBeUndefined()
   })
 })
 ```
@@ -847,7 +905,7 @@ Expected: FAIL ("Cannot find module './session'").
 
 ```ts
 // src/server/session.ts
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { generatePkce } from './oauth-pkce'
 import { encryptToken, decryptToken } from './session-crypto'
 import * as store from './session-store'
@@ -858,8 +916,15 @@ export const CLIENT_ID = 'stalmail'
 export const IDLE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const ABSOLUTE_TTL_MS = 30 * 24 * 60 * 60 * 1000 // aligned with refreshTokenExpiry
 const REFRESH_SKEW_MS = 60_000
+const TOUCH_THROTTLE_MS = 60_000 // persist lastSeenAt at most once per minute
 
 export type LoginResult = { ok: true; sid: string } | { ok: false; reason: 'failure' | 'mfa' }
+
+// Only SHA-256(sid) ever reaches the store: the cleartext sid lives in the httpOnly
+// cookie alone, so stealing the store file does not allow replaying sessions.
+export function hashSid(sid: string): string {
+  return createHash('sha256').update(sid).digest('hex')
+}
 
 function isExpired(r: store.SessionRecord, now: number): boolean {
   return now - r.lastSeenAt > IDLE_TTL_MS || now - r.createdAt > ABSOLUTE_TTL_MS
@@ -870,8 +935,11 @@ export async function login(input: {
   accountSecret: string
   redirectUri: string
   forwardedFor?: string
+  previousSid?: string
   now?: number
 }): Promise<LoginResult> {
+  const now = input.now ?? Date.now()
+  store.sweep((r) => isExpired(r, now)) // global GC — expired records never linger on disk
   const { verifier, challenge } = generatePkce()
   const auth = await postApiAuth({
     accountName: input.accountName,
@@ -891,14 +959,16 @@ export async function login(input: {
     redirectUri: input.redirectUri,
   })
   const { accountId, accountName } = await fetchJmapAccount(tokens.accessToken)
-  const now = input.now ?? Date.now()
+  // Anti-fixation: a pre-existing session must not survive a successful re-login.
+  if (input.previousSid) store.deleteSession(hashSid(input.previousSid))
   const sid = randomBytes(32).toString('base64url')
+  const sidHash = hashSid(sid)
   store.createSession({
-    sid,
+    sidHash,
     accountId,
     accountName,
-    encAccess: encryptToken(tokens.accessToken),
-    encRefresh: tokens.refreshToken ? encryptToken(tokens.refreshToken) : null,
+    encAccess: encryptToken(tokens.accessToken, sidHash),
+    encRefresh: tokens.refreshToken ? encryptToken(tokens.refreshToken, sidHash) : null,
     accessExp: now + tokens.expiresIn * 1000,
     createdAt: now,
     lastSeenAt: now,
@@ -907,7 +977,7 @@ export async function login(input: {
 }
 
 export function logout(sid: string): void {
-  store.deleteSession(sid)
+  store.deleteSession(hashSid(sid))
 }
 
 export function logoutAllForAccount(accountId: string): void {
@@ -919,39 +989,55 @@ export function currentSession(
   now: number = Date.now(),
 ): { accountId: string; accountName: string } | null {
   if (!sid) return null
-  const r = store.getSession(sid)
+  const sidHash = hashSid(sid)
+  const r = store.getSession(sidHash)
   if (!r) return null
   if (isExpired(r, now)) {
-    store.deleteSession(sid)
+    store.deleteSession(sidHash)
     return null
   }
-  store.updateSession(sid, { lastSeenAt: now })
+  // Throttled touch: one store write per minute per session, not one per request.
+  if (now - r.lastSeenAt > TOUCH_THROTTLE_MS) store.updateSession(sidHash, { lastSeenAt: now })
   return { accountId: r.accountId, accountName: r.accountName }
 }
 
-export async function withFreshAccessToken(
+// Per-session mutex: a single refresh in flight per sid. Without it, two concurrent
+// requests inside the RT rotation window (its last 4 days) can lose the rotated RT
+// or fail the second exchange → spurious logout.
+const inFlight = new Map<string, Promise<string | null>>()
+
+export function withFreshAccessToken(
   sid: string,
   now: number = Date.now(),
 ): Promise<string | null> {
-  const r = store.getSession(sid)
+  const sidHash = hashSid(sid)
+  const pending = inFlight.get(sidHash)
+  if (pending) return pending
+  const p = freshAccessToken(sidHash, now).finally(() => inFlight.delete(sidHash))
+  inFlight.set(sidHash, p)
+  return p
+}
+
+async function freshAccessToken(sidHash: string, now: number): Promise<string | null> {
+  const r = store.getSession(sidHash)
   if (!r) return null
   if (isExpired(r, now)) {
-    store.deleteSession(sid)
+    store.deleteSession(sidHash)
     return null
   }
-  if (now < r.accessExp - REFRESH_SKEW_MS) return decryptToken(r.encAccess)
-  if (!r.encRefresh) return decryptToken(r.encAccess)
+  if (now < r.accessExp - REFRESH_SKEW_MS) return decryptToken(r.encAccess, sidHash)
+  if (!r.encRefresh) return decryptToken(r.encAccess, sidHash)
   try {
-    const tokens = await refreshTokens({ refreshToken: decryptToken(r.encRefresh), clientId: CLIENT_ID })
-    store.updateSession(sid, {
-      encAccess: encryptToken(tokens.accessToken),
+    const tokens = await refreshTokens({ refreshToken: decryptToken(r.encRefresh, sidHash), clientId: CLIENT_ID })
+    store.updateSession(sidHash, {
+      encAccess: encryptToken(tokens.accessToken, sidHash),
       // Stalwart rotates the refresh token only in its last 4 days — persist when present.
-      encRefresh: tokens.refreshToken ? encryptToken(tokens.refreshToken) : r.encRefresh,
+      encRefresh: tokens.refreshToken ? encryptToken(tokens.refreshToken, sidHash) : r.encRefresh,
       accessExp: now + tokens.expiresIn * 1000,
     })
     return tokens.accessToken
   } catch {
-    store.deleteSession(sid) // refresh failed → force re-login
+    store.deleteSession(sidHash) // refresh failed → force re-login
     return null
   }
 }
@@ -960,13 +1046,13 @@ export async function withFreshAccessToken(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/server/session.test.ts`
-Expected: PASS (7 tests).
+Expected: PASS (10 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/server/session.ts src/server/session.test.ts
-git commit -m "feat(auth): session layer (login/logout/currentSession/refresh)"
+git commit -m "feat(auth): session layer (hashed sids, serialized refresh, login sweep)"
 ```
 
 ---
@@ -1027,7 +1113,15 @@ describe('assertSameOrigin', () => {
     headers({ origin: 'https://mail.x/login', 'x-forwarded-host': 'mail.x' })
     expect(() => assertSameOrigin()).not.toThrow()
   })
-  it('passes when there is no Origin header (same-origin navigation)', () => {
+  it('falls back to Referer when Origin is absent', () => {
+    headers({ referer: 'https://mail.x/login', 'x-forwarded-host': 'mail.x' })
+    expect(() => assertSameOrigin()).not.toThrow()
+  })
+  it('throws on a cross-origin Referer when Origin is absent', () => {
+    headers({ referer: 'https://evil.x/csrf', host: 'mail.x' })
+    expect(() => assertSameOrigin()).toThrow()
+  })
+  it('passes when there is neither Origin nor Referer (same-origin navigation)', () => {
     headers({})
     expect(() => assertSameOrigin()).not.toThrow()
   })
@@ -1085,21 +1179,25 @@ export function clearSid(): void {
   deleteCookie(cookieName(), { path: '/' })
 }
 
-// CSRF: reject state-changing requests whose Origin host ≠ our host.
+// CSRF: reject state-changing requests whose Origin (or, failing that, Referer)
+// host ≠ our host. Trust model: x-forwarded-host MUST be overwritten by Caddy —
+// never relayed from the client (see spec §8/§9).
 export function assertSameOrigin(): void {
-  const origin = getRequestHeader('origin')
-  if (!origin) return // same-origin navigations may omit Origin
+  const origin = getRequestHeader('origin') ?? getRequestHeader('referer')
+  if (!origin) return // same-origin navigations may omit both headers
   const host = getRequestHeader('x-forwarded-host') ?? getRequestHeader('host')
   let originHost: string
   try {
     originHost = new URL(origin).host
   } catch {
-    throw new Error('invalid Origin header')
+    throw new Error('invalid Origin/Referer header')
   }
   if (!host || originHost !== host) throw new Error('cross-origin request rejected')
 }
 
 // Real client IP from the proxy chain, for Stalwart rate-limiting/Fail2Ban.
+// First X-Forwarded-For hop — safe ONLY because Caddy overwrites the incoming
+// header for untrusted clients (do NOT add Internet to trusted_proxies).
 export function clientIp(): string | undefined {
   const xff = getRequestHeader('x-forwarded-for')
   return xff ? xff.split(',')[0]!.trim() : undefined
@@ -1109,24 +1207,113 @@ export function clientIp(): string | undefined {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/server/session-cookie.test.ts`
-Expected: PASS (6 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/server/session-cookie.ts src/server/session-cookie.test.ts
-git commit -m "feat(auth): session cookie helpers + CSRF origin check + client IP"
+git commit -m "feat(auth): session cookie helpers + CSRF Origin/Referer check + client IP"
 ```
 
 ---
 
-## Task 8: Auth server functions
+## Task 8: Login rate-limit + auth server functions
 
 **Files:**
+- Create: `src/server/login-rate-limit.ts`
+- Test: `src/server/login-rate-limit.test.ts`
 - Create: `src/server/auth-actions.ts`
 - Test: `src/server/auth-actions.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+Le rate-limiting BFF est une exigence de la spec §9 : il amortit le bruteforce **avant**
+`/api/auth` pour que les échecs ne s'accumulent pas sur l'IP du BFF côté Stalwart
+(auto-ban `authBanRate` = 100 échecs/jour par IP source) et limite l'oracle `mfaRequired`.
+
+- [ ] **Step 1: Write the failing rate-limit test**
+
+```ts
+// src/server/login-rate-limit.test.ts
+import { describe, it, expect, beforeEach } from 'vitest'
+import { isRateLimited, recordFailure, __resetForTest } from './login-rate-limit'
+
+beforeEach(() => __resetForTest())
+
+describe('login-rate-limit', () => {
+  it('allows attempts below the per-account threshold', () => {
+    for (let i = 0; i < 9; i++) recordFailure('a@x', '203.0.113.7', 1000)
+    expect(isRateLimited('a@x', '203.0.113.7', 1000)).toBe(false)
+  })
+
+  it('blocks an account after too many failures (any IP)', () => {
+    for (let i = 0; i < 10; i++) recordFailure('a@x', `198.51.100.${i}`, 1000)
+    expect(isRateLimited('a@x', '203.0.113.7', 1000)).toBe(true)
+    expect(isRateLimited('A@X', '203.0.113.7', 1000)).toBe(true) // case-insensitive
+    expect(isRateLimited('b@x', '203.0.113.7', 1000)).toBe(false)
+  })
+
+  it('blocks an IP after too many failures (any account)', () => {
+    for (let i = 0; i < 30; i++) recordFailure(`u${i}@x`, '203.0.113.7', 1000)
+    expect(isRateLimited('fresh@x', '203.0.113.7', 1000)).toBe(true)
+    expect(isRateLimited('fresh@x', '198.51.100.9', 1000)).toBe(false)
+  })
+
+  it('unblocks once the sliding window has passed', () => {
+    for (let i = 0; i < 10; i++) recordFailure('a@x', undefined, 1000)
+    expect(isRateLimited('a@x', undefined, 1000)).toBe(true)
+    expect(isRateLimited('a@x', undefined, 1000 + 15 * 60_000 + 1)).toBe(false)
+  })
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run src/server/login-rate-limit.test.ts`
+Expected: FAIL ("Cannot find module './login-rate-limit'").
+
+- [ ] **Step 3: Write the rate limiter**
+
+```ts
+// src/server/login-rate-limit.ts
+// Sliding-window login throttle (in-memory — the BFF is single-process). Counts
+// failed attempts per account AND per client IP before /api/auth is ever called,
+// so brute force is absorbed here instead of pooling failures on the BFF's IP in
+// Stalwart (auto-ban: authBanRate 100/day per source IP).
+const WINDOW_MS = 15 * 60 * 1000
+const MAX_PER_ACCOUNT = 10
+const MAX_PER_IP = 30
+
+const attempts = new Map<string, number[]>()
+
+function recent(key: string, now: number): number[] {
+  const list = (attempts.get(key) ?? []).filter((t) => now - t < WINDOW_MS)
+  attempts.set(key, list)
+  return list
+}
+
+export function isRateLimited(account: string, ip: string | undefined, now = Date.now()): boolean {
+  if (recent(`a:${account.toLowerCase()}`, now).length >= MAX_PER_ACCOUNT) return true
+  if (ip && recent(`i:${ip}`, now).length >= MAX_PER_IP) return true
+  return false
+}
+
+export function recordFailure(account: string, ip: string | undefined, now = Date.now()): void {
+  recent(`a:${account.toLowerCase()}`, now).push(now)
+  if (ip) recent(`i:${ip}`, now).push(now)
+}
+
+// test-only
+export function __resetForTest(): void {
+  attempts.clear()
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run src/server/login-rate-limit.test.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Write the failing auth-actions test**
 
 ```ts
 // src/server/auth-actions.test.ts
@@ -1138,7 +1325,6 @@ vi.mock('@tanstack/react-start', () => ({
     handler: (fn: unknown) => fn,
   }),
 }))
-vi.mock('@tanstack/react-start/server', () => ({ getRequestHeader: vi.fn() }))
 vi.mock('./session', () => ({ login: vi.fn(), logout: vi.fn(), currentSession: vi.fn() }))
 vi.mock('./session-cookie', () => ({
   assertSameOrigin: vi.fn(),
@@ -1147,41 +1333,55 @@ vi.mock('./session-cookie', () => ({
   readSid: vi.fn(),
   clientIp: vi.fn(() => '203.0.113.7'),
 }))
+vi.mock('./login-rate-limit', () => ({ isRateLimited: vi.fn(), recordFailure: vi.fn() }))
 
-// eslint-disable-next-line import/first
-import { getRequestHeader } from '@tanstack/react-start/server'
 // eslint-disable-next-line import/first
 import { login, logout, currentSession } from './session'
 // eslint-disable-next-line import/first
 import { assertSameOrigin, writeSid, clearSid, readSid } from './session-cookie'
 // eslint-disable-next-line import/first
+import { isRateLimited, recordFailure } from './login-rate-limit'
+// eslint-disable-next-line import/first
 import { loginHandler, logoutHandler, sessionStatusHandler } from './auth-actions'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(getRequestHeader).mockImplementation((n: string) =>
-    ({ 'x-forwarded-proto': 'https', 'x-forwarded-host': 'mail.x' })[n.toLowerCase()],
-  )
+  vi.mocked(isRateLimited).mockReturnValue(false)
+  process.env.STALMAIL_PUBLIC_URL = 'https://mail.x'
 })
 
 describe('loginHandler', () => {
-  it('checks CSRF, builds the redirect URI, writes the sid on success', async () => {
+  it('checks CSRF, uses the fixed public URL, replaces the previous session, writes the sid', async () => {
+    vi.mocked(readSid).mockReturnValue('OLD-SID')
     vi.mocked(login).mockResolvedValue({ ok: true, sid: 'SID' })
     const res = await loginHandler({ data: { email: 'a@x', password: 'pw' } })
     expect(assertSameOrigin).toHaveBeenCalledOnce()
     expect(vi.mocked(login).mock.calls[0][0]).toMatchObject({
-      accountName: 'a@x', accountSecret: 'pw', redirectUri: 'https://mail.x/login', forwardedFor: '203.0.113.7',
+      accountName: 'a@x', accountSecret: 'pw', redirectUri: 'https://mail.x/login',
+      forwardedFor: '203.0.113.7', previousSid: 'OLD-SID',
     })
     expect(writeSid).toHaveBeenCalledWith('SID')
     expect(res).toEqual({ status: 'ok' })
   })
 
-  it('maps failure and mfa without writing a sid', async () => {
+  it('maps failure and mfa, records the failed attempt, writes no sid', async () => {
     vi.mocked(login).mockResolvedValue({ ok: false, reason: 'failure' })
     expect(await loginHandler({ data: { email: 'a@x', password: 'pw' } })).toEqual({ status: 'invalid' })
     vi.mocked(login).mockResolvedValue({ ok: false, reason: 'mfa' })
     expect(await loginHandler({ data: { email: 'a@x', password: 'pw' } })).toEqual({ status: 'mfa' })
+    expect(recordFailure).toHaveBeenCalledTimes(2)
     expect(writeSid).not.toHaveBeenCalled()
+  })
+
+  it('short-circuits with rateLimited before any Stalwart call', async () => {
+    vi.mocked(isRateLimited).mockReturnValue(true)
+    expect(await loginHandler({ data: { email: 'a@x', password: 'pw' } })).toEqual({ status: 'rateLimited' })
+    expect(login).not.toHaveBeenCalled()
+  })
+
+  it('maps unexpected errors to a generic error status (no internals in the response)', async () => {
+    vi.mocked(login).mockRejectedValue(new Error('OAuthError: /auth/token HTTP 500'))
+    expect(await loginHandler({ data: { email: 'a@x', password: 'pw' } })).toEqual({ status: 'error' })
   })
 })
 
@@ -1208,44 +1408,62 @@ describe('sessionStatusHandler', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 6: Run test to verify it fails**
 
 Run: `npx vitest run src/server/auth-actions.test.ts`
 Expected: FAIL ("Cannot find module './auth-actions'").
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 7: Write minimal implementation**
 
 ```ts
 // src/server/auth-actions.ts
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
-export type LoginStatus = { status: 'ok' } | { status: 'invalid' } | { status: 'mfa' }
+export type LoginStatus =
+  | { status: 'ok' }
+  | { status: 'invalid' }
+  | { status: 'mfa' }
+  | { status: 'rateLimited' }
+  | { status: 'error' }
 
 export async function loginHandler({
   data,
 }: {
   data: { email: string; password: string }
 }): Promise<LoginStatus> {
-  const { assertSameOrigin, writeSid, clientIp } = await import('./session-cookie')
+  const { assertSameOrigin, writeSid, readSid, clientIp } = await import('./session-cookie')
   const { login } = await import('./session')
-  const { getRequestHeader } = await import('@tanstack/react-start/server')
+  const { isRateLimited, recordFailure } = await import('./login-rate-limit')
   assertSameOrigin()
-  const proto = getRequestHeader('x-forwarded-proto') ?? 'http'
-  const host = getRequestHeader('x-forwarded-host') ?? getRequestHeader('host') ?? 'localhost'
-  const redirectUri = `${proto}://${host}/login`
-  const res = await login({
-    accountName: data.email,
-    accountSecret: data.password,
-    redirectUri,
-    forwardedFor: clientIp(),
-  })
-  if (!res.ok) return { status: res.reason === 'mfa' ? 'mfa' : 'invalid' }
-  writeSid(res.sid)
-  return { status: 'ok' }
+  const ip = clientIp()
+  if (isRateLimited(data.email, ip)) return { status: 'rateLimited' }
+  try {
+    // Fixed public base URL — never derived from request headers (spec §7/§13):
+    // no proxy-chain dependency, and https as Stalwart requires outside recovery/dev.
+    const publicUrl = process.env.STALMAIL_PUBLIC_URL
+    if (!publicUrl) throw new Error('STALMAIL_PUBLIC_URL is not set')
+    const res = await login({
+      accountName: data.email,
+      accountSecret: data.password,
+      redirectUri: `${publicUrl.replace(/\/+$/, '')}/login`,
+      forwardedFor: ip,
+      previousSid: readSid(),
+    })
+    if (!res.ok) {
+      // mfaRequired confirms a valid password → throttle that oracle too.
+      recordFailure(data.email, ip)
+      return { status: res.reason === 'mfa' ? 'mfa' : 'invalid' }
+    }
+    writeSid(res.sid)
+    return { status: 'ok' }
+  } catch {
+    // Never leak internals (OAuthError, Stalwart HTTP codes) in the network response.
+    return { status: 'error' }
+  }
 }
 
-const loginSchema = z.object({ email: z.string().min(1), password: z.string().min(1) })
+const loginSchema = z.object({ email: z.string().min(1).max(254), password: z.string().min(1).max(1024) })
 
 export const loginFn = createServerFn({ method: 'POST' })
   .validator((d: { email: string; password: string }) => loginSchema.parse(d))
@@ -1275,16 +1493,17 @@ export async function sessionStatusHandler(): Promise<SessionStatus> {
 export const sessionStatusFn = createServerFn({ method: 'GET' }).handler(sessionStatusHandler)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 8: Run test to verify it passes**
 
 Run: `npx vitest run src/server/auth-actions.test.ts`
-Expected: PASS (5 tests).
+Expected: PASS (7 tests).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/server/auth-actions.ts src/server/auth-actions.test.ts
-git commit -m "feat(auth): loginFn/logoutFn/sessionStatusFn server functions"
+git add src/server/login-rate-limit.ts src/server/login-rate-limit.test.ts \
+        src/server/auth-actions.ts src/server/auth-actions.test.ts
+git commit -m "feat(auth): BFF login rate-limit + loginFn/logoutFn/sessionStatusFn"
 ```
 
 ---
@@ -1310,6 +1529,7 @@ In `src/i18n/resources.ts`, inside `export const fr = { ... }`, add a sibling ke
     signingIn: 'Connexion…',
     invalid: 'Adresse e-mail ou mot de passe invalide.',
     mfa: "L'authentification à deux facteurs n'est pas encore prise en charge.",
+    rateLimited: 'Trop de tentatives. Réessayez dans quelques minutes.',
     error: 'Connexion impossible. Réessayez.',
   },
 ```
@@ -1327,6 +1547,7 @@ In `src/i18n/resources.ts`, inside `export const fr = { ... }`, add a sibling ke
     signingIn: 'Signing in…',
     invalid: 'Invalid email or password.',
     mfa: 'Two-factor authentication is not supported yet.',
+    rateLimited: 'Too many attempts. Try again in a few minutes.',
     error: 'Could not sign in. Please try again.',
   },
 ```
@@ -1412,6 +1633,15 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('deux facteurs')
   })
+
+  it('shows the rate-limited message', async () => {
+    vi.mocked(loginFn).mockResolvedValue({ status: 'rateLimited' })
+    wrap()
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'a@x.fr' } })
+    fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'pw' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Trop de tentatives')
+  })
 })
 ```
 
@@ -1455,7 +1685,15 @@ export function LoginPage() {
         await router.navigate({ to: '/mail/$folder', params: { folder: 'inbox' } })
         return
       }
-      setError(res.status === 'mfa' ? t('login.mfa') : t('login.invalid'))
+      setError(
+        res.status === 'mfa'
+          ? t('login.mfa')
+          : res.status === 'rateLimited'
+            ? t('login.rateLimited')
+            : res.status === 'invalid'
+              ? t('login.invalid')
+              : t('login.error'),
+      )
     } catch {
       setError(t('login.error'))
     }
@@ -1507,7 +1745,7 @@ export function LoginPage() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/routes/login.test.tsx`
-Expected: PASS (3 tests).
+Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1619,21 +1857,117 @@ git commit -m "feat(auth): requireAuth guard protecting /mail/*"
 
 ---
 
-## Task 12: Compose env + app data volume + X-Forwarded-For
+## Task 12: Compose env + app data volume + Stalwart `useXForwarded`
 
 **Files:**
+- Create: `src/server/stalwart-hardening.ts`
+- Test: `src/server/stalwart-hardening.test.ts`
+- Modify: `src/server/setup-actions.ts` (+ son test)
 - Modify: `compose.yml`
 - Modify: `compose.dev.yml`
 
-The BFF already forwards the client IP to `/api/auth` (Task 4/8). This task provisions the app's persistent session store and the secret used to encrypt tokens. The Stalwart-side knob `server.http.use-x-forwarded` (needed for the forwarded IP to drive Fail2Ban) is tracked as a follow-up in the spec §9/§16 — not changed here.
+The BFF already forwards the client IP to `/api/auth` (Task 4/8). This task provisions the app's persistent session store, the secret used to encrypt tokens, the fixed public URL — **and enables `server.http.use-x-forwarded` on Stalwart**. The latter is a **go-live condition** (spec §9): without it, every `/api/auth` failure pools on the BFF's IP and ~100 bad passwords (auto-ban `authBanRate` default) get the BFF banned **for everyone**. It must run during the wizard finalize, while the recovery admin is still active (it is dropped at the next restart).
 
-- [ ] **Step 1: Add env + volume to the `app` service in `compose.yml`**
+- [ ] **Step 1: Write the failing stalwart-hardening test**
+
+```ts
+// src/server/stalwart-hardening.test.ts
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+vi.mock('./jmap', () => ({
+  jmapCall: vi.fn(),
+  resolveAccountId: vi.fn(async () => 'acc'),
+  firstResponse: (r: unknown[][]) => r[0],
+  JmapError: class JmapError extends Error {},
+}))
+
+// eslint-disable-next-line import/first
+import { jmapCall } from './jmap'
+// eslint-disable-next-line import/first
+import { enableXForwarded } from './stalwart-hardening'
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('enableXForwarded', () => {
+  it('sets useXForwarded:true on the Http singleton', async () => {
+    vi.mocked(jmapCall).mockResolvedValue([
+      ['x:Http/set', { updated: { singleton: {} } }, '0'],
+    ])
+    await enableXForwarded()
+    const [calls] = vi.mocked(jmapCall).mock.calls[0]
+    expect(calls[0][0]).toBe('x:Http/set')
+    expect(calls[0][1]).toMatchObject({ update: { singleton: { useXForwarded: true } } })
+  })
+
+  it('throws when the update is rejected', async () => {
+    vi.mocked(jmapCall).mockResolvedValue([['error', { type: 'forbidden' }, '0']])
+    await expect(enableXForwarded()).rejects.toThrow()
+  })
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run src/server/stalwart-hardening.test.ts`
+Expected: FAIL ("Cannot find module './stalwart-hardening'").
+
+- [ ] **Step 3: Write the hardening module**
+
+```ts
+// src/server/stalwart-hardening.ts
+import { jmapCall, resolveAccountId, firstResponse, JmapError } from './jmap'
+
+// Stalwart only honours X-Forwarded-For when the Http singleton's useXForwarded is
+// on. Without it, every /api/auth failure pools on the BFF's IP → auto-ban of the
+// BFF for all users (authBanRate default 100/day). Must run while the recovery
+// admin is still active, i.e. during the wizard, before markSetupComplete().
+export async function enableXForwarded(): Promise<void> {
+  const accountId = await resolveAccountId()
+  const responses = await jmapCall([
+    ['x:Http/set', { accountId, update: { singleton: { useXForwarded: true } } }, '0'],
+  ])
+  const [name, result] = firstResponse(responses)
+  const updated = (result as { updated?: Record<string, unknown> }).updated
+  if (name === 'error' || !updated || !('singleton' in updated)) {
+    throw new JmapError('failed to enable useXForwarded', result)
+  }
+}
+```
+
+(Adapter les signatures exactes à `src/server/jmap.ts` — même idiome que `x:AcmeProvider/set` dans `stalwart-acme.ts`.)
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run src/server/stalwart-hardening.test.ts`
+Expected: PASS (2 tests).
+
+- [ ] **Step 5: Wire it into the wizard finalize**
+
+Dans `src/server/setup-actions.ts`, `finishSetupHandler()` appelle `enableXForwarded()` **avant** `markSetupComplete()` :
+
+```ts
+export async function finishSetupHandler(): Promise<{ ok: true }> {
+  const { enableXForwarded } = await import('./stalwart-hardening')
+  const { markSetupComplete } = await import('./setup-flag')
+  await enableXForwarded() // go-live condition — recovery admin still active here
+  markSetupComplete()
+  // … reste inchangé …
+}
+```
+
+Étendre `src/server/setup-actions.test.ts` : `finishSetupHandler` appelle `enableXForwarded` avant `markSetupComplete`, et **ne marque pas** le setup complet si `enableXForwarded` rejette. (Note migration : les installations déjà finalisées avant ce changement doivent activer le réglage via la WebUI Stalwart — documenté, hors scope du code.)
+
+Run: `npx vitest run src/server/setup-actions.test.ts`
+Expected: PASS.
+
+- [ ] **Step 6: Add env + volume to the `app` service in `compose.yml`**
 
 Under the `app` service `environment:` block (next to `STALWART_URL`/`STALWART_RECOVERY_ADMIN`), add:
 
 ```yaml
       STALMAIL_SECRET: "${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
       STALMAIL_DATA_DIR: /var/lib/stalmail
+      STALMAIL_PUBLIC_URL: "${STALMAIL_PUBLIC_URL:?set STALMAIL_PUBLIC_URL in .env (e.g. https://mail.example.com)}"
       NODE_ENV: production
 ```
 
@@ -1649,20 +1983,22 @@ Under the top-level `volumes:` block, add:
   stalmail-app-data:
 ```
 
-- [ ] **Step 2: Mirror in `compose.dev.yml`**
+- [ ] **Step 7: Mirror in `compose.dev.yml`**
 
-Add the same `STALMAIL_SECRET` and `STALMAIL_DATA_DIR: /var/lib/stalmail` env to the dev `app` service, plus the `- stalmail-app-data:/var/lib/stalmail` volume and the top-level `stalmail-app-data:` volume. Do **not** set `NODE_ENV: production` in dev (cookies stay non-`__Host-`/non-Secure over http, per `session-cookie.ts`).
+Add the same `STALMAIL_SECRET` and `STALMAIL_DATA_DIR: /var/lib/stalmail` env to the dev `app` service, plus `STALMAIL_PUBLIC_URL: http://localhost:3000` (http toléré en dev uniquement — Stalwart n'exige https qu'hors modes recovery/dev), the `- stalmail-app-data:/var/lib/stalmail` volume and the top-level `stalmail-app-data:` volume. Do **not** set `NODE_ENV: production` in dev (cookies stay non-`__Host-`/non-Secure over http, per `session-cookie.ts`).
 
-- [ ] **Step 3: Validate compose files parse**
+- [ ] **Step 8: Validate compose files parse**
 
 Run: `docker compose -f compose.yml config >/dev/null && docker compose -f compose.dev.yml config >/dev/null && echo OK`
-Expected: `OK` (no YAML/interpolation errors; `STALMAIL_SECRET` must be present in `.env`).
+Expected: `OK` (no YAML/interpolation errors; `STALMAIL_SECRET` and `STALMAIL_PUBLIC_URL` must be present in `.env`).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add compose.yml compose.dev.yml
-git commit -m "chore(compose): app session store volume + STALMAIL_SECRET/DATA_DIR env"
+git add src/server/stalwart-hardening.ts src/server/stalwart-hardening.test.ts \
+        src/server/setup-actions.ts src/server/setup-actions.test.ts \
+        compose.yml compose.dev.yml
+git commit -m "feat(auth): enable Stalwart useXForwarded at wizard finalize + compose env (PUBLIC_URL, DATA_DIR, app-data volume)"
 ```
 
 ---
@@ -1684,7 +2020,11 @@ Expected: no errors.
 - [ ] **Step 3: Sanity self-check of the end-to-end flow (read-through, no code)**
 
 Confirm by reading the code that the login path is whole:
-`login.tsx` → `loginFn` → `loginHandler` (CSRF + redirectUri + clientIp) → `session.login` (PKCE → `postApiAuth` → `exchangeCode` → `fetchJmapAccount` → store) → `writeSid`; and that `/mail/$folder` `beforeLoad` → `requireAuth` → `sessionStatusFn` → `currentSession`. Logout: `logoutFn` → `logoutHandler` → `logout` + `clearSid`.
+`login.tsx` → `loginFn` → `loginHandler` (CSRF Origin/Referer + rate-limit + `STALMAIL_PUBLIC_URL` + clientIp + previousSid) → `session.login` (sweep → PKCE → `postApiAuth` → `exchangeCode` → `fetchJmapAccount` → store keyed by `hashSid`) → `writeSid`; and that `/mail/$folder` `beforeLoad` → `requireAuth` → `sessionStatusFn` → `currentSession`. Logout: `logoutFn` → `logoutHandler` → `logout` + `clearSid`. Wizard finalize: `finishSetupHandler` → `enableXForwarded` **avant** `markSetupComplete`.
+
+- [ ] **Step 3b: Security gate (read-through, no code)**
+
+Vérifier que les invariants de la revue sécurité (`docs/superpowers/reviews/2026-06-11-plan-3a-security-review.md`) tiennent dans le code livré : aucun `sid` en clair hors cookie ; aucun fallback de `STALMAIL_SECRET` ; `redirect_uri` jamais dérivé des headers ; refresh sous mutex ; `recordFailure` appelé sur tout échec ; aucune erreur interne dans les réponses réseau.
 
 - [ ] **Step 4: Commit (no-op marker if everything was already committed)**
 
@@ -1699,5 +2039,6 @@ git commit --allow-empty -m "chore(auth): Plan 3a complete — full suite + type
 - JMAP user-scoped server functions (queryEmails/getThread/setEmail/sendEmail/search), SSE/live mail → Plan 4 (UI-driven).
 - 2FA TOTP entry UI (only `mfaRequired` detection here) → deferred.
 - `logoutAllForAccount` trigger UI ("sign out everywhere") → Plan 4 / settings (the store helper exists, see `session.ts`).
-- Enabling `server.http.use-x-forwarded` on Stalwart → infra follow-up (spec §9/§16).
+- Caddyfile : vérifier/documenter que Caddy écrase les `X-Forwarded-*` entrants (`trusted_proxies` — défaut sûr, à confirmer) → suivi infra (spec §8/§9).
+- **Re-validation empirique hors mode bootstrap** des verdicts de la capture §10 (redirect_uri https, client public, rotation RT) + question ouverte : Stalwart invalide-t-il les tokens au changement de mot de passe ? (spec §16) → avant mise en service / Plan 4.
 - App Passwords, external OIDC, multi-account → later.
