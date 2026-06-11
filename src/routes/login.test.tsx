@@ -74,4 +74,22 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(navigate).not.toHaveBeenCalled()
   })
+
+  it('blocks submission and shows field error when email format is invalid', async () => {
+    wrap()
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'not-an-email' } })
+    fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'pw' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+    expect(await screen.findByText(/invalide/i)).toBeInTheDocument()
+    expect(loginFn).not.toHaveBeenCalled()
+  })
+
+  it('blocks submission and shows field error when password is empty', async () => {
+    wrap()
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'a@x.fr' } })
+    // leave password empty
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+    expect(await screen.findByText(/requis/i)).toBeInTheDocument()
+    expect(loginFn).not.toHaveBeenCalled()
+  })
 })

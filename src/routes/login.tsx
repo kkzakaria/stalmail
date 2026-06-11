@@ -1,37 +1,78 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
-import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { loginFn } from '@/server/auth-actions'
 import { redirectIfAuthenticated } from '@/lib/auth-guard'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { getServerTheme } from '@/server/setup-theme'
+import type { Theme } from '@/server/setup-theme'
+import {
+  Alert,
+  BrandMark,
+  Brand,
+  Button,
+  Field,
+  PasswordInput,
+  Spinner,
+  StepHeader,
+  TextInput,
+} from '@/components/setup/ui/primitives'
+import { LangSelect } from '@/components/setup/ui/LangSelect'
+import { ThemeToggle } from '@/components/setup/ui/ThemeToggle'
+import { IconLock } from '@/components/setup/ui/icons'
+import '@/components/setup/wizard.css'
 
 export const Route = createFileRoute('/login')({
   beforeLoad: () => redirectIfAuthenticated(),
+  loader: async () => {
+    const { theme } = await getServerTheme()
+    return { theme }
+  },
   component: LoginPage,
 })
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 export function LoginPage() {
   const { t } = useTranslation()
   const router = useRouter()
+  // useLoaderData is not available in test environments where the route is mocked
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loaderData = typeof (Route as any).useLoaderData === 'function'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? (Route as any).useLoaderData() as { theme: Theme }
+    : undefined
+  const initialTheme: Theme = loaderData?.theme ?? 'light'
+
+  const [theme, setTheme] = useState<Theme>(initialTheme)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [touched, setTouched] = useState(false)
 
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
+  const emailOk = EMAIL_RE.test(email)
+  const passOk = password.length > 0
+
+  const emailError = touched && !emailOk ? t('login.invalidEmail') : undefined
+  const passError = touched && !passOk ? t('login.requiredPassword') : undefined
+
+  async function submit() {
+    setTouched(true)
+    if (!emailOk || !passOk) return
+    if (busy) return
+    setServerError(null)
     setBusy(true)
     try {
       const res = await loginFn({ data: { email, password } })
       if (res.status === 'ok') {
-        await router.navigate({ to: '/mail/$folder', params: { folder: 'inbox' } })
+        setSuccess(true)
+        setTimeout(() => {
+          void router.navigate({ to: '/mail/$folder', params: { folder: 'inbox' } })
+        }, 600)
         return
       }
-      setError(
+      setServerError(
         res.status === 'mfa'
           ? t('login.mfa')
           : res.status === 'rateLimited'
@@ -41,51 +82,86 @@ export function LoginPage() {
               : t('login.error'),
       )
     } catch {
-      setError(t('login.error'))
+      setServerError(t('login.error'))
     } finally {
       setBusy(false)
     }
   }
 
+  const submitLabel = success
+    ? t('login.success')
+    : busy
+      ? t('login.signingIn')
+      : t('login.submit')
+
   return (
-    <div className="flex min-h-svh items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">{t('login.title')}</h1>
-          <p className="text-muted-foreground text-sm">{t('login.subtitle')}</p>
+    <div className="stalmail-wizard login-shell" data-theme={theme}>
+      <div className="login-topbar">
+        <Brand size={24} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <LangSelect />
+          <ThemeToggle theme={theme} onChange={setTheme} />
         </div>
-        {error && (
-          <div role="alert" className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm">
-            {error}
+      </div>
+      <main className="login-main">
+        <div className="login-card">
+          <div className="login-head">
+            <BrandMark size={40} />
+            <StepHeader title={t('login.title')} sub={t('login.subtitle')} />
           </div>
-        )}
-        <div className="space-y-1.5">
-          <Label htmlFor="email">{t('login.email')}</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="username"
-            value={email}
-            placeholder={t('login.emailPlaceholder')}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+
+          {serverError && (
+            <Alert variant="destructive" title={t('login.errorTitle')}>
+              {serverError}
+            </Alert>
+          )}
+
+          <Field
+            label={t('login.email')}
+            htmlFor="login-email"
+            error={emailError}
+          >
+            <TextInput
+              id="login-email"
+              type="email"
+              value={email}
+              onChange={(v) => setEmail(v.trim())}
+              placeholder={t('login.emailPlaceholder')}
+              autoFocus
+              invalid={touched && !emailOk}
+              onEnter={submit}
+            />
+          </Field>
+
+          <Field
+            label={t('login.password')}
+            htmlFor="login-password"
+            error={passError}
+          >
+            <PasswordInput
+              id="login-password"
+              value={password}
+              onChange={setPassword}
+              invalid={touched && !passOk}
+              showLabel={t('wizard.account.show')}
+              hideLabel={t('wizard.account.hide')}
+              onEnter={submit}
+            />
+          </Field>
+
+          <Button
+            variant="primary"
+            size="lg"
+            type="button"
+            disabled={busy || success}
+            onClick={submit}
+            style={{ width: '100%' }}
+          >
+            {busy ? <Spinner size={14} /> : <IconLock size={15} />}
+            {submitLabel}
+          </Button>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password">{t('login.password')}</Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? t('login.signingIn') : t('login.submit')}
-        </Button>
-      </form>
+      </main>
     </div>
   )
 }
