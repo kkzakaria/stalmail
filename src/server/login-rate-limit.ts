@@ -9,6 +9,8 @@ const MAX_PER_IP = 30
 const attempts = new Map<string, number[]>()
 
 const PRUNE_THRESHOLD = 10_000
+const PRUNE_INTERVAL_MS = WINDOW_MS
+let nextPruneAt = 0
 
 function pruneAll(now: number): void {
   for (const [key, list] of attempts) {
@@ -16,6 +18,14 @@ function pruneAll(now: number): void {
     if (fresh.length === 0) attempts.delete(key)
     else attempts.set(key, fresh)
   }
+}
+
+// Prune at most once per window so the throttle path never becomes an O(n)-per-request hotspot.
+function maybePruneAll(now: number): void {
+  if (attempts.size <= PRUNE_THRESHOLD) return
+  if (now < nextPruneAt) return
+  pruneAll(now)
+  nextPruneAt = now + PRUNE_INTERVAL_MS
 }
 
 function recent(key: string, now: number): number[] {
@@ -32,7 +42,7 @@ export function isRateLimited(account: string, ip: string | undefined, now = Dat
 }
 
 export function recordFailure(account: string, ip: string | undefined, now = Date.now()): void {
-  if (attempts.size > PRUNE_THRESHOLD) pruneAll(now)
+  maybePruneAll(now)
   for (const key of [`a:${account.toLowerCase()}`, ...(ip ? [`i:${ip}`] : [])]) {
     const list = recent(key, now)
     list.push(now)
@@ -43,6 +53,7 @@ export function recordFailure(account: string, ip: string | undefined, now = Dat
 // test-only
 export function __resetForTest(): void {
   attempts.clear()
+  nextPruneAt = 0
 }
 
 export function __mapSizeForTest(): number {

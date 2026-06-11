@@ -39,4 +39,10 @@ describe('login-rate-limit', () => {
     expect(isRateLimited('ghost@x', undefined, 1000 + 15 * 60_000 + 1)).toBe(false)
     expect(__mapSizeForTest()).toBe(0)
   })
+
+  it('does not rescan the whole map on every failure while entries are still fresh', () => {
+    for (let i = 0; i < 10_001; i++) recordFailure(`u${i}@x`, undefined, 1000)
+    recordFailure('again@x', undefined, 2000) // within window AND within prune interval → no prune
+    expect(__mapSizeForTest()).toBe(10_002)
+  })
 })
