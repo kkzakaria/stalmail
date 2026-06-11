@@ -10,6 +10,10 @@ STALWART_CONFIG="${STALWART_CONFIG:-/etc/stalwart/config.json}"
 STALWART_DATA_DIR="${STALWART_DATA_DIR:-/var/lib/stalwart}"
 RUN_DIR="${STALMAIL_RUN_DIR:-/shared}"
 SENTINEL="${RUN_DIR}/restart-stalwart"
+# Recovery-admin hardening: the wizard writes this flag (markSetupComplete) into the
+# shared volume on finalize. Its presence at (re)start makes us drop the permanent
+# STALWART_RECOVERY_ADMIN credential — see start_stalwart.
+CONFIGURED_FLAG="${STALMAIL_CONFIGURED_FLAG:-${RUN_DIR}/.stalmail-configured}"
 mkdir -p "${RUN_DIR}"
 
 term_wait_kill() {
@@ -22,7 +26,18 @@ term_wait_kill() {
 start_stalwart() {
   # Subshell cd so Stalwart runs from its data dir (like the official WORKDIR) without
   # changing this script's cwd. exec keeps the subshell PID = the real process.
-  ( cd "${STALWART_DATA_DIR}" && exec "${STALWART_BIN}" --config "${STALWART_CONFIG}" ) &
+  #
+  # Hardening: once setup is complete (flag present), launch Stalwart WITHOUT the
+  # recovery admin so the management API on :8080 is no longer reachable via the
+  # permanent recovery credential. Before setup the flag is absent, so the recovery
+  # admin stays active for the wizard; the gate takes effect at the next (re)start
+  # after finalize. (`env -u` execs Stalwart with that single var removed.)
+  if [ -f "${CONFIGURED_FLAG}" ]; then
+    echo "[stalwart-sup] setup complete — starting Stalwart WITHOUT recovery admin (:8080 management hardened)"
+    ( cd "${STALWART_DATA_DIR}" && exec env -u STALWART_RECOVERY_ADMIN "${STALWART_BIN}" --config "${STALWART_CONFIG}" ) &
+  else
+    ( cd "${STALWART_DATA_DIR}" && exec "${STALWART_BIN}" --config "${STALWART_CONFIG}" ) &
+  fi
   STALWART_PID=$!
 }
 
