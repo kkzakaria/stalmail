@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { submitBootstrap } from './stalwart-bootstrap'
 import { requestStalwartRestart } from './stalwart-restart'
-import { getStepHandler, submitBootstrapHandler, createAdminAccountHandler, createDnsServerHandler, setDnsManagementHandler, dnsGridStatusHandler, configureAcmeHandler, acmeStatusHandler, finishSetupHandler } from './setup-actions'
+import { getStepHandler, submitBootstrapHandler, createAdminAccountHandler, createDnsServerHandler, setDnsManagementHandler, dnsGridStatusHandler, configureAcmeHandler, acmeStatusHandler, finishSetupHandler, setupStatusHandler } from './setup-actions'
 import type * as StalwartAccountModule from './stalwart-account'
 import type * as StalwartDomainModule from './stalwart-domain'
 import type * as StalwartDnsModule from './stalwart-dns'
@@ -9,6 +9,7 @@ import type * as DnsZoneModule from './dns-zone'
 import type * as DnsResolveModule from './dns-resolve'
 import type * as StalwartAcmeModule from './stalwart-acme'
 import type * as SetupFlagModule from './setup-flag'
+import type * as StalwartHardeningModule from './stalwart-hardening'
 
 vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({ validator: () => ({ handler: (fn: unknown) => fn }), handler: (fn: unknown) => fn }),
@@ -45,6 +46,11 @@ vi.mock('./stalwart-acme', async (importActual) => ({
 vi.mock('./setup-flag', async (importActual) => ({
   ...(await importActual<typeof SetupFlagModule>()),
   markSetupComplete: vi.fn(),
+  isSetupComplete: vi.fn(() => false),
+}))
+vi.mock('./stalwart-hardening', async (importActual) => ({
+  ...(await importActual<typeof StalwartHardeningModule>()),
+  enableXForwarded: vi.fn(async () => undefined),
 }))
 
 // eslint-disable-next-line import/first
@@ -60,7 +66,9 @@ import { resolveRecordStatus } from './dns-resolve'
 // eslint-disable-next-line import/first
 import { configureAcme, getAcmeStatus } from './stalwart-acme'
 // eslint-disable-next-line import/first
-import { markSetupComplete } from './setup-flag'
+import { markSetupComplete, isSetupComplete } from './setup-flag'
+// eslint-disable-next-line import/first
+import { enableXForwarded } from './stalwart-hardening'
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -199,9 +207,36 @@ describe('acmeStatusHandler', () => {
 })
 
 describe('finishSetupHandler', () => {
-  it('calls markSetupComplete and returns {ok:true}', async () => {
+  it('calls enableXForwarded before markSetupComplete and returns {ok:true}', async () => {
+    const callOrder: string[] = []
+    vi.mocked(enableXForwarded).mockImplementationOnce(async () => { callOrder.push('enableXForwarded') })
+    vi.mocked(markSetupComplete).mockImplementationOnce(() => { callOrder.push('markSetupComplete') })
     const result = await finishSetupHandler()
+    expect(enableXForwarded).toHaveBeenCalled()
     expect(markSetupComplete).toHaveBeenCalled()
+    expect(callOrder).toEqual(['enableXForwarded', 'markSetupComplete'])
     expect(result).toEqual({ ok: true })
+  })
+
+  it('does not mark setup complete when enableXForwarded rejects', async () => {
+    vi.mocked(enableXForwarded).mockRejectedValueOnce(new Error('http-set failed'))
+    await expect(finishSetupHandler()).rejects.toThrow('http-set failed')
+    expect(markSetupComplete).not.toHaveBeenCalled()
+  })
+})
+
+describe('setupStatusHandler', () => {
+  it('returns {configured:false} when isSetupComplete returns false', async () => {
+    vi.mocked(isSetupComplete).mockReturnValueOnce(false)
+    const result = await setupStatusHandler()
+    expect(result).toEqual({ configured: false })
+    expect(isSetupComplete).toHaveBeenCalledOnce()
+  })
+
+  it('returns {configured:true} when isSetupComplete returns true', async () => {
+    vi.mocked(isSetupComplete).mockReturnValueOnce(true)
+    const result = await setupStatusHandler()
+    expect(result).toEqual({ configured: true })
+    expect(isSetupComplete).toHaveBeenCalledOnce()
   })
 })

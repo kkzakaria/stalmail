@@ -25,7 +25,10 @@ ENV NODE_ENV=production \
 # write the restart sentinel to the /shared volume (owned by stalwart at 2000:2000).
 RUN groupadd --gid 2000 stalmail \
   && useradd --uid 2000 --gid 2000 --no-create-home --shell /usr/sbin/nologin stalmail \
-  && mkdir -p /shared && chown 2000:2000 /shared
+  && mkdir -p /shared && chown 2000:2000 /shared \
+  # Pre-own the session-store mountpoint so the named volume inherits this ownership
+  # on first mount (Docker copies the image mountpoint ownership into a new named volume).
+  && mkdir -p /var/lib/stalmail && chown 2000:2000 /var/lib/stalmail
 
 # Copy only production node_modules — dev deps (vite, eslint, ts, vitest…) stay out.
 COPY --from=prod-deps /app/node_modules /app/node_modules

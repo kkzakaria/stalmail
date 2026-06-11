@@ -124,7 +124,9 @@ export async function acmeStatusHandler(): Promise<{ status: AcmeStatus }> {
 }
 
 export async function finishSetupHandler(): Promise<{ ok: true }> {
+  const { enableXForwarded } = await import('./stalwart-hardening')
   const { markSetupComplete } = await import('./setup-flag')
+  await enableXForwarded() // go-live condition — recovery admin still active here
   markSetupComplete()
   return { ok: true }
 }
@@ -135,3 +137,10 @@ export const configureAcmeFn = createServerFn({ method: 'POST' })
   .handler(configureAcmeHandler)
 export const acmeStatusFn = createServerFn({ method: 'GET' }).handler(acmeStatusHandler)
 export const finishSetupFn = createServerFn({ method: 'POST' }).handler(finishSetupHandler)
+
+export async function setupStatusHandler(): Promise<{ configured: boolean }> {
+  const { isSetupComplete } = await import('./setup-flag')
+  return { configured: isSetupComplete() }
+}
+
+export const setupStatusFn = createServerFn({ method: 'GET' }).handler(setupStatusHandler)

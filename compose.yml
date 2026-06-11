@@ -41,9 +41,13 @@ services:
       PORT: "3000"
       STALWART_URL: http://stalwart:8080
       STALWART_RECOVERY_ADMIN: "stalmail-admin:${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
+      STALMAIL_SECRET: "${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
+      STALMAIL_DATA_DIR: /var/lib/stalmail
+      STALMAIL_PUBLIC_URL: "${STALMAIL_PUBLIC_URL:?set STALMAIL_PUBLIC_URL in .env (e.g. https://mail.example.com)}"
       STALMAIL_RUN_DIR: /shared
     volumes:
       - stalmail-shared:/shared
+      - stalmail-app-data:/var/lib/stalmail
     depends_on:
       - stalwart
     networks:
@@ -74,3 +78,4 @@ volumes:
   stalmail-shared:
   stalmail-caddy-data:
   stalmail-caddy-config:
+  stalmail-app-data:

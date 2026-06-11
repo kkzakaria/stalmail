@@ -38,11 +38,15 @@ services:
     environment:
       STALWART_URL: http://stalwart:8080
       STALWART_RECOVERY_ADMIN: "stalmail-admin:dev-insecure-secret"
+      STALMAIL_SECRET: "dev-insecure-secret-do-not-use-in-prod!!"
+      STALMAIL_DATA_DIR: /var/lib/stalmail
+      STALMAIL_PUBLIC_URL: "http://localhost:3000"
       STALMAIL_RUN_DIR: /shared
     volumes:
       - .:/app
       - stalmail-dev-modules:/app/node_modules
       - stalmail-dev-shared:/shared
+      - stalmail-dev-app-data:/var/lib/stalmail
     ports:
       - "3000:3000"
     depends_on:
@@ -70,3 +74,4 @@ volumes:
   stalmail-dev-data:
   stalmail-dev-shared:
   stalmail-dev-modules:
+  stalmail-dev-app-data:
