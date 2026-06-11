@@ -38,9 +38,10 @@ Le flux retenu s'appuie donc sur `/api/auth` (custom form → code) puis `/auth/
 ## 3. Décisions retenues (issues du brainstorming)
 
 1. **Fondation** : `/api/auth` + PKCE (S256) + tokens Bearer.
-2. **Client OAuth** : client **confidentiel dédié `stalmail`** (`client_secret` + PKCE,
-   défense en profondeur ; moindre privilège vs le client `webadmin` de l'admin WebUI),
-   provisionné à l'installation/bootstrap.
+2. **Client OAuth** : client **public PKCE dédié `stalmail`** — `client_id` arbitraire,
+   **sans secret, sans enregistrement préalable** (confirmé empiriquement, cf. capture
+   §10 : Stalwart v0.16 traite le client comme public et **rejette** un `client_secret` ;
+   PKCE S256 est *enforced*). La reco initiale d'un client confidentiel est donc infirmée.
 3. **Session** : pattern BFF / token-handler — **cookie opaque httpOnly** + **store
    serveur** (`bun:sqlite`), **tokens chiffrés au repos**. Révocation instantanée.
 4. **2FA** : la machine d'état gère `mfaRequired` dès maintenant (pas de crash, message
@@ -68,11 +69,11 @@ Navigateur                BFF (TanStack Start)                Stalwart
    |                           |   (ou mfaRequired / failure)      |
    |                           |-- POST /auth/token -------------->|
    |                           |   grant_type=authorization_code,  |
-   |                           |   code=clientCode, code_verifier, |
-   |                           |   client_id, client_secret,       |
-   |                           |   redirect_uri                    |
+   |                           |   code=client_code, code_verifier,|
+   |                           |   client_id, redirect_uri         |
+   |                           |   (form-urlencoded, PAS de secret)|
    |                           |<-- {access_token, refresh_token,  |
-   |                           |     expires_in} -----------------|
+   |                           |     id_token, expires_in:3600} ---|
    |                           |-- crée session serveur            |
    |                           |   (tokens chiffrés au repos)      |
    |<-- Set-Cookie:            |                                   |
@@ -80,16 +81,22 @@ Navigateur                BFF (TanStack Start)                Stalwart
    |-- redirect /mail/inbox -->|                                   |
 ```
 
-Réponses possibles de `/api/auth` : `authenticated` (→ `clientCode`), `mfaRequired`
-(retry avec `mfaToken`), `failure` (identifiants rejetés). Voir §10 pour la MFA.
+`/api/auth` renvoie **toujours HTTP 200** ; le statut métier est dans le champ `type` :
+`authenticated` (→ `client_code`, snake_case), `mfaRequired` (retry avec `mfaToken`),
+`failure` (identifiants rejetés). Le BFF discrimine sur `type`, **jamais sur le code
+HTTP**. Voir §10 pour la MFA.
 
-**Refresh** : à expiration de l'access token (réponse 401 Stalwart ou `expires_at`
-dépassé), le BFF appelle `/auth/token` avec `grant_type=refresh_token`. Rotation gérée
-côté serveur, sérialisée par session (pas de course de réécriture de cookie).
+**Refresh** : à l'approche de l'expiration de l'access token (`access_exp`, défaut 3600 s)
+ou sur 401 Stalwart, le BFF appelle `/auth/token` avec `grant_type=refresh_token`. Le
+refresh est **non-rotatif** (confirmé §10) : le même `refresh_token` est conservé, seul
+l'`access_token` est remplacé. Rafraîchissement sérialisé par session (pas de course de
+réécriture du store).
 
-**Logout** : suppression de l'enregistrement de session (révocation instantanée) +
-effacement du cookie + révocation best-effort du token côté Stalwart si l'endpoint le
-permet (à valider, §16).
+**Logout** : Stalwart **n'expose aucun endpoint de révocation** (confirmé §10). Le logout
+est donc **purement côté BFF** : suppression de l'enregistrement de session (le cookie ne
+référence plus rien d'utilisable) + effacement du cookie. Les tokens restent
+techniquement valides côté Stalwart jusqu'à expiration naturelle — d'où l'importance de
+ne jamais les exposer hors du BFF et de garder des TTL d'access token courts.
 
 ## 5. Modules et fichiers (BFF)
 
@@ -159,21 +166,24 @@ suppression à la révocation.
 **Persistance** : le store survit aux redémarrages/màj du container (volume dédié),
 évitant de délogger tout le monde à chaque déploiement.
 
-## 7. Provisioning du client OAuth `stalmail`
+## 7. Client OAuth `stalmail` (public, aucun provisioning)
 
-À l'installation/bootstrap, Stalmail enregistre un client OAuth confidentiel dédié :
+Confirmé empiriquement (capture §10) : **aucun enregistrement de client n'est requis**.
+Stalwart v0.16 accepte un `client_id` arbitraire et traite le client comme **public**.
 
-- `client_id = "stalmail"`, `client_secret` = valeur générée (dérivée de
-  `STALMAIL_SECRET` via HKDF `info="stalmail/oauth-client-secret"`, ou secret distinct).
-- `redirect_uri` verrouillé sur le callback Stalmail (https en prod ; http toléré en
-  dev/recovery — cf. note `/api/auth`).
-- Provisionnement via le recovery-admin déjà détenu par le BFF (même canal que les
-  opérations du wizard).
-- ⚠️ Le **mécanisme exact d'enregistrement** (config statique vs management API vs
-  Dynamic Client Registration) est à **valider empiriquement contre v0.16** (§16). Si la
-  v0.16 impose un client pré-déclaré et n'accepte pas un `client_id` arbitraire avec
-  PKCE public, le provisioning confidentiel devient obligatoire ; sinon un client public
-  + PKCE est le repli acceptable.
+- `client_id = "stalmail"` — constante, pas de secret.
+- **PKCE S256 obligatoire** (*enforced* : l'échange sans/mauvais `code_verifier` →
+  `invalid_grant`). C'est PKCE — et non un secret client — qui lie le code à l'échange.
+- ⚠️ Ne **jamais** envoyer de `Authorization: Basic` ni de `client_secret` à `/auth/token`
+  (Stalwart répond `invalid_client`). L'auth client se fait par `client_id` en form + PKCE.
+- `redirect_uri` : verrouillé sur le callback Stalmail. http accepté par le serveur ;
+  on garde https en prod par hygiène, http toléré en dev.
+- Le `client_id` n'est pas une frontière de sécurité ici : la garde réelle est le couple
+  identifiants utilisateur (vérifiés par `/api/auth`, anonyme mais rate-limité) + PKCE +
+  le fait que seul le BFF (réseau interne) atteint Stalwart.
+
+→ Cette découverte **supprime** toute étape de provisioning à l'install/bootstrap prévue
+initialement, et la dérivation d'un secret client (§13 simplifié en conséquence).
 
 ## 8. Cookies, CSRF et transport
 
@@ -196,8 +206,10 @@ or toutes les requêtes `/api/auth` proviennent de l'IP du container BFF. Sans p
 quelques échecs de login banniraient le BFF **pour tous les utilisateurs**.
 
 - Le BFF transmet l'**IP réelle du client** à Stalwart (`X-Forwarded-For`, chaîne Caddy
-  → BFF → Stalwart), pour que les bans visent le vrai contrevenant. (Honneur de
-  `X-Forwarded-For` par Stalwart derrière proxy de confiance à valider, §16.)
+  → BFF → Stalwart), pour que les bans visent le vrai contrevenant. ⚠️ Stalwart ne prend
+  en compte `X-Forwarded-For` que si **`server.http.use-x-forwarded` est activé** côté
+  Stalwart (tâche de **configuration infra**, à câbler dans l'image/le bootstrap — cf.
+  capture §10, point non prouvable en boîte noire).
 - Le BFF applique en complément son **propre rate-limiting** des tentatives de login
   (par compte et/ou par IP) avant d'appeler `/api/auth`, pour amortir le bruteforce et
   ne pas dépendre uniquement de Stalwart.
@@ -235,8 +247,8 @@ des formes de données mail (réservées au Plan 4).
   `stalmail-shared:/shared` (coordination inter-containers). Ajouter
   `stalmail-app-data:/var/lib/stalmail` (app-only) pour le store de session sqlite.
 - **Nouvelle env** : `STALMAIL_DATA_DIR` (défaut `/var/lib/stalmail`) pour localiser la
-  base de session. `STALMAIL_SECRET` (déjà présent) sert de racine HKDF pour les clés de
-  chiffrement de session et le secret client OAuth.
+  base de session. `STALMAIL_SECRET` (déjà présent) sert de racine HKDF pour la **clé de
+  chiffrement des tokens en session** (le client OAuth public n'a pas de secret à dériver).
 - `STALWART_URL` (déjà présent) sert aussi aux appels Bearer (même base que l'admin).
 - `compose.dev.yml` : assouplissements dev (cookies non-`Secure`, redirect_uri http).
 
@@ -262,21 +274,25 @@ des formes de données mail (réservées au Plan 4).
 - **App Passwords** (pour clients IMAP/SMTP natifs) → itération ultérieure.
 - **OIDC externe / multi-compte / annuaires externes** → hors scope.
 
-## 16. À valider empiriquement contre Stalwart v0.16
+## 16. Inconnues — résolues par la capture live
 
-(Dans l'esprit des captures d'API du wizard — cf. `2026-06-09-stalwart-api-capture`.)
+Les 7 inconnues initiales ont été **levées empiriquement** contre Stalwart v0.16.8 — voir
+`2026-06-09-stalwart-api-capture.md` §10 (source de vérité / fixtures). Synthèse :
 
-1. Mécanisme d'enregistrement du client OAuth `stalmail` (config statique / management
-   API / Dynamic Client Registration) ; un `client_id` non pré-déclaré est-il accepté ?
-2. Méthode d'authentification client à `/auth/token` (`client_secret_basic` vs
-   `client_secret_post`) et paramètres exacts du grant `authorization_code`.
-3. Émission de `refresh_token` par défaut et comportement de rotation.
-4. Durées de vie par défaut (`access_token`, `refresh_token`) via la métadonnée
-   `/.well-known/oauth-authorization-server` ou l'objet `OidcProvider`.
-5. Présence/forme d'un endpoint de **révocation** de token pour le logout.
-6. Honneur de `X-Forwarded-For` par Stalwart pour le rate-limiting/Fail2Ban derrière
-   proxy de confiance.
-7. Contraintes `redirect_uri` (https obligatoire ?) en mode normal vs dev.
+| # | Question initiale | Verdict |
+|---|---|---|
+| 1 | Enregistrement du client OAuth | ✅ aucun requis — `client_id` arbitraire, client **public** |
+| 2 | Auth client à `/auth/token` | ✅ **aucune** — client public, PKCE seul ; un secret → `invalid_client` |
+| 3 | Émission/rotation du `refresh_token` | ✅ émis par défaut, **non-rotatif**, réutilisable |
+| 4 | Durées de vie | ✅ `access_token` = **3600 s** ; RT longue durée (réutilisable) |
+| 5 | Endpoint de révocation | ✅ **aucun** → logout BFF-only (cf. §4) |
+| 6 | `X-Forwarded-For` | ⚠️ non prouvable en boîte noire → **config infra** `server.http.use-x-forwarded` (cf. §9) |
+| 7 | Contrainte `redirect_uri` | ✅ http accepté ; https en prod par hygiène |
+
+**Seul reliquat** : activer `server.http.use-x-forwarded` côté Stalwart (tâche infra, §9).
+Option de durcissement à considérer dans le plan : **raccourcir le TTL d'access token**
+via l'objet `OidcProvider` (le logout étant BFF-only, des AT courts limitent la fenêtre
+de validité résiduelle après logout).
 
 ## 17. Références
 

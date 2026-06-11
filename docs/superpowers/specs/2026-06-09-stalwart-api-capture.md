@@ -211,3 +211,98 @@ Défaut : `{ "@type": "Manual" }`. Bascule automatique :
 - **Non-bloquant** : en sandbox dev (pas d'IP publique / 443 joignable depuis Internet),
   le challenge TLS-ALPN ne peut aboutir → la task reste `Pending`/`Failed` ; l'UI laisse
   continuer (Stalwart réessaie, `:8080/admin` reste accessible).
+
+## 10. OAuth / Auth utilisateur — repérage live (Plan 3a, v0.16.8)
+
+> Capturé contre `stalwartlabs/stalwart:v0.16` (réelle **0.16.8**, edition `community`),
+> mode normal, user de test `alice@probe.test` (rôle Admin). Source de vérité pour les
+> fixtures du flux de login BFF (Plan 3a).
+
+### Métadonnée (`GET /.well-known/oauth-authorization-server` + `/openid-configuration`)
+
+```json
+{"issuer":"https://mail.<domain>",
+ "token_endpoint":"https://mail.<domain>/auth/token",
+ "authorization_endpoint":"https://mail.<domain>/login",
+ "device_authorization_endpoint":"https://mail.<domain>/auth/device",
+ "registration_endpoint":"https://mail.<domain>/auth/register",
+ "introspection_endpoint":"https://mail.<domain>/auth/introspect",
+ "grant_types_supported":["authorization_code","implicit","urn:ietf:params:oauth:grant-type:device_code"],
+ "code_challenge_methods_supported":["S256"],
+ "scopes_supported":["openid","offline_access","urn:ietf:params:jmap:core",
+   "urn:ietf:params:jmap:mail","urn:ietf:params:jmap:submission","urn:ietf:params:jmap:vacationresponse"]}
+```
+- **Pas de `revocation_endpoint`** (absent des deux documents). OIDC ajoute `userinfo_endpoint`
+  (`/auth/userinfo`), `jwks_uri` (`/auth/jwks.json`).
+
+### Client OAuth — client public PKCE, `client_id` arbitraire
+
+- Un `client_id` **non pré-enregistré** (ex. `stalmail`) est accepté de bout en bout. **Le
+  client public PKCE (sans secret) suffit.** Aucun enregistrement préalable requis.
+- `registration_endpoint` (`/auth/register`) existe mais **exige une auth Bearer** (`POST`
+  sans token → `401`) → inutile pour notre flux.
+
+### `POST /api/auth` (authCode) — anonyme
+
+```
+POST /api/auth   Content-Type: application/json
+{"type":"authCode","accountName":"alice@probe.test","accountSecret":"<pwd>",
+ "clientId":"stalmail","redirectUri":"http://localhost:18080/login",
+ "codeChallenge":"<base64url(sha256(verifier))>","codeChallengeMethod":"S256"}
+
+→ 200  {"type":"authenticated","client_code":"W6V0cMjj…"}
+```
+- **Toujours HTTP 200** ; le statut métier est dans `type` : `authenticated` |
+  `failure` (mdp invalide) | `mfaRequired` (2FA). La clé du code est **`client_code`** (snake_case).
+- `redirectUri` **http accepté** (pas d'exigence https côté serveur).
+
+### Échange `POST /auth/token` — form-urlencoded, sans secret
+
+```
+POST /auth/token   Content-Type: application/x-www-form-urlencoded
+grant_type=authorization_code&code=<client_code>&code_verifier=<verifier>
+  &client_id=stalmail&redirect_uri=http://localhost:18080/login
+
+→ 200  {"access_token":"sw1.t10Ynnzx…","token_type":"bearer","expires_in":3600,
+        "refresh_token":"sw1.-O8aisii…","id_token":"eyJhbGciOiJFUzI1Ni…"}
+```
+- **PKCE enforced** : sans/mauvais `code_verifier` → `400 {"error":"invalid_grant"}`.
+- **Ne PAS envoyer de header `Authorization: Basic`** : client public → un Basic avec
+  secret → `400 {"error":"invalid_client"}`.
+- `expires_in` = **3600** s. `refresh_token` + `id_token` (JWT ES256) **émis par défaut**.
+  Pas de champ `scope` dans la réponse. Tokens opaques `sw1.<payload>.<base64(email)>`
+  (sauf `id_token`, JWT).
+
+### `GET /api/account` (Bearer)
+
+```
+→ 200  {"permissions":[…],"edition":"community","locale":"en_US"}
+```
+- User non-admin = sous-ensemble restreint de permissions.
+
+### Sonde JMAP authentifiée (Bearer) — chaîne bout-en-bout prouvée
+
+```
+GET /jmap/session   Authorization: Bearer <access_token>   → 200
+```
+- `username:"alice@probe.test"`, `primaryAccounts` mappés, capabilities complètes
+  (core/mail/submission/…, websocket `wss://…/jmap/ws`). Le token user OAuth accède bien à JMAP.
+
+### Refresh + révocation
+
+```
+POST /auth/token   grant_type=refresh_token&refresh_token=<RT>&client_id=stalmail
+→ 200  {"access_token":"sw1.…","token_type":"bearer","expires_in":3600}
+```
+- **Refresh NON-rotatif** : aucun nouveau `refresh_token` renvoyé ; le RT est **réutilisable**
+  (pas de détection de replay) ; l'**ancien access_token reste valide** après refresh.
+- **Aucun endpoint de révocation** (`/auth/revoke` → 404). → **logout = purge côté BFF
+  uniquement** ; les tokens restent valides côté Stalwart jusqu'à expiration (AT 3600 s).
+- `/auth/introspect` existe mais **Bearer-protégé** (`token=<AT>` + `Authorization: Bearer <AT>`
+  → `{"active":true,"username":…,"exp":…}`). Redondant si on valide déjà via `/jmap/session`.
+
+### Non concluant
+
+- **`X-Forwarded-For`** : non prouvable en boîte noire (dépend de la config Stalwart
+  `server.http.use-x-forwarded`, non observable via les réponses HTTP). À traiter comme
+  **tâche de configuration infra**, pas comme comportement à découvrir.
