@@ -5,7 +5,23 @@
 
 ### Bug Fixes
 
-* **wizard:** reserve admin username + dev reset script ([#26](https://github.com/kkzakaria/stalmail/issues/26)) ([7896782](https://github.com/kkzakaria/stalmail/commit/7896782cfd4fe92130cf3e76265ebabe3d21f746))
+* **wizard : nom d'utilisateur « admin » réservé + script de reset dev** ([#26](https://github.com/kkzakaria/stalmail/issues/26)) ([7896782](https://github.com/kkzakaria/stalmail/commit/7896782cfd4fe92130cf3e76265ebabe3d21f746))
+
+  Corrige un bug remonté au test live de l'étape 6 : le bootstrap Stalwart crée
+  toujours un admin **système** nommé `admin` (`admin@<domaine>`) ; choisir ce même nom
+  à l'étape 4 faisait échouer la création du compte sur `primaryKeyViolation` (email déjà
+  pris), remontée comme un générique « account creation rejected » — et seulement après
+  un retry de mot de passe (la vérif mot-de-passe-faible passant en premier masquait la
+  collision). Cause racine trouvée par reproduction live de `x:Account/set`.
+  - **`admin` réservé** (insensible à la casse) dans la validation de l'étape 4, message
+    dédié → l'erreur est attrapée là où le nom est encore modifiable, pas à l'étape 6.
+  - **Placeholder / aperçu** d'e-mail changés `admin` → `marie`.
+  - **Défense backend** : `primaryKeyViolation` **sur `email`** → message « username
+    already in use » ; les autres violations de clé retombent sur le générique.
+  - **`scripts/dev-reset.sh`** `[--build]` : remet le stack dev en bootstrap frais
+    (`down -v` → rebuild optionnel → `up` → attente du wizard).
+  - Couverture : 193 tests. (Note design : l'étape 7 DNS reste **non-bloquante** — la
+    propagation DNS est asynchrone, la vérification continue en arrière-plan.)
 
 ## [0.1.9](https://github.com/kkzakaria/stalmail/compare/v0.1.8...v0.1.9) (2026-06-11)
 
