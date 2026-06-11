@@ -36,9 +36,7 @@ export function LoginPage() {
   const { t } = useTranslation()
   const router = useRouter()
   // useLoaderData is not available in test environments where the route is mocked
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loaderData = typeof (Route as any).useLoaderData === 'function'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? (Route as any).useLoaderData() as { theme: Theme }
     : undefined
   const initialTheme: Theme = loaderData?.theme ?? 'light'
