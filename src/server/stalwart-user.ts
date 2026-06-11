@@ -13,6 +13,7 @@ export async function stalwartUserFetch(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
+      // assumes object-literal headers (callers in this repo never pass Headers/array forms)
       ...(init.headers as Record<string, string> | undefined),
     },
   })
@@ -25,7 +26,12 @@ export async function fetchJmapAccount(
 ): Promise<{ accountId: string; accountName: string }> {
   const res = await stalwartUserFetch('/jmap/session', accessToken, { method: 'GET' })
   if (!res.ok) throw new Error(`jmap session HTTP ${res.status}`)
-  const s = (await res.json()) as { username?: string; primaryAccounts?: Record<string, string> }
+  let s: { username?: string; primaryAccounts?: Record<string, string> }
+  try {
+    s = (await res.json()) as { username?: string; primaryAccounts?: Record<string, string> }
+  } catch {
+    throw new Error(`jmap session: non-JSON body (status ${res.status})`)
+  }
   const accountId =
     s.primaryAccounts?.['urn:ietf:params:jmap:core'] ?? Object.values(s.primaryAccounts ?? {})[0]
   if (!accountId || !s.username) throw new Error('jmap session missing account')

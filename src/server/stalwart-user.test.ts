@@ -36,4 +36,20 @@ describe('fetchJmapAccount', () => {
     fetchMock.mockResolvedValue(mockResponse({}))
     await expect(fetchJmapAccount('AT')).rejects.toThrow()
   })
+
+  it('throws on HTTP error', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 401 })
+    await expect(fetchJmapAccount('AT')).rejects.toThrow('jmap session HTTP 401')
+  })
+
+  it('throws on a non-JSON body', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('x')
+      },
+    })
+    await expect(fetchJmapAccount('AT')).rejects.toThrow(/non-JSON/)
+  })
 })
