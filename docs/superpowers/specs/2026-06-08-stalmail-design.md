@@ -4,6 +4,31 @@
 **Stack :** TanStack Start · React 19 · Tailwind v4 · shadcn/ui  
 **Stalwart version cible :** v0.16.x
 
+> ⚠️ **Mise à jour — déploiement (depuis v0.1.4).** Le modèle « conteneur unique »
+> décrit en **§2** (une image Debian regroupant Stalwart + Node + Caddy, avec un
+> `entrypoint.sh` qui démarre tout) a été **remplacé par une stack `docker compose` à
+> trois services**, chacun dans son propre namespace réseau, derrière Caddy :
+> - **`stalwart`** — image **stock** `stalwartlabs/stalwart:v0.16` (seul l'entrypoint est
+>   un superviseur de redémarrage) ;
+> - **`app`** — webmail + BFF (TanStack Start, runtime node) ;
+> - **`caddy`** — TLS public + reverse-proxy (`:443`/`:80`).
+>
+> Référence courante : [`compose.yml`](../../../compose.yml) et le plan
+> [`2026-06-09-compose-two-service-architecture.md`](../plans/2026-06-09-compose-two-service-architecture.md).
+> Précisions du document ci-dessous devenues inexactes :
+> - **Installation** = `docker compose up -d` + un `.env` (`STALMAIL_SECRET`) généré par
+>   `install.sh` — plus de `docker run` mono-conteneur.
+> - **recovery-admin** = `STALWART_RECOVERY_ADMIN=stalmail-admin:<secret>` (et non
+>   `stalmail-internal`) ; il n'est pas seulement « plus utilisé » après le setup, il est
+>   **activement retiré** par le superviseur Stalwart au prochain démarrage une fois le
+>   flag posé (**durcissement v0.1.9**).
+> - **Flag first-run** = `${STALMAIL_RUN_DIR}/.stalmail-configured` (= `/shared/...`, le
+>   volume partagé entre conteneurs) — et non `/var/lib/stalwart/...`.
+> - Le **wizard compte 9 étapes** (et non 6) — voir le design du wizard.
+>
+> Le reste du document (vision, modèle de données/volumes, sécurité applicative,
+> structure des routes/server functions) reste pertinent.
+
 ---
 
 ## 1. Vision
