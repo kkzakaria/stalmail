@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/kkzakaria/stalmail/compare/v0.1.8...v0.1.9) (2026-06-11)
+
+
+### Features
+
+* wizard 2b-ii Stage C — recovery-admin hardening ([#24](https://github.com/kkzakaria/stalmail/issues/24)) ([a77851a](https://github.com/kkzakaria/stalmail/commit/a77851a38283972d7be1ba438ad5e5ce62a0a3c0))
+
 ## [0.1.8](https://github.com/kkzakaria/stalmail/compare/v0.1.7...v0.1.8) (2026-06-10)
 
 
