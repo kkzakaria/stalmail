@@ -23,9 +23,17 @@ export const dnsProviderSchema = z
   })
 export type DnsProviderValues = z.infer<typeof dnsProviderSchema>
 
-export const adminAccountSchema = z.object({
-  name: z.string().min(1).regex(/^[a-z0-9._-]+$/i, 'invalid username'),
-  // Client-side minimum only; the server enforces real strength (zxcvbn).
-  password: z.string().min(8),
-})
+export const adminAccountSchema = z
+  .object({
+    name: z.string().min(1).regex(/^[a-z0-9._-]+$/i, 'invalid username'),
+    // Client-side minimum only; the server enforces real strength (zxcvbn).
+    password: z.string().min(8),
+  })
+  // "admin" is taken by Stalwart's bootstrap system administrator (admin@<domain>);
+  // reusing it collides on email at account creation. Reserve it so the user picks
+  // a different username at the collect phase (where they can still change it).
+  .refine((v) => v.name.trim().toLowerCase() !== 'admin', {
+    message: 'reserved-admin',
+    path: ['name'],
+  })
 export type AdminAccountValues = z.infer<typeof adminAccountSchema>
