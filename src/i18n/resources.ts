@@ -175,6 +175,19 @@ export const fr = {
       finishing: 'Finalisation…',
     },
   },
+  login: {
+    title: 'Connexion',
+    subtitle: 'Connectez-vous à votre boîte Stalmail.',
+    email: 'Adresse e-mail',
+    emailPlaceholder: 'vous@exemple.fr',
+    password: 'Mot de passe',
+    submit: 'Se connecter',
+    signingIn: 'Connexion…',
+    invalid: 'Adresse e-mail ou mot de passe invalide.',
+    mfa: "L'authentification à deux facteurs n'est pas encore prise en charge.",
+    rateLimited: 'Trop de tentatives. Réessayez dans quelques minutes.',
+    error: 'Connexion impossible. Réessayez.',
+  },
 } as const
 
 // DeepRecord<T> enforces the same nested key structure as T, but allows any string values.
@@ -345,5 +358,18 @@ export const en: DeepRecord<typeof fr> = {
       open: 'Open my mailbox',
       finishing: 'Finishing…',
     },
+  },
+  login: {
+    title: 'Sign in',
+    subtitle: 'Sign in to your Stalmail inbox.',
+    email: 'Email address',
+    emailPlaceholder: 'you@example.com',
+    password: 'Password',
+    submit: 'Sign in',
+    signingIn: 'Signing in…',
+    invalid: 'Invalid email or password.',
+    mfa: 'Two-factor authentication is not supported yet.',
+    rateLimited: 'Too many attempts. Try again in a few minutes.',
+    error: 'Could not sign in. Please try again.',
   },
 }
