@@ -38,8 +38,10 @@ export async function loginHandler({
     }
     writeSid(res.sid)
     return { status: 'ok' }
-  } catch {
-    // Never leak internals (OAuthError, Stalwart HTTP codes) in the network response.
+  } catch (err) {
+    // Never leak internals (OAuthError, Stalwart HTTP codes) in the network response —
+    // but DO log them server-side so ops can tell config errors from outages.
+    console.error('[auth] login failed unexpectedly:', err)
     return { status: 'error' }
   }
 }

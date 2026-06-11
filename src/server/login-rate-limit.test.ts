@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { isRateLimited, recordFailure, __resetForTest } from './login-rate-limit'
+import { isRateLimited, recordFailure, __resetForTest, __mapSizeForTest } from './login-rate-limit'
 
 beforeEach(() => __resetForTest())
 
@@ -26,5 +26,11 @@ describe('login-rate-limit', () => {
     for (let i = 0; i < 10; i++) recordFailure('a@x', undefined, 1000)
     expect(isRateLimited('a@x', undefined, 1000)).toBe(true)
     expect(isRateLimited('a@x', undefined, 1000 + 15 * 60_000 + 1)).toBe(false)
+  })
+
+  it('drops stale keys instead of keeping empty arrays (bounded memory)', () => {
+    recordFailure('ghost@x', undefined, 1000)
+    expect(isRateLimited('ghost@x', undefined, 1000 + 15 * 60_000 + 1)).toBe(false)
+    expect(__mapSizeForTest()).toBe(0)
   })
 })

@@ -61,8 +61,11 @@ describe('loginHandler', () => {
   })
 
   it('maps unexpected errors to a generic error status (no internals in the response)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(login).mockRejectedValue(new Error('OAuthError: /auth/token HTTP 500'))
     expect(await loginHandler({ data: { email: 'a@x', password: 'pw' } })).toEqual({ status: 'error' })
+    expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
   })
 })
 

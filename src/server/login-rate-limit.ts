@@ -10,7 +10,8 @@ const attempts = new Map<string, number[]>()
 
 function recent(key: string, now: number): number[] {
   const list = (attempts.get(key) ?? []).filter((t) => now - t < WINDOW_MS)
-  attempts.set(key, list)
+  if (list.length === 0) attempts.delete(key)
+  else attempts.set(key, list)
   return list
 }
 
@@ -21,11 +22,18 @@ export function isRateLimited(account: string, ip: string | undefined, now = Dat
 }
 
 export function recordFailure(account: string, ip: string | undefined, now = Date.now()): void {
-  recent(`a:${account.toLowerCase()}`, now).push(now)
-  if (ip) recent(`i:${ip}`, now).push(now)
+  for (const key of [`a:${account.toLowerCase()}`, ...(ip ? [`i:${ip}`] : [])]) {
+    const list = recent(key, now)
+    list.push(now)
+    attempts.set(key, list)
+  }
 }
 
 // test-only
 export function __resetForTest(): void {
   attempts.clear()
+}
+
+export function __mapSizeForTest(): number {
+  return attempts.size
 }
