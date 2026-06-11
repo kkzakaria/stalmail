@@ -9,6 +9,7 @@ import type * as DnsZoneModule from './dns-zone'
 import type * as DnsResolveModule from './dns-resolve'
 import type * as StalwartAcmeModule from './stalwart-acme'
 import type * as SetupFlagModule from './setup-flag'
+import type * as StalwartHardeningModule from './stalwart-hardening'
 
 vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({ validator: () => ({ handler: (fn: unknown) => fn }), handler: (fn: unknown) => fn }),
@@ -46,6 +47,10 @@ vi.mock('./setup-flag', async (importActual) => ({
   ...(await importActual<typeof SetupFlagModule>()),
   markSetupComplete: vi.fn(),
 }))
+vi.mock('./stalwart-hardening', async (importActual) => ({
+  ...(await importActual<typeof StalwartHardeningModule>()),
+  enableXForwarded: vi.fn(async () => undefined),
+}))
 
 // eslint-disable-next-line import/first
 import { getPrimaryDomain, setDnsManagementAutomatic } from './stalwart-domain'
@@ -61,6 +66,8 @@ import { resolveRecordStatus } from './dns-resolve'
 import { configureAcme, getAcmeStatus } from './stalwart-acme'
 // eslint-disable-next-line import/first
 import { markSetupComplete } from './setup-flag'
+// eslint-disable-next-line import/first
+import { enableXForwarded } from './stalwart-hardening'
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -199,9 +206,20 @@ describe('acmeStatusHandler', () => {
 })
 
 describe('finishSetupHandler', () => {
-  it('calls markSetupComplete and returns {ok:true}', async () => {
+  it('calls enableXForwarded before markSetupComplete and returns {ok:true}', async () => {
+    const callOrder: string[] = []
+    vi.mocked(enableXForwarded).mockImplementationOnce(async () => { callOrder.push('enableXForwarded') })
+    vi.mocked(markSetupComplete).mockImplementationOnce(() => { callOrder.push('markSetupComplete') })
     const result = await finishSetupHandler()
+    expect(enableXForwarded).toHaveBeenCalled()
     expect(markSetupComplete).toHaveBeenCalled()
+    expect(callOrder).toEqual(['enableXForwarded', 'markSetupComplete'])
     expect(result).toEqual({ ok: true })
+  })
+
+  it('does not mark setup complete when enableXForwarded rejects', async () => {
+    vi.mocked(enableXForwarded).mockRejectedValueOnce(new Error('http-set failed'))
+    await expect(finishSetupHandler()).rejects.toThrow('http-set failed')
+    expect(markSetupComplete).not.toHaveBeenCalled()
   })
 })

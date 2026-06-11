@@ -124,7 +124,9 @@ export async function acmeStatusHandler(): Promise<{ status: AcmeStatus }> {
 }
 
 export async function finishSetupHandler(): Promise<{ ok: true }> {
+  const { enableXForwarded } = await import('./stalwart-hardening')
   const { markSetupComplete } = await import('./setup-flag')
+  await enableXForwarded() // go-live condition — recovery admin still active here
   markSetupComplete()
   return { ok: true }
 }
