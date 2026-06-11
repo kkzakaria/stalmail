@@ -21,12 +21,31 @@ describe('AdminAccountStep', () => {
         onBack={vi.fn()}
       />,
     )
-    // Default derives admin@domain.
-    expect(screen.getByText('Adresse : admin@exemple.fr')).toBeInTheDocument()
+    // Default derives a sample username@domain (placeholder example).
+    expect(screen.getByText('Adresse : marie@exemple.fr')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(LABEL_NAME), {
       target: { value: 'koffi' },
     })
     expect(screen.getByText('Adresse : koffi@exemple.fr')).toBeInTheDocument()
+  })
+
+  it('rejects the reserved "admin" username with a dedicated message', async () => {
+    const onNext = vi.fn()
+    wrap(
+      <AdminAccountStep
+        defaults={{}}
+        domain="exemple.fr"
+        onNext={onNext}
+        onBack={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText(LABEL_NAME), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Mot de passe'), {
+      target: { value: 'correct horse battery 9' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
+    expect(await screen.findByText(/« admin » est réservé/)).toBeInTheDocument()
+    expect(onNext).not.toHaveBeenCalled()
   })
 
   it('shows invalidPassword and does not call onNext for a short password', async () => {

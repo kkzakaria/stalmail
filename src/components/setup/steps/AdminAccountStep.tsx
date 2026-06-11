@@ -29,31 +29,37 @@ export function AdminAccountStep({ defaults, domain, onNext, onBack }: Props) {
       />
       <form.Field
         name="name"
-        children={(field) => (
-          <Field
-            label={t('wizard.account.name')}
-            htmlFor={field.name}
-            help={t('wizard.account.email', {
-              email: `${field.state.value.trim() || 'admin'}@${domain}`,
-            })}
-            error={
-              !field.state.meta.isValid
-                ? t('wizard.account.invalidName')
-                : undefined
-            }
-          >
-            <TextInput
-              id={field.name}
-              value={field.state.value}
-              mono
-              autoFocus
-              placeholder={t('wizard.account.namePlaceholder')}
-              invalid={!field.state.meta.isValid}
-              onChange={(v) => field.handleChange(v)}
-              onEnter={() => void form.handleSubmit()}
-            />
-          </Field>
-        )}
+        children={(field) => {
+          const firstError = (
+            field.state.meta.errors[0] as { message?: string } | undefined
+          )?.message
+          const nameError = field.state.meta.isValid
+            ? undefined
+            : firstError === 'reserved-admin'
+              ? t('wizard.account.reservedName')
+              : t('wizard.account.invalidName')
+          return (
+            <Field
+              label={t('wizard.account.name')}
+              htmlFor={field.name}
+              help={t('wizard.account.email', {
+                email: `${field.state.value.trim() || 'marie'}@${domain}`,
+              })}
+              error={nameError}
+            >
+              <TextInput
+                id={field.name}
+                value={field.state.value}
+                mono
+                autoFocus
+                placeholder={t('wizard.account.namePlaceholder')}
+                invalid={!field.state.meta.isValid}
+                onChange={(v) => field.handleChange(v)}
+                onEnter={() => void form.handleSubmit()}
+              />
+            </Field>
+          )
+        }}
       />
       <form.Field
         name="password"

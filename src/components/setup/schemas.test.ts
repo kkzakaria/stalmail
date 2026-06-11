@@ -55,4 +55,10 @@ describe('adminAccountSchema', () => {
     expect(adminAccountSchema.safeParse({ name: '', password: 'correct horse battery staple' }).success).toBe(false)
     expect(adminAccountSchema.safeParse({ name: 'koffi', password: 'short' }).success).toBe(false)
   })
+  it('reserves the "admin" username (collides with the bootstrap system admin)', () => {
+    const r = adminAccountSchema.safeParse({ name: 'admin', password: 'correct horse battery staple' })
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error.issues[0]?.message).toBe('reserved-admin')
+    expect(adminAccountSchema.safeParse({ name: 'Admin', password: 'correct horse battery staple' }).success).toBe(false)
+  })
 })

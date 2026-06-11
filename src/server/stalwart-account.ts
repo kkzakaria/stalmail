@@ -44,5 +44,11 @@ export async function createAdminAccount(input: AdminAccountInput): Promise<stri
   if (err?.type === 'invalidProperties' && err.properties?.includes('secret')) {
     throw new WeakPasswordError(err.description)
   }
+  // primaryKeyViolation on EMAIL = the username is already taken (e.g. the bootstrap
+  // system admin "admin"). Surface a clearer message than the generic rejection.
+  // Other primaryKeyViolations (different unique field) fall through to the generic case.
+  if (err?.type === 'primaryKeyViolation' && err.properties?.includes('email')) {
+    throw new JmapError('username already in use', err)
+  }
   throw new JmapError('account creation rejected', err)
 }
