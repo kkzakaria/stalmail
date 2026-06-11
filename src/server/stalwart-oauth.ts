@@ -9,6 +9,9 @@ function base(): string {
   return process.env.STALWART_URL ?? 'http://localhost:8080'
 }
 
+// Hung Stalwart must not pile up hung login requests.
+const UPSTREAM_TIMEOUT_MS = 10_000
+
 export type ApiAuthResult =
   | { type: 'authenticated'; clientCode: string }
   | { type: 'mfaRequired' }
@@ -28,6 +31,7 @@ export async function postApiAuth(input: {
   const res = await fetch(`${base()}/api/auth`, {
     method: 'POST',
     headers,
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     body: JSON.stringify({
       type: 'authCode',
       accountName: input.accountName,
@@ -66,6 +70,7 @@ async function tokenRequest(form: Record<string, string>): Promise<TokenSet> {
   const res = await fetch(`${base()}/auth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     body: new URLSearchParams(form).toString(),
   })
   if (!res.ok) throw new OAuthError(`/auth/token HTTP ${res.status}`)

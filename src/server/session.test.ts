@@ -142,6 +142,16 @@ describe('logout / withFreshAccessToken', () => {
     expect(store.getSession(hashSid(res.sid))).toBeUndefined()
   })
 
+  it('drops the session instead of returning an expired token when no refresh token exists', async () => {
+    mockSuccess()
+    xc.mockResolvedValue({ accessToken: 'AT', refreshToken: null, expiresIn: 3600 })
+    const res = await login({ ...baseLogin, now: 1000 })
+    if (!res.ok) throw new Error('login failed')
+    expect(await withFreshAccessToken(res.sid, 1000 + 3600_000 + 1)).toBeNull()
+    expect(store.getSession(hashSid(res.sid))).toBeUndefined()
+    expect(rt).not.toHaveBeenCalled()
+  })
+
   it('drops the session and returns null when the record cannot be decrypted', async () => {
     mockSuccess()
     const res = await login({ ...baseLogin, now: 1000 })

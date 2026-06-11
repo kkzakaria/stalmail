@@ -28,6 +28,12 @@ describe('login-rate-limit', () => {
     expect(isRateLimited('a@x', undefined, 1000 + 15 * 60_000 + 1)).toBe(false)
   })
 
+  it('prunes all stale keys when the map grows past the threshold', () => {
+    for (let i = 0; i < 10_001; i++) recordFailure(`u${i}@x`, undefined, 1000)
+    recordFailure('trigger@x', undefined, 1000 + 15 * 60_000 + 1)
+    expect(__mapSizeForTest()).toBe(1)
+  })
+
   it('drops stale keys instead of keeping empty arrays (bounded memory)', () => {
     recordFailure('ghost@x', undefined, 1000)
     expect(isRateLimited('ghost@x', undefined, 1000 + 15 * 60_000 + 1)).toBe(false)

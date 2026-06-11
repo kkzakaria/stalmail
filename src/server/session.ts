@@ -121,7 +121,15 @@ async function freshAccessToken(sidHash: string, now: number): Promise<string | 
   // Decrypt failure (corrupt record or rotated STALMAIL_SECRET) self-heals by dropping the session.
   try {
     if (now < r.accessExp - REFRESH_SKEW_MS) return decryptToken(r.encAccess, sidHash)
-    if (!r.encRefresh) return decryptToken(r.encAccess, sidHash)
+    // No refresh token: if the access token is already expired, the session is unusable
+    // → drop it so the user is prompted to re-login rather than getting a stale token.
+    if (!r.encRefresh) {
+      if (now >= r.accessExp) {
+        store.deleteSession(sidHash)
+        return null
+      }
+      return decryptToken(r.encAccess, sidHash) // still valid, inside the skew window
+    }
     const tokens = await refreshTokens({ refreshToken: decryptToken(r.encRefresh, sidHash), clientId: CLIENT_ID })
     store.updateSession(sidHash, {
       encAccess: encryptToken(tokens.accessToken, sidHash),

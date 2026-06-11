@@ -2,6 +2,9 @@ function base(): string {
   return process.env.STALWART_URL ?? 'http://localhost:8080'
 }
 
+// Hung Stalwart must not pile up hung login requests.
+const UPSTREAM_TIMEOUT_MS = 10_000
+
 // User-scoped Stalwart call with an OAuth access token (parallels stalwartAdminFetch).
 export async function stalwartUserFetch(
   path: string,
@@ -9,6 +12,7 @@ export async function stalwartUserFetch(
   init: RequestInit = {},
 ): Promise<Response> {
   return fetch(`${base()}${path}`, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS), // set before ...init so caller may override
     ...init,
     headers: {
       'Content-Type': 'application/json',

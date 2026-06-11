@@ -60,6 +60,10 @@ describe('assertSameOrigin', () => {
     headers({ origin: 'https://evil.x', host: 'mail.x' })
     expect(() => assertSameOrigin()).toThrow()
   })
+  it('throws when the scheme does not match (http Origin against https host)', () => {
+    headers({ origin: 'http://mail.x/login', 'x-forwarded-host': 'mail.x', 'x-forwarded-proto': 'https' })
+    expect(() => assertSameOrigin()).toThrow()
+  })
 })
 
 describe('clientIp', () => {

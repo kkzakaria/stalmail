@@ -8,6 +8,16 @@ const MAX_PER_IP = 30
 
 const attempts = new Map<string, number[]>()
 
+const PRUNE_THRESHOLD = 10_000
+
+function pruneAll(now: number): void {
+  for (const [key, list] of attempts) {
+    const fresh = list.filter((t) => now - t < WINDOW_MS)
+    if (fresh.length === 0) attempts.delete(key)
+    else attempts.set(key, fresh)
+  }
+}
+
 function recent(key: string, now: number): number[] {
   const list = (attempts.get(key) ?? []).filter((t) => now - t < WINDOW_MS)
   if (list.length === 0) attempts.delete(key)
@@ -22,6 +32,7 @@ export function isRateLimited(account: string, ip: string | undefined, now = Dat
 }
 
 export function recordFailure(account: string, ip: string | undefined, now = Date.now()): void {
+  if (attempts.size > PRUNE_THRESHOLD) pruneAll(now)
   for (const key of [`a:${account.toLowerCase()}`, ...(ip ? [`i:${ip}`] : [])]) {
     const list = recent(key, now)
     list.push(now)

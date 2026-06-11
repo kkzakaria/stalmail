@@ -31,19 +31,24 @@ export function clearSid(): void {
 }
 
 // CSRF: reject state-changing requests whose Origin (or, failing that, Referer)
-// host ≠ our host. Trust model: x-forwarded-host MUST be overwritten by Caddy —
-// never relayed from the client (see spec §8/§9).
+// differs from our canonical origin (scheme + host). Trust model: x-forwarded-host /
+// x-forwarded-proto MUST be overwritten by Caddy — never relayed from the client
+// (see spec §8/§9).
 export function assertSameOrigin(): void {
   const origin = getRequestHeader('origin') ?? getRequestHeader('referer')
   if (!origin) return // same-origin navigations may omit both headers
   const host = getRequestHeader('x-forwarded-host') ?? getRequestHeader('host')
-  let originHost: string
+  if (!host) throw new Error('cross-origin request rejected')
+  const proto = getRequestHeader('x-forwarded-proto') ?? (secure() ? 'https' : 'http')
+  let parsed: URL
   try {
-    originHost = new URL(origin).host
+    parsed = new URL(origin)
   } catch {
     throw new Error('invalid Origin/Referer header')
   }
-  if (!host || originHost !== host.toLowerCase()) throw new Error('cross-origin request rejected')
+  if (parsed.origin !== `${proto}://${host.toLowerCase()}`) {
+    throw new Error('cross-origin request rejected')
+  }
 }
 
 // Real client IP from the proxy chain, for Stalwart rate-limiting/Fail2Ban.
