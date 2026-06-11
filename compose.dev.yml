@@ -39,7 +39,6 @@ services:
       STALWART_URL: http://stalwart:8080
       STALWART_RECOVERY_ADMIN: "stalmail-admin:dev-insecure-secret"
       STALMAIL_RUN_DIR: /shared
-      STALMAIL_DATA_DIR: /shared
     volumes:
       - .:/app
       - stalmail-dev-modules:/app/node_modules
