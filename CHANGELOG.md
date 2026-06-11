@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/kkzakaria/stalmail/compare/v0.1.10...v0.1.11) (2026-06-11)
+
+
+### Features
+
+* Plan 3a — Auth & Session (BFF token-handler) ([#30](https://github.com/kkzakaria/stalmail/issues/30)) ([44b9775](https://github.com/kkzakaria/stalmail/commit/44b9775c4d3a4a801b1ae2c47b05c3a48385adc8))
+
 ## [0.1.10](https://github.com/kkzakaria/stalmail/compare/v0.1.9...v0.1.10) (2026-06-11)
 
 
