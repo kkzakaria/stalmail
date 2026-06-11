@@ -5,7 +5,29 @@
 
 ### Features
 
-* wizard 2b-ii Stage C — recovery-admin hardening ([#24](https://github.com/kkzakaria/stalmail/issues/24)) ([a77851a](https://github.com/kkzakaria/stalmail/commit/a77851a38283972d7be1ba438ad5e5ce62a0a3c0))
+* **Wizard 2b-ii — étape C : durcissement recovery-admin** ([#24](https://github.com/kkzakaria/stalmail/issues/24)) ([a77851a](https://github.com/kkzakaria/stalmail/commit/a77851a38283972d7be1ba438ad5e5ce62a0a3c0))
+
+  Dernière pièce du Plan 2b-ii (3/3) : ferme la faille du credential recovery
+  permanent. `STALWART_RECOVERY_ADMIN` est passé en permanence au process Stalwart, donc
+  l'accès management `:8080` restait joignable indéfiniment avec ce credential même
+  après le setup.
+  - **Gate sur le flag** : le superviseur Stalwart (`docker/stalwart/entrypoint.sh`)
+    vérifie le flag `.stalmail-configured` à chaque (re)démarrage. Flag absent (pendant
+    le wizard) → Stalwart démarre **avec** le recovery admin ; flag présent (après
+    `finishSetupFn`) → démarrage via `env -u STALWART_RECOVERY_ADMIN`, donc le credential
+    recovery n'authentifie plus sur `:8080`. Effet au prochain redémarrage après
+    finalisation (les deux chemins — sentinelle et conteneur — l'honorent).
+  - **Contrat de chemin unifié** : le flag de setup est un artefact de coordination
+    inter-conteneurs (comme la sentinelle de redémarrage) → déplacé de `STALMAIL_DATA_DIR`
+    vers **`STALMAIL_RUN_DIR`** (le volume partagé `/shared`), pour que l'app et le
+    superviseur résolvent le même chemin. `STALMAIL_DATA_DIR` (devenu mort) retiré des
+    compose.
+  - **Vérifié en live** contre Stalwart v0.16 : avant flag → creds recovery acceptés ;
+    après flag → **401 Unauthorized**, Stalwart reste sain. Test superviseur étendu
+    (SET → SET → UNSET). L'accès management post-setup relèvera de l'auth OAuth (Plan 3).
+
+  **Le wizard d'installation est désormais complet de bout en bout** : collecte →
+  redémarrage → compte → DNS → SSL → Terminé → `/login`, avec durcissement sécurité.
 
 ## [0.1.8](https://github.com/kkzakaria/stalmail/compare/v0.1.7...v0.1.8) (2026-06-10)
 
