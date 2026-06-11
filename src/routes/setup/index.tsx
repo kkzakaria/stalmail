@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import {
   getStep,
@@ -10,11 +10,16 @@ import {
   configureAcmeFn,
   acmeStatusFn,
   finishSetupFn,
+  setupStatusFn,
 } from '@/server/setup-actions'
 import { getServerTheme } from '@/server/setup-theme'
 import { SetupWizard } from '@/components/setup/SetupWizard'
 
 export const Route = createFileRoute('/setup/')({
+  beforeLoad: async () => {
+    const { configured } = await setupStatusFn()
+    if (configured) throw redirect({ to: '/login' })
+  },
   loader: async () => {
     const [{ step }, { theme }] = await Promise.all([getStep(), getServerTheme()])
     return { step, theme }

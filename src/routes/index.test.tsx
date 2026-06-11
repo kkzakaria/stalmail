@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { isSetupComplete } from '../server/setup-flag'
-import { getSetupStatus } from './index'
+import { setupStatusHandler } from '../server/setup-actions'
 
 vi.mock('../server/setup-flag', () => ({
   isSetupComplete: vi.fn(),
@@ -8,6 +8,7 @@ vi.mock('../server/setup-flag', () => ({
 
 vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({
+    validator: () => ({ handler: (fn: unknown) => fn }),
     handler: (fn: unknown) => fn,
   }),
 }))
@@ -17,14 +18,14 @@ vi.mock('@tanstack/react-router', () => ({
   redirect: vi.fn(),
 }))
 
-describe('getSetupStatus', () => {
+describe('setupStatusHandler', () => {
   it('returns configured: false when setup not complete', async () => {
     vi.mocked(isSetupComplete).mockReturnValue(false)
-    expect(await getSetupStatus()).toEqual({ configured: false })
+    expect(await setupStatusHandler()).toEqual({ configured: false })
   })
 
   it('returns configured: true when setup is complete', async () => {
     vi.mocked(isSetupComplete).mockReturnValue(true)
-    expect(await getSetupStatus()).toEqual({ configured: true })
+    expect(await setupStatusHandler()).toEqual({ configured: true })
   })
 })

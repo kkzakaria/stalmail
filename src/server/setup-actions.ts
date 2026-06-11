@@ -137,3 +137,10 @@ export const configureAcmeFn = createServerFn({ method: 'POST' })
   .handler(configureAcmeHandler)
 export const acmeStatusFn = createServerFn({ method: 'GET' }).handler(acmeStatusHandler)
 export const finishSetupFn = createServerFn({ method: 'POST' }).handler(finishSetupHandler)
+
+export async function setupStatusHandler(): Promise<{ configured: boolean }> {
+  const { isSetupComplete } = await import('./setup-flag')
+  return { configured: isSetupComplete() }
+}
+
+export const setupStatusFn = createServerFn({ method: 'GET' }).handler(setupStatusHandler)

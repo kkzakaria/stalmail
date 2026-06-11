@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { submitBootstrap } from './stalwart-bootstrap'
 import { requestStalwartRestart } from './stalwart-restart'
-import { getStepHandler, submitBootstrapHandler, createAdminAccountHandler, createDnsServerHandler, setDnsManagementHandler, dnsGridStatusHandler, configureAcmeHandler, acmeStatusHandler, finishSetupHandler } from './setup-actions'
+import { getStepHandler, submitBootstrapHandler, createAdminAccountHandler, createDnsServerHandler, setDnsManagementHandler, dnsGridStatusHandler, configureAcmeHandler, acmeStatusHandler, finishSetupHandler, setupStatusHandler } from './setup-actions'
 import type * as StalwartAccountModule from './stalwart-account'
 import type * as StalwartDomainModule from './stalwart-domain'
 import type * as StalwartDnsModule from './stalwart-dns'
@@ -46,6 +46,7 @@ vi.mock('./stalwart-acme', async (importActual) => ({
 vi.mock('./setup-flag', async (importActual) => ({
   ...(await importActual<typeof SetupFlagModule>()),
   markSetupComplete: vi.fn(),
+  isSetupComplete: vi.fn(() => false),
 }))
 vi.mock('./stalwart-hardening', async (importActual) => ({
   ...(await importActual<typeof StalwartHardeningModule>()),
@@ -65,7 +66,7 @@ import { resolveRecordStatus } from './dns-resolve'
 // eslint-disable-next-line import/first
 import { configureAcme, getAcmeStatus } from './stalwart-acme'
 // eslint-disable-next-line import/first
-import { markSetupComplete } from './setup-flag'
+import { markSetupComplete, isSetupComplete } from './setup-flag'
 // eslint-disable-next-line import/first
 import { enableXForwarded } from './stalwart-hardening'
 
@@ -221,5 +222,21 @@ describe('finishSetupHandler', () => {
     vi.mocked(enableXForwarded).mockRejectedValueOnce(new Error('http-set failed'))
     await expect(finishSetupHandler()).rejects.toThrow('http-set failed')
     expect(markSetupComplete).not.toHaveBeenCalled()
+  })
+})
+
+describe('setupStatusHandler', () => {
+  it('returns {configured:false} when isSetupComplete returns false', async () => {
+    vi.mocked(isSetupComplete).mockReturnValueOnce(false)
+    const result = await setupStatusHandler()
+    expect(result).toEqual({ configured: false })
+    expect(isSetupComplete).toHaveBeenCalledOnce()
+  })
+
+  it('returns {configured:true} when isSetupComplete returns true', async () => {
+    vi.mocked(isSetupComplete).mockReturnValueOnce(true)
+    const result = await setupStatusHandler()
+    expect(result).toEqual({ configured: true })
+    expect(isSetupComplete).toHaveBeenCalledOnce()
   })
 })

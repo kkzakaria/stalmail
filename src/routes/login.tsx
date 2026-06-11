@@ -3,11 +3,13 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { loginFn } from '@/server/auth-actions'
+import { redirectIfAuthenticated } from '@/lib/auth-guard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export const Route = createFileRoute('/login')({
+  beforeLoad: () => redirectIfAuthenticated(),
   component: LoginPage,
 })
 
