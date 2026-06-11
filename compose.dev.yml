@@ -38,7 +38,7 @@ services:
     environment:
       STALWART_URL: http://stalwart:8080
       STALWART_RECOVERY_ADMIN: "stalmail-admin:dev-insecure-secret"
-      STALMAIL_SECRET: "dev-insecure-secret"
+      STALMAIL_SECRET: "dev-insecure-secret-do-not-use-in-prod!!"
       STALMAIL_DATA_DIR: /var/lib/stalmail
       STALMAIL_PUBLIC_URL: "http://localhost:3000"
       STALMAIL_RUN_DIR: /shared
