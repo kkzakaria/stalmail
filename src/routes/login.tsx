@@ -35,11 +35,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 export function LoginPage() {
   const { t } = useTranslation()
   const router = useRouter()
-  // useLoaderData is not available in test environments where the route is mocked
-  const loaderData = typeof (Route as any).useLoaderData === 'function'
-    ? (Route as any).useLoaderData() as { theme: Theme }
-    : undefined
-  const initialTheme: Theme = loaderData?.theme ?? 'light'
+  const { theme: initialTheme } = Route.useLoaderData()
 
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const [email, setEmail] = useState('')
@@ -102,7 +98,7 @@ export function LoginPage() {
         </div>
       </div>
       <main className="login-main">
-        <div className="login-card">
+        <div className="card login-card">
           <div className="login-head">
             <BrandMark size={40} />
             <StepHeader title={t('login.title')} sub={t('login.subtitle')} />
@@ -126,7 +122,9 @@ export function LoginPage() {
               onChange={(v) => setEmail(v.trim())}
               placeholder={t('login.emailPlaceholder')}
               autoFocus
+              autoComplete="username"
               invalid={touched && !emailOk}
+              ariaDescribedBy={touched && !emailOk ? 'login-email-error' : undefined}
               onEnter={submit}
             />
           </Field>
@@ -143,6 +141,8 @@ export function LoginPage() {
               invalid={touched && !passOk}
               showLabel={t('wizard.account.show')}
               hideLabel={t('wizard.account.hide')}
+              autoComplete="current-password"
+              ariaDescribedBy={touched && !passOk ? 'login-password-error' : undefined}
               onEnter={submit}
             />
           </Field>

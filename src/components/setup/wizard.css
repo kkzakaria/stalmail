@@ -484,20 +484,20 @@
 .stalmail-wizard .step-done .step-header { text-align: center; }
 
 /* ============ Page de connexion ============ */
-.login-shell { display: flex; flex-direction: column; min-height: 100vh; }
-.login-topbar {
+.stalmail-wizard.login-shell { display: flex; flex-direction: column; min-height: 100vh; }
+.stalmail-wizard .login-topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 24px 28px 0;
   width: 100%; max-width: 960px; margin: 0 auto;
 }
-.login-main {
+.stalmail-wizard .login-main {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 20px; padding: 24px 20px 72px;
 }
-.login-card {
+.stalmail-wizard .login-card {
   width: 100%; max-width: 404px;
   padding: 34px 32px 30px;
   display: flex; flex-direction: column; gap: 18px;
 }
-.login-head { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
-.login-head .step-sub { text-wrap: balance; }
+.stalmail-wizard .login-head { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.stalmail-wizard .login-head .step-sub { text-wrap: balance; }

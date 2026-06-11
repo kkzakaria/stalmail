@@ -93,7 +93,7 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p className="field-error">{error}</p>
+        <p className="field-error" id={htmlFor ? `${htmlFor}-error` : undefined}>{error}</p>
       ) : help ? (
         <p className="help">{help}</p>
       ) : null}
@@ -111,6 +111,8 @@ export interface TextInputProps {
   invalid?: boolean
   mono?: boolean
   autoFocus?: boolean
+  autoComplete?: string
+  ariaDescribedBy?: string
   onEnter?: () => void
 }
 
@@ -123,6 +125,8 @@ export function TextInput({
   invalid,
   mono,
   autoFocus,
+  autoComplete = 'off',
+  ariaDescribedBy,
   onEnter,
 }: TextInputProps) {
   return (
@@ -133,7 +137,8 @@ export function TextInput({
       value={value}
       placeholder={placeholder}
       autoFocus={autoFocus}
-      autoComplete="off"
+      autoComplete={autoComplete}
+      aria-describedby={ariaDescribedBy}
       spellCheck={false}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
@@ -151,6 +156,8 @@ export interface PasswordInputProps {
   invalid?: boolean
   showLabel: string
   hideLabel: string
+  autoComplete?: string
+  ariaDescribedBy?: string
   onEnter?: () => void
 }
 
@@ -161,6 +168,8 @@ export function PasswordInput({
   invalid,
   showLabel,
   hideLabel,
+  autoComplete,
+  ariaDescribedBy,
   onEnter,
 }: PasswordInputProps) {
   const [show, setShow] = useState(false)
@@ -174,6 +183,8 @@ export function PasswordInput({
         invalid={invalid}
         type={show ? 'text' : 'password'}
         mono
+        autoComplete={autoComplete}
+        ariaDescribedBy={ariaDescribedBy}
         onEnter={onEnter}
       />
       <button

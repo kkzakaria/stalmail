@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { createI18n } from '@/i18n/i18n'
 
 const navigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => () => ({}),
+  createFileRoute: () => () => ({ useLoaderData: () => ({ theme: 'light' }) }),
   useRouter: () => ({ navigate }),
 }))
 vi.mock('@/server/auth-actions', () => ({ loginFn: vi.fn() }))
@@ -23,17 +23,22 @@ const wrap = () =>
   )
 
 beforeEach(() => vi.clearAllMocks())
+afterEach(() => vi.useRealTimers())
 
 describe('LoginPage', () => {
   it('navigates to the inbox after a successful login', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.mocked(loginFn).mockResolvedValue({ status: 'ok' })
     wrap()
     fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'a@x.fr' } })
     fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'pw' } })
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
-    await waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ to: '/mail/$folder', params: { folder: 'inbox' } }),
-    )
+    // wait for the async submit to settle (loginFn resolves, setSuccess fires)
+    await waitFor(() => expect(screen.getByRole('button', { name: /Connecté/i })).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /Connecté — ouverture du webmail/i })).toBeInTheDocument()
+    expect(navigate).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(navigate).toHaveBeenCalledWith({ to: '/mail/$folder', params: { folder: 'inbox' } })
     expect(loginFn).toHaveBeenCalledWith({ data: { email: 'a@x.fr', password: 'pw' } })
   })
 
@@ -91,5 +96,13 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
     expect(await screen.findByText(/requis/i)).toBeInTheDocument()
     expect(loginFn).not.toHaveBeenCalled()
+  })
+
+  it('renders email input with autocomplete="username" and password input with autocomplete="current-password"', () => {
+    wrap()
+    const emailInput = screen.getByLabelText('Adresse e-mail')
+    const passwordInput = screen.getByLabelText('Mot de passe')
+    expect(emailInput).toHaveAttribute('autocomplete', 'username')
+    expect(passwordInput).toHaveAttribute('autocomplete', 'current-password')
   })
 })
