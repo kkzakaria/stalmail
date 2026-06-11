@@ -35,7 +35,7 @@ describe('session cookie', () => {
       expect.objectContaining({ httpOnly: true, secure: true, sameSite: 'lax', path: '/' }),
     )
     clearSid()
-    expect(deleteCookie).toHaveBeenCalledWith('__Host-stalmail_session', { path: '/' })
+    expect(deleteCookie).toHaveBeenCalledWith('__Host-stalmail_session', { path: '/', secure: true })
   })
 })
 
@@ -66,5 +66,13 @@ describe('clientIp', () => {
   it('returns the first X-Forwarded-For hop', () => {
     headers({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1' })
     expect(clientIp()).toBe('203.0.113.7')
+  })
+  it('returns undefined when the header is absent', () => {
+    headers({})
+    expect(clientIp()).toBeUndefined()
+  })
+  it('returns undefined for a whitespace-only header', () => {
+    headers({ 'x-forwarded-for': '   ' })
+    expect(clientIp()).toBeUndefined()
   })
 })

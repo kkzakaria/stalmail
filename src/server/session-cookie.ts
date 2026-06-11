@@ -26,7 +26,8 @@ export function writeSid(sid: string): void {
 }
 
 export function clearSid(): void {
-  deleteCookie(cookieName(), { path: '/' })
+  // h3's deleteCookie emits Set-Cookie with Max-Age=0; __Host- deletion needs the same attributes.
+  deleteCookie(cookieName(), { path: '/', secure: secure() })
 }
 
 // CSRF: reject state-changing requests whose Origin (or, failing that, Referer)
@@ -42,13 +43,13 @@ export function assertSameOrigin(): void {
   } catch {
     throw new Error('invalid Origin/Referer header')
   }
-  if (!host || originHost !== host) throw new Error('cross-origin request rejected')
+  if (!host || originHost !== host.toLowerCase()) throw new Error('cross-origin request rejected')
 }
 
 // Real client IP from the proxy chain, for Stalwart rate-limiting/Fail2Ban.
 // First X-Forwarded-For hop — safe ONLY because Caddy overwrites the incoming
 // header for untrusted clients (do NOT add Internet to trusted_proxies).
 export function clientIp(): string | undefined {
-  const xff = getRequestHeader('x-forwarded-for')
-  return xff ? xff.split(',')[0]?.trim() : undefined
+  const ip = getRequestHeader('x-forwarded-for')?.split(',')[0]?.trim()
+  return ip || undefined
 }
