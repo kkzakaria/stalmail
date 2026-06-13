@@ -12,6 +12,7 @@ export function pageIndexesForItems(indexes: number[], page: number): number[] {
 }
 
 // Pur : index absolu → AppThread chargé, ou undefined (skeleton).
+// undefined = ligne non chargée → ThreadRow rend un skeleton.
 export function threadAt(
   pages: Map<number, EmailListPage>,
   index: number,

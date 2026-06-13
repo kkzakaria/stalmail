@@ -22,7 +22,7 @@ export function ThreadList({
   const { t } = useTranslation()
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Sonde : charge la plage 0 pour obtenir le total (react-query déduplique avec windowed).
+  // probe + windowed convergent vers la même query-key (réseau dédupliqué par react-query) ; le virtualizer a besoin de `count` avant de connaître les index visibles → double abonnement inévitable par construction.
   const probe = useThreadsHook(folder, [0])
   const count = probe.total ?? provisionalCount ?? PROVISIONAL_COUNT
 
@@ -49,21 +49,10 @@ export function ThreadList({
     return <div className="list-empty">{t('mail.empty')}</div>
   }
 
-  // jsdom : le virtualizer mesure une hauteur 0 → aucun item ; fallback non-virtualisé
-  // sur les premières lignes (plafonné) pour rester rendu/testable.
-  const rows = items.length
-    ? items
-    : Array.from({ length: Math.min(count, 50) }, (_, i) => ({
-        key: i,
-        index: i,
-        size: ROW_HEIGHT,
-        start: i * ROW_HEIGHT,
-      }))
-
   return (
     <div className="list-rows" ref={scrollRef}>
       <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
-        {rows.map((item) => (
+        {items.map((item) => (
           <div
             key={item.key}
             style={{
