@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeAll } from 'vitest'
+import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
@@ -29,6 +29,12 @@ vi.mock('../../server/mail-actions', async (importActual) => ({
 
 // eslint-disable-next-line import/first
 import { MailPage } from './$folder'
+// eslint-disable-next-line import/first
+import { emailListFn } from '../../server/mail-actions'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 beforeAll(() => {
   // @tanstack/react-virtual needs ResizeObserver + measurable elements in jsdom.
@@ -68,5 +74,6 @@ describe('MailPage', () => {
   it('court-circuite snoozed : affiche le placeholder, ne monte pas la liste', () => {
     wrap(<MailPage folder="snoozed" mailboxes={mailboxes} accountName="me@x.fr" />)
     expect(screen.getByText('Disponible prochainement')).toBeInTheDocument()
+    expect(emailListFn).not.toHaveBeenCalled()
   })
 })
