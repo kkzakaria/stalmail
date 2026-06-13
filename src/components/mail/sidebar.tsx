@@ -36,6 +36,8 @@ export function AppSidebar({
             {accountName.slice(0, 1).toUpperCase()}
           </span>
           <span className="meta">
+            {/* La session n'expose que l'email (= username JMAP) ; pas de displayName distinct
+                avant le Plan 4b. Les deux lignes affichent donc volontairement accountName. */}
             <b>{accountName}</b>
             <span>{accountName}</span>
           </span>
