@@ -118,8 +118,8 @@ export function buildListMethodCalls(
 interface RawEmail {
   id: string
   threadId: string
-  mailboxIds: Record<string, boolean>
-  keywords: Record<string, boolean>
+  mailboxIds?: Record<string, boolean>
+  keywords?: Record<string, boolean>
   from?: MailAddress[] | null
   to?: MailAddress[] | null
   subject?: string
@@ -131,10 +131,17 @@ interface RawEmail {
 // Pur : assemble la page depuis les 3 réponses du batch.
 export function parseListPage(responses: JmapMethodResponse[], position: number): EmailListPage {
   const query = responses.find(([n]) => n === 'Email/query')?.[1] as
-    | { total?: number; queryState?: string }
+    | { total?: number; queryState?: string; ids?: string[] }
     | undefined
   const rawEmails = responses.find(([n]) => n === 'Email/get')?.[1].list
-  const emails: RawEmail[] = Array.isArray(rawEmails) ? (rawEmails as RawEmail[]) : []
+  const emailList: RawEmail[] = Array.isArray(rawEmails) ? (rawEmails as RawEmail[]) : []
+  // RFC 8620 §5.1 : l'ordre du `list` d'un /get n'est pas garanti — on réaligne sur l'ordre
+  // trié des ids renvoyés par Email/query (receivedAt desc).
+  const orderedIds = Array.isArray(query?.ids) ? query.ids : []
+  const byId = new Map(emailList.map((e) => [e.id, e]))
+  const emails: RawEmail[] = orderedIds.length
+    ? orderedIds.map((id) => byId.get(id)).filter((e): e is RawEmail => e !== undefined)
+    : emailList
   const rawThreads = responses.find(([n]) => n === 'Thread/get')?.[1].list
   const threads: { id: string; emailIds: string[] }[] = Array.isArray(rawThreads)
     ? (rawThreads as { id: string; emailIds: string[] }[])
@@ -150,10 +157,10 @@ export function parseListPage(responses: JmapMethodResponse[], position: number)
     to: e.to ?? [],
     messageCount: countByThread.get(e.threadId) ?? 1,
     receivedAt: e.receivedAt,
-    unread: e.keywords.$seen !== true,
-    starred: e.keywords.$flagged === true,
+    unread: (e.keywords ?? {}).$seen !== true,
+    starred: (e.keywords ?? {}).$flagged === true,
     hasAttachment: e.hasAttachment === true,
-    mailboxIds: Object.keys(e.mailboxIds),
+    mailboxIds: Object.keys(e.mailboxIds ?? {}),
   }))
 
   return {

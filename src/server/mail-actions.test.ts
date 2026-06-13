@@ -153,4 +153,26 @@ describe('parseListPage', () => {
     expect(parseListPage(mk({}), 0).threads[0].unread).toBe(true)
     expect(parseListPage(mk({ $seen: true }), 0).threads[0].unread).toBe(false)
   })
+
+  it('réordonne Email/get selon l\'ordre des ids de Email/query (RFC 8620 §5.1)', () => {
+    const responses: JmapMethodResponse[] = [
+      ['Email/query', { total: 3, position: 0, ids: ['e1', 'e2', 'e3'] }, '0'],
+      [
+        'Email/get',
+        {
+          // volontairement DÉSORDONNÉ par rapport à la query (e3, e1, e2)
+          list: [
+            { id: 'e3', threadId: 't3', mailboxIds: { mi: true }, keywords: {}, from: [], to: [], subject: 'C', preview: '', receivedAt: '2026-06-08T08:00:00Z', hasAttachment: false },
+            { id: 'e1', threadId: 't1', mailboxIds: { mi: true }, keywords: {}, from: [], to: [], subject: 'A', receivedAt: '2026-06-10T08:00:00Z' },
+            { id: 'e2', threadId: 't2', mailboxIds: { mi: true }, keywords: {}, from: [], to: [], subject: 'B', receivedAt: '2026-06-09T08:00:00Z' },
+          ],
+        },
+        '1',
+      ],
+      ['Thread/get', { list: [{ id: 't1', emailIds: ['e1'] }, { id: 't2', emailIds: ['e2'] }, { id: 't3', emailIds: ['e3'] }] }, '2'],
+    ]
+    const page = parseListPage(responses, 0)
+    expect(page.threads.map((t) => t.id)).toEqual(['e1', 'e2', 'e3'])
+    expect(page.threads.map((t) => t.subject)).toEqual(['A', 'B', 'C'])
+  })
 })
