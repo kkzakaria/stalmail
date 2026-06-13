@@ -40,7 +40,12 @@ export function ThreadRow({
     <div
       className={'row' + (thread.unread ? ' unread' : '') + (selected ? ' sel' : '')}
       onClick={() => onOpen?.(thread.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpen?.(thread.id) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen?.(thread.id)
+        }
+      }}
       role="button"
       tabIndex={0}
     >

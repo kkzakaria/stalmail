@@ -515,7 +515,7 @@ button { font-family: inherit; cursor: pointer; }
 .row:hover .row-actions { opacity: 1; pointer-events: auto; }
 .row.sel .row-actions { background: linear-gradient(90deg, transparent, var(--sel-solid) 22%); }
 .mini-btn {
-  width: 28px; height: 28px; border: none; background: var(--surface);
+  width: 28px; height: 28px; background: var(--surface);
   border: 1px solid var(--line); border-radius: 7px; color: var(--ink-2);
   display: grid; place-items: center; box-shadow: var(--shadow-sm);
 }
