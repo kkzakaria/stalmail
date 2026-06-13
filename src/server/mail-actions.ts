@@ -67,12 +67,14 @@ export function resolveFilter(folder: string, mailboxes: AppMailbox[]): JmapFilt
     const spam = mailboxIdByRole(mailboxes, 'spam')
     if (trash) exclude.push({ inMailbox: trash })
     if (spam) exclude.push({ inMailbox: spam })
+    if (exclude.length === 0) return { hasKeyword: '$flagged' }
     return {
       operator: 'AND',
       conditions: [{ hasKeyword: '$flagged' }, { operator: 'NOT', conditions: exclude }],
     }
   }
   const id = mailboxIdByRole(mailboxes, folder)
+  if (id === undefined) throw new Error(`Unknown mail folder: ${folder}`)
   return { inMailbox: id }
 }
 

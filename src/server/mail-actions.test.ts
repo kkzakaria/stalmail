@@ -54,6 +54,18 @@ describe('resolveFilter', () => {
       ],
     })
   })
+
+  it('starred sans trash/spam → filtre keyword seul (pas de NOT vide)', () => {
+    const inboxOnly: AppMailbox[] = [
+      { id: 'mi', name: 'In', role: 'inbox', unreadEmails: 0, totalEmails: 0, sortOrder: 1 },
+    ]
+    expect(resolveFilter('starred', inboxOnly)).toEqual({ hasKeyword: '$flagged' })
+    expect(resolveFilter('starred', [])).toEqual({ hasKeyword: '$flagged' })
+  })
+
+  it('dossier inconnu (rôle absent) → lève une erreur', () => {
+    expect(() => resolveFilter('sent', MBX)).toThrow(/Unknown mail folder/)
+  })
 })
 
 describe('buildListMethodCalls', () => {
@@ -68,6 +80,7 @@ describe('buildListMethodCalls', () => {
       limit: 50,
       sort: [{ property: 'receivedAt', isAscending: false }],
     })
+    expect(query.filter).toEqual({ inMailbox: 'mi' })
     expect(calls[1][0]).toBe('Email/get')
     expect(calls[2][0]).toBe('Thread/get')
     expect(calls[2][1]['#ids']).toMatchObject({
