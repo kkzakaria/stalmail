@@ -14,7 +14,8 @@ interface RawMailbox {
 // Pur : extrait + trie les mailboxes d'une réponse Mailbox/get.
 export function mapMailboxes(responses: JmapMethodResponse[]): AppMailbox[] {
   const get = responses.find(([name]) => name === 'Mailbox/get')
-  const list = (get?.[1].list as RawMailbox[] | undefined) ?? []
+  const raw = get?.[1].list
+  const list: RawMailbox[] = Array.isArray(raw) ? (raw as RawMailbox[]) : []
   return list
     .map((m) => ({
       id: m.id,

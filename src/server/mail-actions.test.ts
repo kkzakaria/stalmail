@@ -27,4 +27,8 @@ describe('mapMailboxes', () => {
     ]
     expect(mapMailboxes(responses)[0].role).toBeNull()
   })
+
+  it('retourne [] quand Mailbox/get est absent ou list non-tableau', () => {
+    expect(mapMailboxes([])).toEqual([])
+  })
 })
