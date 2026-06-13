@@ -31,9 +31,10 @@ export function ThreadRow({
     )
   }
 
-  const lead = RECIPIENT_FOLDERS.has(folder) ? thread.to[0] : thread.from[0]
-  const leadName = lead.name || lead.email || '—'
-  const leadEmail = lead.email
+  const addrs = RECIPIENT_FOLDERS.has(folder) ? thread.to : thread.from
+  const lead = addrs.at(0)
+  const leadName = lead?.name || lead?.email || '—'
+  const leadEmail = lead?.email ?? ''
 
   return (
     <div

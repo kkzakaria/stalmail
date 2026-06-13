@@ -49,4 +49,9 @@ describe('ThreadRow', () => {
     expect(container.querySelector('.row-skeleton')).toBeInTheDocument()
     expect(container.querySelector('.unread-dot')).not.toBeInTheDocument()
   })
+
+  it('ne plante pas si from/to est vide (affiche le fallback —)', () => {
+    const { container } = render(<ThreadRow thread={{ ...base, from: [], to: [] }} folder="inbox" now={now} />)
+    expect(container.querySelector('.from-name')).toHaveTextContent('—')
+  })
 })
