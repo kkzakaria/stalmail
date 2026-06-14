@@ -7,7 +7,10 @@ import type { WindowedThreads } from './use-windowed-threads'
 
 type ThreadsHook = (folder: string, visibleIndexes: number[]) => WindowedThreads
 
-const ROW_HEIGHT = 64
+// Hauteur d'une ligne (densité « regular ») : from-name/heure + sujet + aperçu + padding.
+// Mesurée sur le rendu réel (mail.css `.row-fg` padding 9px × 14px). Une valeur trop
+// faible fait chevaucher les lignes → aperçu clippé + séparateur masqué.
+const ROW_HEIGHT = 77
 const PROVISIONAL_COUNT = 30
 
 export function ThreadList({

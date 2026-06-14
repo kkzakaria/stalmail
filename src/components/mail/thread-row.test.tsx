@@ -30,8 +30,8 @@ describe('ThreadRow', () => {
   })
 
   it('compteur +N si messageCount > 1', () => {
-    render(<ThreadRow thread={{ ...base, messageCount: 4 }} folder="inbox" now={now} />)
-    expect(screen.getByText('4')).toBeInTheDocument()
+    const { container } = render(<ThreadRow thread={{ ...base, messageCount: 4 }} folder="inbox" now={now} />)
+    expect(container.querySelector('.thread-count')?.textContent).toContain('4')
   })
 
   it('affiche l\'expéditeur dans inbox', () => {

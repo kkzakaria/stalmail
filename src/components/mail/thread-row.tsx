@@ -58,17 +58,27 @@ export function ThreadRow({
         </div>
         <div className="row-main">
           <div className="row-line1">
-            <span className="from-name">{leadName}</span>
-            {thread.messageCount > 1 && <span className="thread-count">{thread.messageCount}</span>}
-            {thread.starred && <Icon name="star-fill" size={14} className="row-star" />}
-            <span className="row-date">{formatThreadDate(thread.receivedAt, now)}</span>
+            <span className="from-name">
+              {leadName}
+              {thread.messageCount > 1 && (
+                <span className="thread-count"> · {thread.messageCount}</span>
+              )}
+            </span>
+            <span className="row-time">{formatThreadDate(thread.receivedAt, now)}</span>
           </div>
-          <div className="row-line2">
-            <span className="subject">{thread.subject}</span>
-            <span className="snippet">{thread.preview}</span>
-            {thread.hasAttachment && <Icon name="paperclip" size={14} className="row-attach" />}
-          </div>
+          <div className="subj">{thread.subject}</div>
+          <div className="snippet">{thread.preview}</div>
+          {thread.hasAttachment && (
+            <div className="row-line3">
+              <Icon name="paperclip" size={14} className="row-attach" style={{ color: 'var(--muted)' }} />
+            </div>
+          )}
         </div>
+        {thread.starred && (
+          <span className="star-btn on" aria-hidden="true">
+            <Icon name="star-fill" size={17} className="row-star" />
+          </span>
+        )}
       </div>
     </div>
   )
