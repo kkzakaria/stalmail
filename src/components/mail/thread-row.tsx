@@ -50,6 +50,7 @@ export function ThreadRow({
       }}
       role="button"
       tabIndex={0}
+      aria-label={`Ouvrir le message : ${thread.subject}`}
     >
       <div className="row-fg">
         <div className="row-rail">
@@ -65,7 +66,7 @@ export function ThreadRow({
               )}
             </span>
             {thread.hasAttachment && (
-              <Icon name="paperclip" size={13} className="row-attach" style={{ color: 'var(--muted)' }} />
+              <Icon name="paperclip" size={13} className="row-attach" />
             )}
             <span className="row-time">{formatThreadDate(thread.receivedAt, now)}</span>
           </div>

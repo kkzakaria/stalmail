@@ -76,7 +76,9 @@
 
 .app, .app * { box-sizing: border-box; }
 .app button { font-family: inherit; cursor: pointer; }
+.app button:disabled { cursor: not-allowed; }
 .app ::selection { background: var(--accent-soft); }
+.row-attach { color: var(--muted); }
 
 /* scrollbars discrètes */
 .scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -1005,46 +1007,6 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 .fade-in { animation: fade .25s ease; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-
-/* ============================================================
-   Cadre d'aperçu — conteneur de requête
-   Pilote la VRAIE responsivité (le cadre épouse la fenêtre)
-   ET le simulateur d'écran des Tweaks (cadre de taille fixe).
-   ============================================================ */
-#root { height: 100%; }
-.app-frame {
-  position: relative;
-  width: 100%; height: 100%;
-  margin: 0 auto;
-  overflow: hidden;
-  background: var(--bg);
-  container-type: inline-size;
-  container-name: app;
-}
-
-/* --- Mode simulateur : cadre fixe centré sur fond neutre --- */
-#root:has(.app-frame[data-screen='mobile']),
-#root:has(.app-frame[data-screen='tablet']),
-#root:has(.app-frame[data-screen='desktop']) {
-  display: flex; align-items: center; justify-content: center;
-  padding: 24px;
-  background: radial-gradient(120% 120% at 50% 0%, color-mix(in oklab, var(--ink) 10%, var(--bg)), var(--bg));
-}
-[data-theme='dark'] #root:has(.app-frame[data-screen='mobile']),
-[data-theme='dark'] #root:has(.app-frame[data-screen='tablet']),
-[data-theme='dark'] #root:has(.app-frame[data-screen='desktop']) { background: #050507; }
-
-.app-frame[data-screen='mobile'],
-.app-frame[data-screen='tablet'],
-.app-frame[data-screen='desktop'] {
-  flex: none;
-  border-radius: 22px;
-  box-shadow: 0 40px 90px -28px rgba(0, 0, 0, .55);
-  outline: 7px solid color-mix(in oklab, var(--ink) 86%, #000);
-}
-.app-frame[data-screen='mobile']  { width: 402px;          height: min(862px, 100%); }
-.app-frame[data-screen='tablet']  { width: 834px;          height: min(1040px, 100%); }
-.app-frame[data-screen='desktop'] { width: min(1320px, 100%); height: min(900px, 100%); border-radius: 14px; }
 
 /* éléments de navigation mobile (cachés par défaut) */
 .nav-toggle { display: none; }

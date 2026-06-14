@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { ThreadRow } from './thread-row'
 import type { AppThread } from '../../server/mail-types'
 
@@ -53,5 +53,26 @@ describe('ThreadRow', () => {
   it('ne plante pas si from/to est vide (affiche le fallback —)', () => {
     const { container } = render(<ThreadRow thread={{ ...base, from: [], to: [] }} folder="inbox" now={now} />)
     expect(container.querySelector('.from-name')).toHaveTextContent('—')
+  })
+
+  it('appelle onOpen au clic', () => {
+    const onOpen = vi.fn()
+    const { container } = render(<ThreadRow thread={base} folder="inbox" now={now} onOpen={onOpen} />)
+    fireEvent.click(container.querySelector('.row')!)
+    expect(onOpen).toHaveBeenCalledWith('e1')
+  })
+
+  it('appelle onOpen sur Entrée et Espace', () => {
+    const onOpen = vi.fn()
+    const { container } = render(<ThreadRow thread={base} folder="inbox" now={now} onOpen={onOpen} />)
+    const row = container.querySelector('.row')!
+    fireEvent.keyDown(row, { key: 'Enter' })
+    fireEvent.keyDown(row, { key: ' ' })
+    expect(onOpen).toHaveBeenCalledTimes(2)
+  })
+
+  it('applique la classe sel si selected', () => {
+    const { container } = render(<ThreadRow thread={base} folder="inbox" now={now} selected />)
+    expect(container.querySelector('.row.sel')).toBeInTheDocument()
   })
 })
