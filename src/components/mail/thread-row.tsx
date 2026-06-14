@@ -64,15 +64,13 @@ export function ThreadRow({
                 <span className="thread-count"> · {thread.messageCount}</span>
               )}
             </span>
+            {thread.hasAttachment && (
+              <Icon name="paperclip" size={13} className="row-attach" style={{ color: 'var(--muted)' }} />
+            )}
             <span className="row-time">{formatThreadDate(thread.receivedAt, now)}</span>
           </div>
           <div className="subj">{thread.subject}</div>
           <div className="snippet">{thread.preview}</div>
-          {thread.hasAttachment && (
-            <div className="row-line3">
-              <Icon name="paperclip" size={14} className="row-attach" style={{ color: 'var(--muted)' }} />
-            </div>
-          )}
         </div>
         {thread.starred && (
           <span className="star-btn on" aria-hidden="true">
