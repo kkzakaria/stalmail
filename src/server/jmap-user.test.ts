@@ -41,6 +41,8 @@ describe('jmapUserCall', () => {
       expect.unreachable('should have thrown')
     } catch (err) {
       expect(isRedirect(err)).toBe(true)
+      // Verrouille la destination : le contrat de jmapUserCall est spécifiquement /login.
+      expect(err).toMatchObject({ options: { to: '/login' } })
     }
     expect(stalwartUserFetch).not.toHaveBeenCalled()
   })
