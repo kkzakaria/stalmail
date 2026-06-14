@@ -14,7 +14,7 @@ Thank you for your interest in contributing. This guide covers everything you ne
 git clone https://github.com/kkzakaria/stalmail.git
 cd stalmail
 bun install        # also installs git hooks via husky
-bun run dev        # starts the dev server on http://localhost:3000
+bun run dev        # starts the dev server on http://localhost:3443 (override with PORT)
 ```
 
 ## Development Workflow

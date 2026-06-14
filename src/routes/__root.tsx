@@ -1,9 +1,11 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
+import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router"
+import type { QueryClient } from "@tanstack/react-query"
 import type { ComponentType } from "react"
 import { lazy, Suspense } from "react"
 import { I18nextProvider } from 'react-i18next'
 import { createI18n } from '../i18n/i18n'
 import { getServerLang } from '../server/setup-lang'
+import { getServerTheme } from '../server/setup-theme'
 
 import appCss from "../styles.css?url"
 
@@ -29,10 +31,11 @@ const DevTools: ComponentType = isDev
     })
   : () => null
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   loader: async () => {
     const { lang } = await getServerLang()
-    return { lang }
+    const { theme } = await getServerTheme()
+    return { lang, theme }
   },
   head: () => ({
     meta: [
@@ -64,10 +67,10 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { lang } = Route.useLoaderData()
+  const { lang, theme } = Route.useLoaderData()
   const i18n = createI18n(lang)
   return (
-    <html lang={lang}>
+    <html lang={lang} data-theme={theme}>
       <head>
         <HeadContent />
       </head>

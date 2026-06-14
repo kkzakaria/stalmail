@@ -1,0 +1,187 @@
+import { describe, expect, it } from 'vitest'
+import { mapMailboxes, resolveFilter, buildListMethodCalls, parseListPage } from './mail-actions'
+import type { JmapMethodResponse } from './jmap'
+import type { AppMailbox } from './mail-types'
+
+describe('mapMailboxes', () => {
+  it('mappe Mailbox/get vers AppMailbox[] trié par sortOrder', () => {
+    const responses: JmapMethodResponse[] = [
+      [
+        'Mailbox/get',
+        {
+          list: [
+            { id: 'm2', name: 'Envoyés', role: 'sent', unreadEmails: 0, totalEmails: 3, sortOrder: 2 },
+            { id: 'm1', name: 'Réception', role: 'inbox', unreadEmails: 5, totalEmails: 40, sortOrder: 1 },
+          ],
+        },
+        '0',
+      ],
+    ]
+    const out = mapMailboxes(responses)
+    expect(out.map((m) => m.id)).toEqual(['m1', 'm2'])
+    expect(out[0]).toMatchObject({ role: 'inbox', unreadEmails: 5, totalEmails: 40 })
+  })
+
+  it('normalise role absent en null', () => {
+    const responses: JmapMethodResponse[] = [
+      ['Mailbox/get', { list: [{ id: 'm1', name: 'X', unreadEmails: 0, totalEmails: 0, sortOrder: 0 }] }, '0'],
+    ]
+    expect(mapMailboxes(responses)[0].role).toBeNull()
+  })
+
+  it('retourne [] quand Mailbox/get est absent ou list non-tableau', () => {
+    expect(mapMailboxes([])).toEqual([])
+  })
+})
+
+const MBX: AppMailbox[] = [
+  { id: 'mi', name: 'In', role: 'inbox', unreadEmails: 0, totalEmails: 0, sortOrder: 1 },
+  { id: 'mt', name: 'Trash', role: 'trash', unreadEmails: 0, totalEmails: 0, sortOrder: 2 },
+  { id: 'ms', name: 'Junk', role: 'junk', unreadEmails: 0, totalEmails: 0, sortOrder: 3 },
+]
+
+describe('resolveFilter', () => {
+  it('dossier réel → inMailbox sur l\'id du role', () => {
+    expect(resolveFilter('inbox', MBX)).toEqual({ inMailbox: 'mi' })
+  })
+
+  it('starred → $flagged AND NOT (trash, spam) [R5]', () => {
+    expect(resolveFilter('starred', MBX)).toEqual({
+      operator: 'AND',
+      conditions: [
+        { hasKeyword: '$flagged' },
+        { operator: 'NOT', conditions: [{ inMailbox: 'mt' }, { inMailbox: 'ms' }] },
+      ],
+    })
+  })
+
+  it('starred sans trash/spam → filtre keyword seul (pas de NOT vide)', () => {
+    const inboxOnly: AppMailbox[] = [
+      { id: 'mi', name: 'In', role: 'inbox', unreadEmails: 0, totalEmails: 0, sortOrder: 1 },
+    ]
+    expect(resolveFilter('starred', inboxOnly)).toEqual({ hasKeyword: '$flagged' })
+    expect(resolveFilter('starred', [])).toEqual({ hasKeyword: '$flagged' })
+  })
+
+  it("'spam' (URL) → mailbox de role 'junk' (RFC 8621, pas de role \"spam\")", () => {
+    expect(resolveFilter('spam', MBX)).toEqual({ inMailbox: 'ms' })
+  })
+
+  it('dossier connu mais mailbox non provisionnée → filtre match-none (liste vide, pas erreur)', () => {
+    // 'sent' est connu mais absent de MBX → on n'erre pas, on renvoie un filtre vide
+    expect(resolveFilter('sent', MBX)).toEqual({ before: '1970-01-02T00:00:00Z' })
+  })
+
+  it('nom de dossier réellement inconnu → lève une erreur', () => {
+    expect(() => resolveFilter('bogus', MBX)).toThrow(/Unknown mail folder/)
+  })
+})
+
+describe('buildListMethodCalls', () => {
+  it('Email/query inclut collapseThreads + calculateTotal + position/limit', () => {
+    const calls = buildListMethodCalls('acc', { inMailbox: 'mi' }, 50, 50)
+    const [, query] = calls[0]
+    expect(query).toMatchObject({
+      accountId: 'acc',
+      collapseThreads: true,
+      calculateTotal: true,
+      position: 50,
+      limit: 50,
+      sort: [{ property: 'receivedAt', isAscending: false }],
+    })
+    expect(query.filter).toEqual({ inMailbox: 'mi' })
+    expect(calls[1][0]).toBe('Email/get')
+    expect(calls[2][0]).toBe('Thread/get')
+    expect(calls[2][1]['#ids']).toMatchObject({
+      resultOf: '1',
+      name: 'Email/get',
+      path: '/list/*/threadId',
+    })
+  })
+})
+
+describe('parseListPage', () => {
+  it('assemble threads (messageCount via Thread/get), total et position', () => {
+    const responses: JmapMethodResponse[] = [
+      ['Email/query', { total: 120, position: 0 }, '0'],
+      [
+        'Email/get',
+        {
+          list: [
+            {
+              id: 'e1',
+              threadId: 't1',
+              mailboxIds: { mi: true },
+              keywords: { $flagged: true },
+              from: [{ name: 'Alice', email: 'a@x.fr' }],
+              to: [{ name: 'Moi', email: 'me@x.fr' }],
+              subject: 'Sujet',
+              preview: 'Aperçu',
+              receivedAt: '2026-06-10T08:00:00Z',
+              hasAttachment: true,
+            },
+          ],
+        },
+        '1',
+      ],
+      ['Thread/get', { list: [{ id: 't1', emailIds: ['e1', 'e2', 'e3'] }] }, '2'],
+    ]
+    const page = parseListPage(responses, 0)
+    expect(page.total).toBe(120)
+    expect(page.position).toBe(0)
+    expect(page.threads).toHaveLength(1)
+    expect(page.threads[0]).toMatchObject({
+      id: 'e1',
+      threadId: 't1',
+      messageCount: 3,
+      unread: true, // $seen absent ⇒ non lu
+      starred: true,
+      hasAttachment: true,
+      mailboxIds: ['mi'],
+    })
+  })
+
+  it('unread = true quand $seen absent, false quand présent', () => {
+    const mk = (keywords: Record<string, boolean>): JmapMethodResponse[] => [
+      ['Email/query', { total: 1, position: 0 }, '0'],
+      [
+        'Email/get',
+        {
+          list: [
+            {
+              id: 'e1', threadId: 't1', mailboxIds: {}, keywords,
+              from: [], to: [], subject: '', preview: '', receivedAt: '2026-06-10T08:00:00Z',
+              hasAttachment: false,
+            },
+          ],
+        },
+        '1',
+      ],
+      ['Thread/get', { list: [{ id: 't1', emailIds: ['e1'] }] }, '2'],
+    ]
+    expect(parseListPage(mk({}), 0).threads[0].unread).toBe(true)
+    expect(parseListPage(mk({ $seen: true }), 0).threads[0].unread).toBe(false)
+  })
+
+  it('réordonne Email/get selon l\'ordre des ids de Email/query (RFC 8620 §5.1)', () => {
+    const responses: JmapMethodResponse[] = [
+      ['Email/query', { total: 3, position: 0, ids: ['e1', 'e2', 'e3'] }, '0'],
+      [
+        'Email/get',
+        {
+          // volontairement DÉSORDONNÉ par rapport à la query (e3, e1, e2)
+          list: [
+            { id: 'e3', threadId: 't3', mailboxIds: { mi: true }, keywords: {}, from: [], to: [], subject: 'C', preview: '', receivedAt: '2026-06-08T08:00:00Z', hasAttachment: false },
+            { id: 'e1', threadId: 't1', mailboxIds: { mi: true }, keywords: {}, from: [], to: [], subject: 'A', receivedAt: '2026-06-10T08:00:00Z' },
+            { id: 'e2', threadId: 't2', mailboxIds: { mi: true }, keywords: {}, from: [], to: [], subject: 'B', receivedAt: '2026-06-09T08:00:00Z' },
+          ],
+        },
+        '1',
+      ],
+      ['Thread/get', { list: [{ id: 't1', emailIds: ['e1'] }, { id: 't2', emailIds: ['e2'] }, { id: 't3', emailIds: ['e3'] }] }, '2'],
+    ]
+    const page = parseListPage(responses, 0)
+    expect(page.threads.map((t) => t.id)).toEqual(['e1', 'e2', 'e3'])
+    expect(page.threads.map((t) => t.subject)).toEqual(['A', 'B', 'C'])
+  })
+})

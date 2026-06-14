@@ -1,6 +1,6 @@
 # Stalmail dev stack — same topology as prod, but the app runs Vite/HMR against the
-# live source. `docker compose -f compose.dev.yml up` then open https://localhost
-# (Caddy, self-signed) or http://localhost:3000 (app direct). Fresh Stalwart volumes
+# live source. `docker compose -f compose.dev.yml up` then open https://localhost:8443
+# (Caddy, self-signed) or http://localhost:3443 (app direct). Fresh Stalwart volumes
 # → bootstrap mode → full wizard incl. the bootstrap→normal restart via the supervisor.
 services:
   stalwart:
@@ -36,11 +36,14 @@ services:
     # No install here — the installer already populated node_modules. Just run Vite.
     command: sh -c "bun run dev --host"
     environment:
+      # Port interne du conteneur (Vite lit PORT, cf. vite.config.ts). Reste 3000 pour
+      # que Caddyfile (reverse_proxy app:3000) soit inchangé ; seul l'hôte est remappé.
+      PORT: "3000"
       STALWART_URL: http://stalwart:8080
       STALWART_RECOVERY_ADMIN: "stalmail-admin:dev-insecure-secret"
       STALMAIL_SECRET: "dev-insecure-secret-do-not-use-in-prod!!"
       STALMAIL_DATA_DIR: /var/lib/stalmail
-      STALMAIL_PUBLIC_URL: "http://localhost:3000"
+      STALMAIL_PUBLIC_URL: "http://localhost:3443"
       STALMAIL_RUN_DIR: /shared
     volumes:
       - .:/app
@@ -48,7 +51,7 @@ services:
       - stalmail-dev-shared:/shared
       - stalmail-dev-app-data:/var/lib/stalmail
     ports:
-      - "3000:3000"
+      - "3443:3000"
     depends_on:
       stalwart:
         condition: service_started
@@ -61,8 +64,8 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
-      - "443:443"
-      - "80:80"
+      - "8443:443"
+      - "8081:80"
     depends_on: [app, stalwart]
     networks: [stalmail]
 
