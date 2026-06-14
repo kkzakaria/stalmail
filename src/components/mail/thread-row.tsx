@@ -20,12 +20,14 @@ export function ThreadRow({
   if (!thread) {
     return (
       <div className="row row-skeleton" aria-hidden="true">
-        <div className="row-rail">
-          <span className="avatar avatar-skel" />
-        </div>
-        <div className="row-main">
-          <div className="skel-line skel-line-1" />
-          <div className="skel-line skel-line-2" />
+        <div className="row-fg">
+          <div className="row-rail">
+            <span className="avatar avatar-skel" />
+          </div>
+          <div className="row-main">
+            <div className="skel-line skel-line-1" />
+            <div className="skel-line skel-line-2" />
+          </div>
         </div>
       </div>
     )
@@ -49,21 +51,23 @@ export function ThreadRow({
       role="button"
       tabIndex={0}
     >
-      <div className="row-rail">
-        <span className="unread-dot" />
-        <Avatar name={leadName} email={leadEmail} />
-      </div>
-      <div className="row-main">
-        <div className="row-line1">
-          <span className="from-name">{leadName}</span>
-          {thread.messageCount > 1 && <span className="thread-count">{thread.messageCount}</span>}
-          {thread.starred && <Icon name="star-fill" size={14} className="row-star" />}
-          <span className="row-date">{formatThreadDate(thread.receivedAt, now)}</span>
+      <div className="row-fg">
+        <div className="row-rail">
+          <span className="unread-dot" />
+          <Avatar name={leadName} email={leadEmail} />
         </div>
-        <div className="row-line2">
-          <span className="subject">{thread.subject}</span>
-          <span className="snippet">{thread.preview}</span>
-          {thread.hasAttachment && <Icon name="paperclip" size={14} className="row-attach" />}
+        <div className="row-main">
+          <div className="row-line1">
+            <span className="from-name">{leadName}</span>
+            {thread.messageCount > 1 && <span className="thread-count">{thread.messageCount}</span>}
+            {thread.starred && <Icon name="star-fill" size={14} className="row-star" />}
+            <span className="row-date">{formatThreadDate(thread.receivedAt, now)}</span>
+          </div>
+          <div className="row-line2">
+            <span className="subject">{thread.subject}</span>
+            <span className="snippet">{thread.preview}</span>
+            {thread.hasAttachment && <Icon name="paperclip" size={14} className="row-attach" />}
+          </div>
         </div>
       </div>
     </div>
