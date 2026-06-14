@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.12](https://github.com/kkzakaria/stalmail/compare/v0.1.11...v0.1.12) (2026-06-14)
+
+Premier écran fonctionnel du webmail : navigation des dossiers et liste de mails virtualisée, en lecture seule (BFF JMAP).
+
+### Features
+
+* **Mail List (Plan 4a)** — layout 3 colonnes (sidebar | liste | reader), sidebar des dossiers JMAP avec compteurs de non-lus, liste de threads **virtualisée** (fenêtrage à index absolu, mémoire bornée), lignes fidèles à la maquette (avatars colorés, point non-lu, favoris ★, pièces jointes 📎, sujet + aperçu tronqué, dates FR Aujourd'hui/Hier/jour/JJ‑MM), thème clair/sombre et i18n fr/en. Lecture seule — actions, lecteur et composition arrivent aux Plans 4b/4c. ([#32](https://github.com/kkzakaria/stalmail/issues/32)) ([c02b8b5](https://github.com/kkzakaria/stalmail/commit/c02b8b59a91598a427b34efb10b10f7f71c19862))
+
+### Architecture
+
+* BFF JMAP utilisateur (Bearer) : server functions `mailboxesFn` / `emailListFn` (batch `Email/query` + `Email/get` + `Thread/get`), intégration SSR de TanStack Query, fenêtrage `useQueries` + `@tanstack/react-virtual`. Mapping des dossiers conforme RFC 8621 (rôle `junk` pour les Indésirables), filtre Favoris aligné Gmail.
+
 ## [0.1.11](https://github.com/kkzakaria/stalmail/compare/v0.1.10...v0.1.11) (2026-06-11)
 
 
