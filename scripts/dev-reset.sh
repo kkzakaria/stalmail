@@ -14,7 +14,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${HERE}"
 COMPOSE="docker compose -f compose.dev.yml"
-SETUP_URL="http://localhost:3000/setup"
+SETUP_URL="http://localhost:3443/setup"
 
 echo "==> Tearing down the dev stack and removing its volumes…"
 ${COMPOSE} down -v
@@ -42,7 +42,7 @@ ${COMPOSE} ps
 echo
 if [ -n "${ready}" ]; then
   echo "✅ Fresh bootstrap ready."
-  echo "   Open  https://localhost/setup   (Caddy, self-signed TLS)"
+  echo "   Open  https://localhost:8443/setup   (Caddy, self-signed TLS)"
   echo "   or    ${SETUP_URL}   (app direct)"
 else
   echo "⚠  The wizard did not answer within the timeout — check the logs:"
