@@ -37,7 +37,7 @@ describe('mapMailboxes', () => {
 const MBX: AppMailbox[] = [
   { id: 'mi', name: 'In', role: 'inbox', unreadEmails: 0, totalEmails: 0, sortOrder: 1 },
   { id: 'mt', name: 'Trash', role: 'trash', unreadEmails: 0, totalEmails: 0, sortOrder: 2 },
-  { id: 'ms', name: 'Spam', role: 'spam', unreadEmails: 0, totalEmails: 0, sortOrder: 3 },
+  { id: 'ms', name: 'Junk', role: 'junk', unreadEmails: 0, totalEmails: 0, sortOrder: 3 },
 ]
 
 describe('resolveFilter', () => {
@@ -63,8 +63,17 @@ describe('resolveFilter', () => {
     expect(resolveFilter('starred', [])).toEqual({ hasKeyword: '$flagged' })
   })
 
-  it('dossier inconnu (rôle absent) → lève une erreur', () => {
-    expect(() => resolveFilter('sent', MBX)).toThrow(/Unknown mail folder/)
+  it("'spam' (URL) → mailbox de role 'junk' (RFC 8621, pas de role \"spam\")", () => {
+    expect(resolveFilter('spam', MBX)).toEqual({ inMailbox: 'ms' })
+  })
+
+  it('dossier connu mais mailbox non provisionnée → filtre match-none (liste vide, pas erreur)', () => {
+    // 'sent' est connu mais absent de MBX → on n'erre pas, on renvoie un filtre vide
+    expect(resolveFilter('sent', MBX)).toEqual({ before: '1970-01-02T00:00:00Z' })
+  })
+
+  it('nom de dossier réellement inconnu → lève une erreur', () => {
+    expect(() => resolveFilter('bogus', MBX)).toThrow(/Unknown mail folder/)
   })
 })
 

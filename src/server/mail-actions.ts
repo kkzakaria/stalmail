@@ -59,22 +59,39 @@ function mailboxIdByRole(mailboxes: AppMailbox[], role: string): string | undefi
   return mailboxes.find((m) => m.role === role)?.id
 }
 
-// Pur : dossier URL → filtre JMAP. 'starred' exclut corbeille/spam (R5, aligné Gmail).
+// Nom de dossier URL → role de mailbox JMAP (RFC 8621). Le dossier « Indésirables »
+// (URL 'spam') correspond au role **'junk'** : il n'existe pas de role "spam" en RFC 8621.
+const ROLE_BY_FOLDER = new Map<string, string>([
+  ['inbox', 'inbox'],
+  ['sent', 'sent'],
+  ['drafts', 'drafts'],
+  ['archive', 'archive'],
+  ['spam', 'junk'],
+  ['trash', 'trash'],
+])
+
+// Filtre ne correspondant à aucun email — pour un dossier connu dont la mailbox n'a pas
+// été provisionnée par Stalwart (ex. Archivés absent) : on affiche « Aucun message » plutôt qu'une erreur.
+const MATCH_NONE: JmapFilter = { before: '1970-01-02T00:00:00Z' }
+
+// Pur : dossier URL → filtre JMAP. 'starred' exclut corbeille/indésirables (R5, aligné Gmail).
 export function resolveFilter(folder: string, mailboxes: AppMailbox[]): JmapFilter {
   if (folder === 'starred') {
     const exclude: JmapFilter[] = []
     const trash = mailboxIdByRole(mailboxes, 'trash')
-    const spam = mailboxIdByRole(mailboxes, 'spam')
+    const junk = mailboxIdByRole(mailboxes, 'junk')
     if (trash) exclude.push({ inMailbox: trash })
-    if (spam) exclude.push({ inMailbox: spam })
+    if (junk) exclude.push({ inMailbox: junk })
     if (exclude.length === 0) return { hasKeyword: '$flagged' }
     return {
       operator: 'AND',
       conditions: [{ hasKeyword: '$flagged' }, { operator: 'NOT', conditions: exclude }],
     }
   }
-  const id = mailboxIdByRole(mailboxes, folder)
-  if (id === undefined) throw new Error(`Unknown mail folder: ${folder}`)
+  const role = ROLE_BY_FOLDER.get(folder)
+  if (role === undefined) throw new Error(`Unknown mail folder: ${folder}`)
+  const id = mailboxIdByRole(mailboxes, role)
+  if (id === undefined) return MATCH_NONE
   return { inMailbox: id }
 }
 
