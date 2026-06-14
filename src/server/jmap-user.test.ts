@@ -34,7 +34,7 @@ describe('jmapUserCall', () => {
     expect(res).toEqual([['Mailbox/get', { list: [] }, '0']])
   })
 
-  it('token null → throw redirect /login', async () => {
+  it('token null → throw redirect /login (sans appel sortant)', async () => {
     vi.mocked(withFreshAccessToken).mockResolvedValue(null)
     try {
       await jmapUserCall('sid-1', methodCalls as never)
@@ -42,6 +42,7 @@ describe('jmapUserCall', () => {
     } catch (err) {
       expect(isRedirect(err)).toBe(true)
     }
+    expect(stalwartUserFetch).not.toHaveBeenCalled()
   })
 
   it('HTTP non-2xx → JmapUserError', async () => {
@@ -62,5 +63,16 @@ describe('jmapUserCall', () => {
       name: 'JmapUserError',
       type: 'serverFail',
     })
+  })
+
+  it('payload malformé (non-JSON ou sans methodResponses) → JmapUserError', async () => {
+    vi.mocked(withFreshAccessToken).mockResolvedValue('tok')
+    vi.mocked(stalwartUserFetch).mockResolvedValue(new Response('not json', { status: 200 }))
+    await expect(jmapUserCall('sid-1', methodCalls as never)).rejects.toBeInstanceOf(JmapUserError)
+
+    vi.mocked(stalwartUserFetch).mockResolvedValue(
+      new Response(JSON.stringify({ unexpected: true }), { status: 200 }),
+    )
+    await expect(jmapUserCall('sid-1', methodCalls as never)).rejects.toBeInstanceOf(JmapUserError)
   })
 })

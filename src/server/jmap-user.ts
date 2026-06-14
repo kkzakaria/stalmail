@@ -30,8 +30,16 @@ export async function jmapUserCall(
   })
   if (!res.ok) throw new JmapUserError(`jmap request failed: HTTP ${res.status}`)
 
-  const body = (await res.json()) as { methodResponses?: JmapMethodResponse[] }
-  const responses = body.methodResponses ?? []
+  let body: { methodResponses?: JmapMethodResponse[] }
+  try {
+    body = (await res.json()) as { methodResponses?: JmapMethodResponse[] }
+  } catch {
+    throw new JmapUserError(`jmap response: non-JSON body (status ${res.status})`)
+  }
+  if (!Array.isArray(body.methodResponses)) {
+    throw new JmapUserError('jmap response missing methodResponses', undefined, body)
+  }
+  const responses = body.methodResponses
   for (const [name, args] of responses) {
     if (name === 'error') {
       const e = args as { type?: string; description?: string }

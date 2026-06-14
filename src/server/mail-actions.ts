@@ -29,6 +29,18 @@ export function mapMailboxes(responses: JmapMethodResponse[]): AppMailbox[] {
     .sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
+// resolveFilter n'a besoin que de { id, role }. Pour la résolution de filtre on ne
+// requête que ['id','role'] : on extrait donc une vue minimale plutôt que de fabriquer
+// des AppMailbox partiels (name/sortOrder undefined → tri NaN) via mapMailboxes.
+export type MailboxRef = { id: string; role: string | null }
+
+export function mailboxRefs(responses: JmapMethodResponse[]): MailboxRef[] {
+  const get = responses.find(([name]) => name === 'Mailbox/get')
+  const raw = get?.[1].list
+  const list = Array.isArray(raw) ? (raw as { id: string; role?: string | null }[]) : []
+  return list.map((m) => ({ id: m.id, role: m.role ?? null }))
+}
+
 // Récupère sid + accountId depuis la session (server-only).
 async function requireSession(): Promise<{ sid: string; accountId: string }> {
   const { readSid } = await import('./session-cookie')
@@ -55,7 +67,7 @@ export const mailboxesFn = createServerFn({ method: 'GET' }).handler(async (): P
 
 type JmapFilter = Record<string, unknown>
 
-function mailboxIdByRole(mailboxes: AppMailbox[], role: string): string | undefined {
+function mailboxIdByRole(mailboxes: MailboxRef[], role: string): string | undefined {
   return mailboxes.find((m) => m.role === role)?.id
 }
 
@@ -75,7 +87,7 @@ const ROLE_BY_FOLDER = new Map<string, string>([
 const MATCH_NONE: JmapFilter = { before: '1970-01-02T00:00:00Z' }
 
 // Pur : dossier URL → filtre JMAP. 'starred' exclut corbeille/indésirables (R5, aligné Gmail).
-export function resolveFilter(folder: string, mailboxes: AppMailbox[]): JmapFilter {
+export function resolveFilter(folder: string, mailboxes: MailboxRef[]): JmapFilter {
   if (folder === 'starred') {
     const exclude: JmapFilter[] = []
     const trash = mailboxIdByRole(mailboxes, 'trash')
@@ -199,12 +211,12 @@ export const emailListFn = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<EmailListPage> => {
     const { jmapUserCall } = await import('./jmap-user')
     const { sid, accountId } = await requireSession()
-    // Les ids trash/spam (pour 'starred') et l'id du dossier viennent de Mailbox/get.
+    // Les ids trash/junk (pour 'starred') et l'id du dossier viennent de Mailbox/get.
+    // Vue minimale { id, role } : on ne requête et ne mappe que ce dont resolveFilter a besoin.
     const mbxResponses = await jmapUserCall(sid, [
       ['Mailbox/get', { accountId, ids: null, properties: ['id', 'role'] }, '0'],
     ])
-    const mailboxes = mapMailboxes(mbxResponses)
-    const filter = resolveFilter(data.folder, mailboxes)
+    const filter = resolveFilter(data.folder, mailboxRefs(mbxResponses))
     const responses = await jmapUserCall(sid, buildListMethodCalls(accountId, filter, data.position, data.limit))
     return parseListPage(responses, data.position)
   })
