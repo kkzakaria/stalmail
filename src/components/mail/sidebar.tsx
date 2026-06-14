@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { Icon } from './mail-icons'
+import { Avatar, Icon } from './mail-icons'
 import type { AppMailbox } from '../../server/mail-types'
 
 // Ordre figé sur la maquette : virtuels intercalés après inbox (spec §2.2).
@@ -30,11 +30,11 @@ export function AppSidebar({
 
   return (
     <nav className="nav">
-      <div className="nav-head">
+      {/* account-wrap (pas nav-head, réservé au logo « brand » qu'on ne rend pas) : évite
+          le padding 16px superflu au-dessus du compte. */}
+      <div className="account-wrap">
         <div className="account">
-          <span className="avatar" aria-hidden="true">
-            {accountName.slice(0, 1).toUpperCase()}
-          </span>
+          <Avatar name={accountName} email={accountName} size={32} />
           <span className="meta">
             {/* La session n'expose que l'email (= username JMAP) ; pas de displayName distinct
                 avant le Plan 4b. Les deux lignes affichent donc volontairement accountName. */}
