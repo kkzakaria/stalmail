@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
@@ -24,6 +24,14 @@ beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 400 })
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 600 })
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 400 })
+})
+
+// Restaure les overrides globaux pour ne pas polluer les autres suites de tests.
+afterAll(() => {
+  delete (globalThis as Record<string, unknown>).ResizeObserver
+  for (const p of ['getBoundingClientRect', 'offsetHeight', 'offsetWidth', 'clientHeight', 'clientWidth']) {
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)[p]
+  }
 })
 
 function wrap(ui: React.ReactNode) {
