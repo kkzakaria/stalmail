@@ -410,6 +410,7 @@ export function parseThreadDetail(
 
   return {
     threadId,
+    // sujet du fil = sujet du 1er message chronologique (ordre emailIds)
     subject: messages[0]?.subject ?? "",
     messages,
     emailIds,

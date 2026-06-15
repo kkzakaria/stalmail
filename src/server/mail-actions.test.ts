@@ -410,5 +410,9 @@ describe("buildReadThreadCalls", () => {
       fetchHTMLBodyValues: true,
       maxBodyValueBytes: 256000,
     })
+    const emailGet = calls[1][1] as { properties: string[] }
+    expect(emailGet.properties).toContain("keywords")
+    expect(emailGet.properties).toContain("bodyValues")
+    expect(emailGet.properties).not.toContain("mailboxIds")
   })
 })
