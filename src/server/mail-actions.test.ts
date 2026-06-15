@@ -6,6 +6,7 @@ import {
   parseListPage,
   parseThreadDetail,
   buildReadThreadCalls,
+  buildSetFlagsCall,
 } from "./mail-actions"
 import type { JmapMethodResponse } from "./jmap"
 import type { AppMailbox } from "./mail-types"
@@ -391,6 +392,36 @@ describe("parseThreadDetail", () => {
       starred: false,
       unread: false,
     })
+  })
+})
+
+describe("buildSetFlagsCall", () => {
+  it("positionne le keyword à true", () => {
+    expect(buildSetFlagsCall("acc", ["e1", "e2"], "$seen", true)).toEqual([
+      [
+        "Email/set",
+        {
+          accountId: "acc",
+          update: {
+            e1: { "keywords/$seen": true },
+            e2: { "keywords/$seen": true },
+          },
+        },
+        "0",
+      ],
+    ])
+  })
+  it("retire le keyword avec null quand value=false", () => {
+    expect(buildSetFlagsCall("acc", ["e1"], "$flagged", false)).toEqual([
+      [
+        "Email/set",
+        {
+          accountId: "acc",
+          update: { e1: { "keywords/$flagged": null } },
+        },
+        "0",
+      ],
+    ])
   })
 })
 

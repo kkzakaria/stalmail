@@ -419,6 +419,47 @@ export function parseThreadDetail(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Task 4 — setFlagsFn (favori / lu-non-lu via keywords)
+// ---------------------------------------------------------------------------
+
+type MailFlag = "$seen" | "$flagged"
+
+// Pur : Email/set qui patch un keyword sur plusieurs emails (true=ajoute, false=retire via null).
+export function buildSetFlagsCall(
+  accountId: string,
+  emailIds: string[],
+  flag: MailFlag,
+  value: boolean
+): JmapMethodCall[] {
+  const patch = value ? true : null
+  const update: Record<string, Record<string, true | null>> = {}
+  for (const id of emailIds) update[id] = { [`keywords/${flag}`]: patch }
+  return [["Email/set", { accountId, update }, "0"]]
+}
+
+export const emailIdsSchema = z.array(z.string().min(1).max(64)).min(1).max(500)
+
+const setFlagsSchema = z.object({
+  emailIds: emailIdsSchema,
+  flag: z.enum(["$seen", "$flagged"]),
+  value: z.boolean(),
+})
+
+export const setFlagsFn = createServerFn({ method: "POST" })
+  .validator((d: { emailIds: string[]; flag: MailFlag; value: boolean }) =>
+    setFlagsSchema.parse(d)
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { jmapUserCall } = await import("./jmap-user")
+    const { sid, accountId } = await requireSession()
+    await jmapUserCall(
+      sid,
+      buildSetFlagsCall(accountId, data.emailIds, data.flag, data.value)
+    )
+    return { ok: true }
+  })
+
 const readThreadSchema = z.object({ threadId: z.string().min(1).max(64) })
 
 // READ-ONLY (invariant design §2.5) : aucun Email/set ici.
