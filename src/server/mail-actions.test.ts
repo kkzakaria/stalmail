@@ -7,6 +7,9 @@ import {
   parseThreadDetail,
   buildReadThreadCalls,
   buildSetFlagsCall,
+  buildMovePatch,
+  parseEmailMailboxes,
+  resolveTargetMailbox,
 } from "./mail-actions"
 import type { JmapMethodResponse } from "./jmap"
 import type { AppMailbox } from "./mail-types"
@@ -445,5 +448,94 @@ describe("buildReadThreadCalls", () => {
     expect(emailGet.properties).toContain("keywords")
     expect(emailGet.properties).toContain("bodyValues")
     expect(emailGet.properties).not.toContain("mailboxIds")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 5 — buildMovePatch / parseEmailMailboxes / resolveTargetMailbox
+// ---------------------------------------------------------------------------
+
+const MOVE_MBX = [
+  { id: "mi", role: "inbox" },
+  { id: "ma", role: "archive" },
+  { id: "lbl", role: null }, // label (4d) — doit être préservé
+]
+
+describe("buildMovePatch", () => {
+  it("retire les dossiers système actuels et ajoute la cible (patch ciblé)", () => {
+    expect(
+      buildMovePatch("acc", [{ id: "e1", mailboxIds: ["mi"] }], MOVE_MBX, "ma")
+    ).toEqual([
+      [
+        "Email/set",
+        {
+          accountId: "acc",
+          update: { e1: { "mailboxIds/ma": true, "mailboxIds/mi": null } },
+        },
+        "0",
+      ],
+    ])
+  })
+  it("préserve les mailboxes sans role (labels) — ne les met pas à null", () => {
+    const out = buildMovePatch(
+      "acc",
+      [{ id: "e1", mailboxIds: ["mi", "lbl"] }],
+      MOVE_MBX,
+      "ma"
+    )
+    const patch = (
+      out[0][1] as { update: Record<string, Record<string, unknown>> }
+    ).update.e1
+    expect(patch).toEqual({ "mailboxIds/ma": true, "mailboxIds/mi": null })
+    expect(patch["mailboxIds/lbl"]).toBeUndefined()
+  })
+  it("idempotent si déjà dans la cible", () => {
+    expect(
+      buildMovePatch("acc", [{ id: "e1", mailboxIds: ["ma"] }], MOVE_MBX, "ma")
+    ).toEqual([
+      [
+        "Email/set",
+        { accountId: "acc", update: { e1: { "mailboxIds/ma": true } } },
+        "0",
+      ],
+    ])
+  })
+})
+
+describe("parseEmailMailboxes", () => {
+  it("extrait {id, mailboxIds[]} depuis Email/get", () => {
+    const responses: JmapMethodResponse[] = [
+      [
+        "Email/get",
+        { list: [{ id: "e1", mailboxIds: { mi: true, lbl: true } }] },
+        "0",
+      ],
+    ]
+    expect(parseEmailMailboxes(responses)).toEqual([
+      { id: "e1", mailboxIds: ["mi", "lbl"] },
+    ])
+  })
+  it("résiste à mailboxIds absent", () => {
+    expect(
+      parseEmailMailboxes([["Email/get", { list: [{ id: "e1" }] }, "0"]])
+    ).toEqual([{ id: "e1", mailboxIds: [] }])
+  })
+})
+
+describe("resolveTargetMailbox", () => {
+  it("résout 'archive' → id du role archive", () => {
+    expect(
+      resolveTargetMailbox("archive", [{ id: "ma", role: "archive" }])
+    ).toBe("ma")
+  })
+  it("'spam' (URL) → role junk", () => {
+    expect(resolveTargetMailbox("spam", [{ id: "mj", role: "junk" }])).toBe(
+      "mj"
+    )
+  })
+  it("role absent → undefined", () => {
+    expect(
+      resolveTargetMailbox("trash", [{ id: "mi", role: "inbox" }])
+    ).toBeUndefined()
   })
 })

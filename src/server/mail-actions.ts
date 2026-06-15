@@ -460,6 +460,109 @@ export const setFlagsFn = createServerFn({ method: "POST" })
     return { ok: true }
   })
 
+// ---------------------------------------------------------------------------
+// Task 5 — moveThreadFn (archiver / corbeille / spam)
+// ---------------------------------------------------------------------------
+
+export type MoveTarget = "archive" | "trash" | "junk" | "inbox"
+
+// La cible 'spam' de l'UI = role 'junk' ; les autres targets = role homonyme.
+const ROLE_BY_TARGET: Record<MoveTarget, string> = {
+  archive: "archive",
+  trash: "trash",
+  junk: "junk",
+  inbox: "inbox",
+}
+
+// Pur : target (UI) → mailboxId, résolu côté serveur depuis Mailbox/get. Accepte 'spam' alias de 'junk'.
+export function resolveTargetMailbox(
+  target: MoveTarget | "spam",
+  mailboxes: MailboxRef[]
+): string | undefined {
+  const t: MoveTarget = target === "spam" ? "junk" : target
+  return mailboxIdByRole(mailboxes, ROLE_BY_TARGET[t])
+}
+
+// Pur : extrait {id, mailboxIds[]} depuis les réponses Email/get.
+export function parseEmailMailboxes(
+  responses: JmapMethodResponse[]
+): { id: string; mailboxIds: string[] }[] {
+  const get = responses.find(([name]) => name === "Email/get")
+  const raw = get?.[1].list
+  const list: { id: string; mailboxIds?: Record<string, boolean> }[] =
+    Array.isArray(raw)
+      ? (raw as { id: string; mailboxIds?: Record<string, boolean> }[])
+      : []
+  return list.map((e) => ({
+    id: e.id,
+    mailboxIds: e.mailboxIds ? Object.keys(e.mailboxIds) : [],
+  }))
+}
+
+// Pur : PATCH CIBLÉ (F3). Retire chaque email de ses dossiers SYSTÈME actuels (role != null)
+// et l'ajoute à la cible ; PRÉSERVE les mailboxes sans role (futurs labels, 4d). Remplace
+// l'ancienne approche « écraser mailboxIds » qui détruisait labels/multi-dossiers.
+export function buildMovePatch(
+  accountId: string,
+  emails: { id: string; mailboxIds: string[] }[],
+  mailboxes: MailboxRef[],
+  targetId: string
+): JmapMethodCall[] {
+  const roleIds = new Set(
+    mailboxes.filter((m) => m.role !== null).map((m) => m.id)
+  )
+  const update: Record<string, Record<string, true | null>> = {}
+  for (const e of emails) {
+    const patch: Record<string, true | null> = {
+      [`mailboxIds/${targetId}`]: true,
+    }
+    for (const mid of e.mailboxIds) {
+      if (mid !== targetId && roleIds.has(mid))
+        patch[`mailboxIds/${mid}`] = null
+    }
+    update[e.id] = patch
+  }
+  return [["Email/set", { accountId, update }, "0"]]
+}
+
+const moveSchema = z.object({
+  emailIds: emailIdsSchema,
+  to: z.enum(["archive", "trash", "junk", "inbox", "spam"]),
+})
+
+export const moveThreadFn = createServerFn({ method: "POST" })
+  .validator((d: { emailIds: string[]; to: MoveTarget | "spam" }) =>
+    moveSchema.parse(d)
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { jmapUserCall } = await import("./jmap-user")
+    const { sid, accountId } = await requireSession()
+    // 1er aller-retour (2 reads batchés) : rôles des mailboxes + mailboxIds actuels des emails.
+    const reads = await jmapUserCall(sid, [
+      [
+        "Mailbox/get",
+        { accountId, ids: null, properties: ["id", "role"] },
+        "0",
+      ],
+      [
+        "Email/get",
+        {
+          accountId,
+          ids: data.emailIds,
+          properties: ["id", "mailboxIds"],
+        },
+        "1",
+      ],
+    ])
+    const refs = mailboxRefs(reads)
+    const targetId = resolveTargetMailbox(data.to, refs)
+    if (targetId === undefined)
+      throw new Error("move: target mailbox unavailable") // message générique (F4)
+    const emails = parseEmailMailboxes(reads)
+    await jmapUserCall(sid, buildMovePatch(accountId, emails, refs, targetId))
+    return { ok: true }
+  })
+
 const readThreadSchema = z.object({ threadId: z.string().min(1).max(64) })
 
 // READ-ONLY (invariant design §2.5) : aucun Email/set ici.
