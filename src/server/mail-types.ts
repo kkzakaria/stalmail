@@ -9,7 +9,7 @@ export interface AppMailbox {
 }
 
 // Dossiers virtuels sans mailbox JMAP réelle.
-export type VirtualFolder = 'starred' | 'snoozed'
+export type VirtualFolder = "starred" | "snoozed"
 
 export interface MailAddress {
   name: string
@@ -36,4 +36,40 @@ export interface EmailListPage {
   total: number
   position: number
   queryState?: string // réservé pour Email/queryChanges (Plan 4d)
+}
+
+export interface MailBodyPart {
+  partId?: string
+  type: string // 'text/plain' | 'text/html' | …
+  value?: string // résolu depuis bodyValues
+}
+
+export interface AppAttachment {
+  blobId: string
+  name: string
+  type: string
+  size: number
+}
+
+export interface AppMessage {
+  id: string
+  from: MailAddress[]
+  to: MailAddress[]
+  cc: MailAddress[]
+  subject: string
+  receivedAt: string // ISO 8601
+  unread: boolean
+  hasAttachment: boolean
+  textBody: string | null
+  htmlBody: string | null
+  attachments: AppAttachment[]
+}
+
+export interface AppThreadDetail {
+  threadId: string
+  subject: string
+  messages: AppMessage[] // ordre chronologique (selon emailIds du Thread)
+  emailIds: string[] // pour les actions au niveau fil
+  starred: boolean // agrégat ($flagged sur au moins un message)
+  unread: boolean // agrégat (au moins un message non lu)
 }
