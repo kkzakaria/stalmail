@@ -20,7 +20,9 @@ export const Route = createFileRoute("/mail/$folder")({
   validateSearch: (search: Record<string, unknown>): { thread?: string } => ({
     // F7 : borne la longueur (défense en profondeur ; le serveur re-valide via readThreadSchema.max(64)).
     thread:
-      typeof search.thread === "string" && search.thread.length <= 64
+      typeof search.thread === "string" &&
+      search.thread.length > 0 &&
+      search.thread.length <= 64
         ? search.thread
         : undefined,
   }),
@@ -123,12 +125,21 @@ function ReaderPane({
   const markReadRef = useRef(actions.markRead)
   markReadRef.current = actions.markRead
 
+  // Garde : mémorise le dernier threadId auto-lu pour éviter le double-appel StrictMode/re-render.
+  const autoReadRef = useRef<string | null>(null)
+
   // Auto-marquage lu à l'ouverture d'un fil non lu (design §2.1) — via setFlags (POST), pas dans readThreadFn.
   useEffect(() => {
-    if (detail && detail.unread && detail.emailIds.length > 0) {
+    if (
+      detail &&
+      detail.unread &&
+      detail.emailIds.length > 0 &&
+      autoReadRef.current !== detail.threadId
+    ) {
+      autoReadRef.current = detail.threadId
       void markReadRef.current(true)
     }
-  }, [detail?.threadId, detail?.unread])
+  }, [detail?.threadId, detail?.unread, detail?.emailIds.length])
 
   return (
     <Reader

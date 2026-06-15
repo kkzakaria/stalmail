@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { MessageItem } from "./message-item"
 import type { AppThreadDetail } from "../../server/mail-types"
+import type { MoveTo } from "./use-thread-actions"
 
 export interface ReaderProps {
   folder: string
@@ -10,7 +11,7 @@ export interface ReaderProps {
   isError: boolean
   star: (value: boolean) => void
   markRead: (value: boolean) => void
-  move: (to: "archive" | "trash" | "junk" | "inbox" | "spam") => void
+  move: (to: MoveTo) => void
   onBack: () => void
 }
 

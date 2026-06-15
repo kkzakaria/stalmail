@@ -70,7 +70,11 @@ vi.mock("../../server/mail-actions", async (importActual) => ({
 // eslint-disable-next-line import/first
 import { MailPage } from "./$folder"
 // eslint-disable-next-line import/first
-import { emailListFn } from "../../server/mail-actions"
+import {
+  emailListFn,
+  setFlagsFn,
+  readThreadFn,
+} from "../../server/mail-actions"
 
 beforeAll(() => {
   // @tanstack/react-virtual needs ResizeObserver + measurable elements in jsdom.
@@ -168,6 +172,25 @@ describe("MailPage — reader", () => {
     )
     await waitFor(() =>
       expect(screen.getByText("Sujet ouvert")).toBeInTheDocument()
+    )
+  })
+
+  it("auto-marque lu un fil unread à l'ouverture", async () => {
+    vi.mocked(readThreadFn).mockResolvedValueOnce({ ...DETAIL, unread: true })
+    wrap(
+      <MailPage
+        folder="inbox"
+        mailboxes={MBX}
+        accountName="Moi"
+        threadId="t1"
+      />
+    )
+    await waitFor(() =>
+      expect(setFlagsFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ flag: "$seen", value: true }),
+        })
+      )
     )
   })
 })

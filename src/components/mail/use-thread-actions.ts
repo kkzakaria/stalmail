@@ -20,7 +20,7 @@ export function patchThreadInPages(
   }
 }
 
-type MoveTo = "archive" | "trash" | "junk" | "inbox" | "spam"
+export type MoveTo = "archive" | "trash" | "junk" | "inbox" | "spam"
 
 export interface ThreadActions {
   star: (value: boolean) => Promise<void>
