@@ -52,6 +52,8 @@ moveThreadFn({ emailIds: string[], to: 'archive' | 'trash' | 'junk' | 'inbox' })
 
 `to` étant un enum fermé résolu **côté serveur** en mailboxId, le client ne peut pas écrire dans une mailbox arbitraire. `flag` est aussi un enum fermé (`$seen` | `$flagged`).
 
+> **Plafond de lot (anti-DoS, A04)** : `emailIds` est borné **en cardinalité** autant qu'en longueur — `z.array(z.string().min(1).max(64)).min(1).max(500)` — pour éviter un `Email/set` géant (cf. `limit ≤ 200` de `emailListFn` en 4a).
+
 > **Note `keywords/$flag`** : JMAP (RFC 8621 §4.6) accepte le patch par référence `keywords/$seen: true|null`. Mettre `null` retire le keyword. On utilise `value ? true : null`.
 
 > **Note `mailboxIds`** : on **remplace** l'ensemble des mailboxIds par `{ [targetId]: true }` (déplacement, pas copie). Suffisant pour la 4b où un email n'est dans qu'un dossier role à la fois.
@@ -72,6 +74,8 @@ readThreadFn({ threadId: string }) → AppThreadDetail
 
 Un seul aller-retour réseau (Thread/get + Email/get chaînés par référence). `maxBodyValueBytes` borne le poids des corps. Le dernier message est ouvert par défaut, les précédents repliés (fidèle à la maquette `MessageItem`).
 
+> **Invariant (read-only)** : `readThreadFn` est un **GET strictement en lecture** — aucun `Email/set` dans ce handler. L'auto-marquage lu (§2.1) n'y est PAS fait : il passe par `setFlagsFn` (POST) déclenché côté client après ouverture. Un GET ne doit jamais muter `$seen`.
+
 ### 2.6 Réconciliation du cache (hybride)
 
 Le fenêtrage 4a utilise des pages offset keyées `['threads', folder, page]`. Stratégie :
@@ -87,20 +91,26 @@ Le fenêtrage 4a utilise des pages offset keyées `['threads', folder, page]`. S
 
 ### 2.7 Rendu du corps de l'email (sécurité)
 
-Le HTML d'un email est du **contenu non fiable** (XSS, traqueurs, CSS qui fuit). Stratégie « texte d'abord, sinon iframe sandbox » :
+Le HTML d'un email est du **contenu non fiable** (XSS, traqueurs, CSS qui fuit). Stratégie « texte d'abord, sinon iframe sandbox **opaque** + CSP » — l'anti-XSS repose sur **deux barrières indépendantes** (sandbox *et* CSP), jamais sur la seule neutralisation d'images.
 
 1. S'il existe un `textBody` non vide → l'afficher en clair (`<p>` par paragraphe / `white-space: pre-wrap`). **Cas par défaut, le plus sûr.**
-2. Sinon, rendre le `htmlBody` dans une **`<iframe sandbox srcdoc=…>`** **sans `allow-scripts`** ni `allow-same-origin`. Le contenu est totalement isolé du DOM de l'app (pas d'accès cookies/JS).
-3. **Images distantes bloquées par défaut** (anti-traceur) : avant injection, neutraliser les `src`/`background` distants. Bandeau « Afficher les images » → réinjecte le HTML original.
+2. Sinon, rendre le `htmlBody` dans une **`<iframe srcdoc=…>` avec `sandbox=""` (aucun flag)** : origine **opaque**, ni script, ni same-origin, ni formulaire, ni navigation top, ni popup. Contenu totalement isolé du DOM et des cookies de l'app.
+   **On n'utilise JAMAIS `allow-same-origin`** : même sans `allow-scripts`, il rétablit l'origine réelle (exfiltration CSS, `<meta refresh>`, `<form>`) et constitue le combo classique de contournement du sandbox.
+3. **CSP du `srcdoc`** (défense en profondeur, indépendante du sandbox) : préfixer le document d'une balise
+   `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'">`.
+   Bloque par construction CSS/fonts distants, `@import`, `url()` réseau, formulaires et `meta refresh` vers le réseau.
+4. **Images distantes bloquées par défaut** — contrôle **anti-traceur (vie privée)**, *pas* anti-XSS (l'anti-XSS = sandbox + CSP). Avant injection, neutraliser les `src`/`background` distants ; bandeau « Afficher les images » → réinjecte le HTML original. `data:`/`cid:` autorisés **uniquement** en `img-src` (cf. CSP), jamais sur des éléments actifs.
+5. **Liens** : pré-traiter tous les `<a>` → ajout de `rel="noopener noreferrer"`, n'autoriser que les schémas `https:` / `mailto:` (neutraliser `javascript:`, `data:`, `vbscript:` sur `href`). Pas de `allow-popups`/`allow-top-navigation` sur l'iframe.
 
 Module pur `email-body.ts` (testable sans DOM) :
 ```
 pickBody(detail) → { kind: 'text' | 'html', content: string }   // texte prioritaire
-blockRemoteImages(html) → string                                 // src distants neutralisés
+blockRemoteImages(html) → string                                 // anti-traceur : src/background distants neutralisés
+sanitizeLinks(html) → string                                     // <a> : rel noopener noreferrer + schémas https/mailto
+buildFrameDoc(html, { showImages }) → string                     // assemble le srcdoc : <meta CSP> + sanitizeLinks + (blockRemoteImages si !showImages)
 ```
-La hauteur de l'iframe s'ajuste au contenu (message `resize` via `postMessage` n'étant pas dispo sans script ; on utilise une hauteur calculée au `load` sur `iframe.contentDocument.body.scrollHeight`, possible car `srcdoc` est same-origin pour le parent en lecture seule — **à vérifier en intégration** ; repli : hauteur min + scroll interne).
 
-> **Risque iframe height** : sans `allow-same-origin`, le parent ne peut pas lire `contentDocument`. Repli retenu : iframe à hauteur fixe raisonnable avec scroll interne, OU `allow-same-origin` SANS `allow-scripts` (autorise la lecture de hauteur sans exécution JS). Décision : **`sandbox` avec uniquement `allow-same-origin`** (pas `allow-scripts`) — permet la mesure de hauteur sans surface XSS exécutable. À confirmer au moment du plan d'implémentation.
+**Hauteur de l'iframe — décision verrouillée :** avec `sandbox=""` le parent ne peut pas lire `contentDocument`. On retient **une hauteur fixe raisonnable + scroll interne** (option zéro-script, zéro-surface). On **n'ouvre pas** `allow-same-origin` pour mesurer la hauteur. (Si une auto-hauteur devenait indispensable plus tard, la seule voie acceptable serait `sandbox="allow-scripts"` + un script de mesure **maison** renvoyant la hauteur par `postMessage`, en origine opaque — **jamais** `allow-same-origin`.)
 
 ## 3. Structure des fichiers
 
@@ -113,7 +123,7 @@ src/server/
 src/components/mail/
   reader.tsx           [NEW] Reader (reader-bar + thread-head + liste MessageItem + reply-bar disabled)
   message-item.tsx     [NEW] MessageItem (en-tête repliable, corps, pièces jointes)
-  email-body.ts        [NEW] pickBody, blockRemoteImages (purs)
+  email-body.ts        [NEW] pickBody, blockRemoteImages, sanitizeLinks, buildFrameDoc (purs) — §2.7
   use-thread-actions.ts[NEW] hook mutations optimistes (star, read, move) + réconciliation cache
   mail-icons.tsx       [MOD] + icônes manquantes (archive, trash2, mailOpen, moreV, chevLeft,
                              spam, reply, replyAll, forward, download, chevDown, x, clock, pin, send)
@@ -173,7 +183,7 @@ Toutes via `createServerFn`, `requireSession()` (déjà en 4a), `jmapUserCall`. 
 - `setFlagsFn({ emailIds, flag, value })` (POST) → `buildSetFlagsCall(accountId, emailIds, flag, value)`
 - `moveThreadFn({ emailIds, to })` (POST) → résout `to` via `Mailbox/get` (réutilise `mailboxRefs` + `mailboxIdByRole`), puis `buildMoveCall(accountId, emailIds, targetId)`
 
-Validation Zod : `emailIds` = tableau non vide de strings ≤ 64 ; `flag` ∈ {`$seen`,`$flagged`} ; `to` ∈ {`archive`,`trash`,`junk`,`inbox`} ; `threadId` string ≤ 64.
+Validation Zod : `emailIds` = `z.array(z.string().min(1).max(64)).min(1).max(500)` (longueur **et** cardinalité bornées, cf. §2.4) ; `flag` ∈ {`$seen`,`$flagged`} ; `to` ∈ {`archive`,`trash`,`junk`,`inbox`} ; `threadId` string ≤ 64.
 
 ## 6. Composants UI
 
@@ -188,7 +198,7 @@ Validation Zod : `emailIds` = tableau non vide de strings ≤ 64 ; `flag` ∈ {`
 
 ### 6.2 MessageItem (`message-item.tsx`)
 - En-tête repliable : avatar, expéditeur, destinataires (À/Cc dépliables), date/heure.
-- Corps : via `email-body.ts` (texte ou iframe sandbox), bandeau images si HTML distant.
+- Corps : via `email-body.ts` (texte, ou `<iframe sandbox="">` opaque + CSP via `buildFrameDoc`, cf. §2.7), bandeau images si HTML distant.
 - Pièces jointes : liste `.attach` (icône type, nom, taille). Bouton télécharger rendu **`disabled`** (téléchargement réel hors 4b, cf. §11).
 - Bouton « Répondre » par message *(disabled, 4c)*.
 
@@ -210,16 +220,22 @@ Nouvelles clés sous `mail.reader.*` (titre vide, libellés boutons, « Afficher
 
 | Cas | Comportement |
 |---|---|
-| Échec mutation (star/read) | Rollback optimiste + toast d'erreur |
-| Échec move (archive/trash/spam) | Pas de fermeture du lecteur + toast d'erreur (l'invalidation ne s'applique qu'au succès) |
+| Échec mutation (star/read) | Rollback optimiste + toast d'erreur **générique** |
+| Échec move (archive/trash/spam) | Pas de fermeture du lecteur + toast d'erreur **générique** (l'invalidation ne s'applique qu'au succès) |
 | Échec `readThreadFn` | État d'erreur dans le lecteur + bouton « Réessayer » |
 | Session expirée (401) | `redirect /login` (déjà géré par `jmapUserCall`) |
-| HTML email malveillant | Isolé par iframe sandbox ; images distantes bloquées par défaut |
+| HTML email malveillant | Double barrière : `<iframe sandbox="">` (origine opaque) **+** CSP `default-src 'none'` dans le `srcdoc` ; images distantes et liens assainis (§2.7) |
+
+> **Messages d'erreur (A09)** : les toasts affichent des **libellés i18n fixes** (« L'action a échoué », « Impossible d'ouvrir le message »). On **n'expose jamais** `JmapUserError.message`/`description`/`detail` au client (ids internes, état serveur) — ces détails restent côté serveur (logs).
 
 ## 10. Tests
 
 **Purs (vitest, sans DOM) :**
-- `email-body` : `pickBody` (texte prioritaire, repli html, vides), `blockRemoteImages` (src distants neutralisés, data: et cid: préservés).
+- `email-body` :
+  - `pickBody` (texte prioritaire, repli html, vides) ;
+  - `blockRemoteImages` (src/background distants neutralisés, `data:`/`cid:` préservés) ;
+  - `sanitizeLinks` (`<a>` reçoivent `rel="noopener noreferrer"` ; `javascript:`/`data:`/`vbscript:` neutralisés ; `https:`/`mailto:` conservés) ;
+  - `buildFrameDoc` (préfixe bien la balise `<meta CSP>` ; applique `blockRemoteImages` si `showImages=false` et pas si `true`).
 - `parseThreadDetail` : ordre messages, agrégats starred/unread, emailIds, corps depuis bodyValues.
 - `buildSetFlagsCall` (`true`→true / `false`→null), `buildMoveCall` (role→id, MATCH_NONE si role absent).
 
@@ -243,6 +259,7 @@ Nouvelles clés sous `mail.reader.*` (titre vide, libellés boutons, « Afficher
 ## 12. Références
 
 - Plan 4a — Mail List (design + revue) : `docs/superpowers/specs/2026-06-12-plan-4a-mail-list-design.md`
+- **Revue de sécurité 4b** (findings F1–F8, OWASP) : `docs/superpowers/reviews/2026-06-15-plan-4b-security-review.md`
 - Maquette webmail : `webmail.zip` → `project/mail-views.jsx` (`Reader`, `MessageItem`, `AISummary`), `project/mail.css`
 - RFC 8621 (JMAP Mail) §4 (Email/get, Email/set), §3 (Thread/get)
 - Design global : `docs/superpowers/specs/2026-06-08-stalmail-design.md` §7 (JMAP), §8 (features), §9 (erreurs)
