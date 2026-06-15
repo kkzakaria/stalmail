@@ -1,9 +1,9 @@
-import { useRef } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { useTranslation } from 'react-i18next'
-import { ThreadRow } from './thread-row'
-import { useWindowedThreads } from './use-windowed-threads'
-import type { WindowedThreads } from './use-windowed-threads'
+import { useRef } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
+import { useTranslation } from "react-i18next"
+import { ThreadRow } from "./thread-row"
+import { useWindowedThreads } from "./use-windowed-threads"
+import type { WindowedThreads } from "./use-windowed-threads"
 
 type ThreadsHook = (folder: string, visibleIndexes: number[]) => WindowedThreads
 
@@ -16,10 +16,14 @@ const PROVISIONAL_COUNT = 30
 export function ThreadList({
   folder,
   provisionalCount,
+  selectedId,
+  onOpen,
   useThreadsHook = useWindowedThreads,
 }: {
   folder: string
   provisionalCount?: number // = mailbox.totalEmails passé par le parent (R2)
+  selectedId?: string
+  onOpen?: (id: string) => void
   useThreadsHook?: ThreadsHook
 }) {
   const { t } = useTranslation()
@@ -44,30 +48,35 @@ export function ThreadList({
   if (probe.isError || windowed.isError) {
     return (
       <div className="list-error" role="alert">
-        {t('mail.error')}
+        {t("mail.error")}
       </div>
     )
   }
   if (probe.total === 0) {
-    return <div className="list-empty">{t('mail.empty')}</div>
+    return <div className="list-empty">{t("mail.empty")}</div>
   }
 
   return (
     <div className="list-rows" ref={scrollRef}>
-      <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
+      <div style={{ height: virt.getTotalSize(), position: "relative" }}>
         {items.map((item) => (
           <div
             key={item.key}
             style={{
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               left: 0,
-              width: '100%',
+              width: "100%",
               height: item.size,
               transform: `translateY(${item.start}px)`,
             }}
           >
-            <ThreadRow thread={windowed.threadAt(item.index)} folder={folder} />
+            <ThreadRow
+              thread={windowed.threadAt(item.index)}
+              folder={folder}
+              selected={windowed.threadAt(item.index)?.id === selectedId}
+              onOpen={onOpen}
+            />
           </div>
         ))}
       </div>

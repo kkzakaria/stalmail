@@ -1429,3 +1429,25 @@
   .kbd-list { grid-template-columns: 1fr; }
   .help-hero h1 { font-size: 21px; }
 }
+
+/* ============================================================
+   READER — iframe HTML + bandeau images bloquées
+   ============================================================ */
+.msg-html-frame {
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+  background: #fff;
+}
+.img-block-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  background: var(--surface-2, #f3f4f6);
+  border-radius: 8px;
+  color: var(--ink-2, #4b5563);
+}
+}
