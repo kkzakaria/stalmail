@@ -112,4 +112,66 @@ describe("Reader", () => {
       screen.getByText("Impossible d’ouvrir le message.")
     ).toBeInTheDocument()
   })
+
+  it("affiche un skeleton en chargement (pas de boutons d’action)", () => {
+    const { container } = wrap(
+      <Reader
+        folder="inbox"
+        detail={undefined}
+        isLoading
+        isError={false}
+        {...noop}
+      />
+    )
+    expect(container.querySelector(".msg-skeleton")).not.toBeNull()
+    expect(screen.queryByTitle("Archiver")).not.toBeInTheDocument()
+  })
+
+  it("clic Favori appelle star(true) quand non favori", () => {
+    const star = vi.fn()
+    wrap(
+      <Reader
+        folder="inbox"
+        detail={detail()}
+        isLoading={false}
+        isError={false}
+        {...noop}
+        star={star}
+      />
+    )
+    screen.getByTitle("Favori").click()
+    expect(star).toHaveBeenCalledWith(true)
+  })
+
+  it("dans spam, propose ‘retirer des indésirables’ et appelle move(‘inbox’)", () => {
+    const move = vi.fn()
+    wrap(
+      <Reader
+        folder="spam"
+        detail={detail()}
+        isLoading={false}
+        isError={false}
+        {...noop}
+        move={move}
+      />
+    )
+    screen.getByTitle("Retirer des indésirables").click()
+    expect(move).toHaveBeenCalledWith("inbox")
+  })
+
+  it("clic Retour appelle onBack", () => {
+    const onBack = vi.fn()
+    wrap(
+      <Reader
+        folder="inbox"
+        detail={detail()}
+        isLoading={false}
+        isError={false}
+        {...noop}
+        onBack={onBack}
+      />
+    )
+    screen.getByTitle("Retour").click()
+    expect(onBack).toHaveBeenCalled()
+  })
 })

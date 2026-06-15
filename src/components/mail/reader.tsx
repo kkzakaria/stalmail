@@ -38,6 +38,22 @@ export function Reader({
     )
   }
 
+  if (isLoading && !detail) {
+    return (
+      <section className="reader">
+        <div className="reader-bar" aria-hidden="true" />
+        <div className="reader-scroll scroll">
+          <div className="reader-inner">
+            <div className="msg msg-skeleton" aria-hidden="true">
+              <div className="skel-line skel-line-1" />
+              <div className="skel-line skel-line-2" />
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   if (!detail && !isLoading) {
     return (
       <section className="reader">
@@ -148,7 +164,11 @@ export function Reader({
               ))}
 
               <div className="reply-bar">
-                <button className="reply-bar-main" disabled>
+                <button
+                  className="reply-bar-main"
+                  disabled
+                  title={t("mail.reader.reply")}
+                >
                   <Icon name="reply" size={16} />
                   <span className="rb-text">{t("mail.reader.reply")}</span>
                 </button>
