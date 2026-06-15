@@ -85,11 +85,16 @@ export function MessageItem({
                   aria-label={a.name}
                 >
                   <div className="fi">
-                    {(a.type.split("/")[1] ?? "fichier").slice(0, 4)}
+                    {(a.type.split("/")[1] ?? t("mail.reader.file")).slice(
+                      0,
+                      4
+                    )}
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="fn">{a.name}</div>
-                    <div className="fs">{Math.ceil(a.size / 1024)} Ko</div>
+                    <div className="fs">
+                      {Math.ceil(a.size / 1024)} {t("mail.reader.sizeKB")}
+                    </div>
                   </div>
                   <Icon name="download" size={16} />
                 </button>

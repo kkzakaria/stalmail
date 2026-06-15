@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { render, screen, act } from "@testing-library/react"
+import { I18nextProvider } from "react-i18next"
+import { createI18n } from "../../i18n/i18n"
 import { ToastProvider, useToast } from "./toast"
 
 function Trigger() {
@@ -7,12 +9,20 @@ function Trigger() {
   return <button onClick={() => notify("Bonjour", "success")}>go</button>
 }
 
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <I18nextProvider i18n={createI18n("fr")}>
+      <ToastProvider>{children}</ToastProvider>
+    </I18nextProvider>
+  )
+}
+
 describe("ToastProvider / useToast", () => {
   it("affiche le message (.toast-msg) + bouton de fermeture après notify", () => {
     const { container } = render(
-      <ToastProvider>
+      <Wrapper>
         <Trigger />
-      </ToastProvider>
+      </Wrapper>
     )
     act(() => {
       screen.getByText("go").click()
@@ -25,9 +35,9 @@ describe("ToastProvider / useToast", () => {
 
   it("le bouton OK ferme le toast", () => {
     render(
-      <ToastProvider>
+      <Wrapper>
         <Trigger />
-      </ToastProvider>
+      </Wrapper>
     )
     act(() => {
       screen.getByText("go").click()

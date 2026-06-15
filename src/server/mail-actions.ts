@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start"
+import { isRedirect } from "@tanstack/react-router"
 import { z } from "zod"
 import type { JmapMethodCall, JmapMethodResponse } from "./jmap"
 import type {
@@ -451,13 +452,19 @@ export const setFlagsFn = createServerFn({ method: "POST" })
     setFlagsSchema.parse(d)
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { jmapUserCall } = await import("./jmap-user")
-    const { sid, accountId } = await requireSession()
-    await jmapUserCall(
-      sid,
-      buildSetFlagsCall(accountId, data.emailIds, data.flag, data.value)
-    )
-    return { ok: true }
+    try {
+      const { jmapUserCall } = await import("./jmap-user")
+      const { sid, accountId } = await requireSession()
+      await jmapUserCall(
+        sid,
+        buildSetFlagsCall(accountId, data.emailIds, data.flag, data.value)
+      )
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
   })
 
 // ---------------------------------------------------------------------------
@@ -527,32 +534,38 @@ export const moveThreadFn = createServerFn({ method: "POST" })
     moveSchema.parse(d)
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { jmapUserCall } = await import("./jmap-user")
-    const { sid, accountId } = await requireSession()
-    // 1er aller-retour (2 reads batchés) : rôles des mailboxes + mailboxIds actuels des emails.
-    const reads = await jmapUserCall(sid, [
-      [
-        "Mailbox/get",
-        { accountId, ids: null, properties: ["id", "role"] },
-        "0",
-      ],
-      [
-        "Email/get",
-        {
-          accountId,
-          ids: data.emailIds,
-          properties: ["id", "mailboxIds"],
-        },
-        "1",
-      ],
-    ])
-    const refs = mailboxRefs(reads)
-    const targetId = resolveTargetMailbox(data.to, refs)
-    if (targetId === undefined)
-      throw new Error("move: target mailbox unavailable") // message générique (F4)
-    const emails = parseEmailMailboxes(reads)
-    await jmapUserCall(sid, buildMovePatch(accountId, emails, refs, targetId))
-    return { ok: true }
+    try {
+      const { jmapUserCall } = await import("./jmap-user")
+      const { sid, accountId } = await requireSession()
+      // 1er aller-retour (2 reads batchés) : rôles des mailboxes + mailboxIds actuels des emails.
+      const reads = await jmapUserCall(sid, [
+        [
+          "Mailbox/get",
+          { accountId, ids: null, properties: ["id", "role"] },
+          "0",
+        ],
+        [
+          "Email/get",
+          {
+            accountId,
+            ids: data.emailIds,
+            properties: ["id", "mailboxIds"],
+          },
+          "1",
+        ],
+      ])
+      const refs = mailboxRefs(reads)
+      const targetId = resolveTargetMailbox(data.to, refs)
+      if (targetId === undefined)
+        throw new Error("move: target mailbox unavailable") // message générique (F4)
+      const emails = parseEmailMailboxes(reads)
+      await jmapUserCall(sid, buildMovePatch(accountId, emails, refs, targetId))
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
   })
 
 const readThreadSchema = z.object({ threadId: z.string().min(1).max(64) })
@@ -561,11 +574,17 @@ const readThreadSchema = z.object({ threadId: z.string().min(1).max(64) })
 export const readThreadFn = createServerFn({ method: "GET" })
   .validator((d: { threadId: string }) => readThreadSchema.parse(d))
   .handler(async ({ data }): Promise<AppThreadDetail> => {
-    const { jmapUserCall } = await import("./jmap-user")
-    const { sid, accountId } = await requireSession()
-    const responses = await jmapUserCall(
-      sid,
-      buildReadThreadCalls(accountId, data.threadId)
-    )
-    return parseThreadDetail(responses)
+    try {
+      const { jmapUserCall } = await import("./jmap-user")
+      const { sid, accountId } = await requireSession()
+      const responses = await jmapUserCall(
+        sid,
+        buildReadThreadCalls(accountId, data.threadId)
+      )
+      return parseThreadDetail(responses)
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
   })

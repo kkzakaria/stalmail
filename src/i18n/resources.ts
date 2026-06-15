@@ -231,8 +231,11 @@ export const fr = {
       showImages: 'Afficher les images',
       imagesBlocked: 'Images distantes bloquées pour votre confidentialité.',
       retry: 'Réessayer',
-      loadError: 'Impossible d’ouvrir le message.',
+      loadError: "Impossible d’ouvrir le message.",
       reply: 'Répondre',
+      dismiss: 'OK',
+      file: 'fichier',
+      sizeKB: 'Ko',
     },
     actions: {
       archived: 'Conversation archivée',
@@ -475,6 +478,9 @@ export const en: DeepRecord<typeof fr> = {
       retry: 'Retry',
       loadError: 'Could not open the message.',
       reply: 'Reply',
+      dismiss: 'OK',
+      file: 'file',
+      sizeKB: 'KB',
     },
     actions: {
       archived: 'Conversation archived',

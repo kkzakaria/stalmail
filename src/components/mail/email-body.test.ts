@@ -68,6 +68,9 @@ describe("sanitizeLinks", () => {
       'href="#"'
     )
     expect(sanitizeLinks('<a href="vbscript:x">x</a>')).toContain('href="#"')
+    expect(sanitizeLinks('<a href="data:text/plain,hello">x</a>')).toContain(
+      'href="#"'
+    )
   })
   it("conserve https et mailto", () => {
     expect(sanitizeLinks('<a href="mailto:a@b.c">m</a>')).toContain(
