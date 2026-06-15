@@ -4,6 +4,7 @@ webmail.zip
 dist
 dist-ssr
 *.local
+.claude/settings.local.json
 .env*
 .tanstack
 .wrangler
