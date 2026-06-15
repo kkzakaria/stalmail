@@ -1,13 +1,15 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties } from "react"
 
 const ICON_PATHS: Record<string, string> = {
-  inbox: '<path d="M3 13l2.5-7.5A2 2 0 0 1 7.4 4h9.2a2 2 0 0 1 1.9 1.5L21 13M3 13v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5M3 13h5l1.5 2.5h5L16 13h5"/>',
+  inbox:
+    '<path d="M3 13l2.5-7.5A2 2 0 0 1 7.4 4h9.2a2 2 0 0 1 1.9 1.5L21 13M3 13v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5M3 13h5l1.5 2.5h5L16 13h5"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.86-4.25 4.14 1 5.86L12 17.1 6.75 19.7l1-5.86L3.5 9.66l5.9-.86z"/>',
-  'star-fill':
+  "star-fill":
     '<path d="M12 3.5l2.6 5.3 5.9.86-4.25 4.14 1 5.86L12 17.1 6.75 19.7l1-5.86L3.5 9.66l5.9-.86z" fill="currentColor" stroke="none"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   send: '<path d="M21 4L3 11l6.5 2.5M21 4l-7 16-3.5-9M21 4L10.5 13.5"/>',
-  draft: '<path d="M12 20h7M4 20h2.5l9.4-9.4a1.8 1.8 0 0 0 0-2.5l-1-1a1.8 1.8 0 0 0-2.5 0L3 16.5V20z"/>',
+  draft:
+    '<path d="M12 20h7M4 20h2.5l9.4-9.4a1.8 1.8 0 0 0 0-2.5l-1-1a1.8 1.8 0 0 0-2.5 0L3 16.5V20z"/>',
   archive:
     '<rect x="3.5" y="5" width="17" height="4" rx="1"/><path d="M5 9v8.5A1.5 1.5 0 0 0 6.5 19h11A1.5 1.5 0 0 0 19 17.5V9M9.5 13h5"/>',
   spam: '<path d="M12 3.5l8.5 4.5v4c0 4.7-3.4 7.7-8.5 9-5.1-1.3-8.5-4.3-8.5-9V8z"/><path d="M12 8.5v4M12 15.5v.01"/>',
@@ -19,7 +21,23 @@ const ICON_PATHS: Record<string, string> = {
   calendar:
     '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3.5M16 3.5v3.5"/>',
   tag: '<path d="M3.5 12.5l8-8H19a1.5 1.5 0 0 1 1.5 1.5v7.5l-8 8a1.5 1.5 0 0 1-2.1 0l-6.9-6.9a1.5 1.5 0 0 1 0-2.1z"/><circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/>',
-  paperclip: '<path d="M18 8.5l-7.6 7.6a3 3 0 0 1-4.2-4.2l8-8a4.2 4.2 0 0 1 6 6l-8 8"/>',
+  paperclip:
+    '<path d="M18 8.5l-7.6 7.6a3 3 0 0 1-4.2-4.2l8-8a4.2 4.2 0 0 1 6 6l-8 8"/>',
+  trash2:
+    '<path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/>',
+  "mail-open":
+    '<path d="M3 9l9-6 9 6v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 9l9 6 9-6"/>',
+  "more-v":
+    '<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>',
+  "chev-left": '<path d="M15 6l-6 6 6 6"/>',
+  "chev-down": '<path d="M6 9l6 6 6-6"/>',
+  reply: '<path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/>',
+  "reply-all":
+    '<path d="M7 7l-5 5 5 5"/><path d="M12 7l-5 5 5 5"/><path d="M7 12h9a4 4 0 0 1 4 4v1"/>',
+  forward: '<path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 0 0-5 5v1"/>',
+  download: '<path d="M12 3v12"/><path d="M7 11l5 4 5-4"/><path d="M5 19h14"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  pin: '<path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 14v7"/>',
 }
 
 export function Icon({
@@ -46,35 +64,35 @@ export function Icon({
       className={className}
       style={style}
       aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: ICON_PATHS[name] ?? '' }}
+      dangerouslySetInnerHTML={{ __html: ICON_PATHS[name] ?? "" }}
     />
   )
 }
 
 export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
+  if (parts.length === 0) return "?"
   return parts
     .slice(0, 2)
     .map((p) => p.charAt(0).toUpperCase())
-    .join('')
+    .join("")
 }
 
 const PALETTE = [
-  '#2a6fdb',
-  '#d6336c',
-  '#7048e8',
-  '#0c8599',
-  '#e8590c',
-  '#2b8a3e',
-  '#5f3dc4',
-  '#c2255c',
+  "#2a6fdb",
+  "#d6336c",
+  "#7048e8",
+  "#0c8599",
+  "#e8590c",
+  "#2b8a3e",
+  "#5f3dc4",
+  "#c2255c",
 ]
 
 export function hashColor(seed: string): string {
   let h = 0
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
-  return PALETTE[h % PALETTE.length] ?? '#2a6fdb'
+  return PALETTE[h % PALETTE.length] ?? "#2a6fdb"
 }
 
 export function Avatar({
@@ -89,7 +107,11 @@ export function Avatar({
   return (
     <span
       className="avatar"
-      style={{ width: size, height: size, background: hashColor(email || name) }}
+      style={{
+        width: size,
+        height: size,
+        background: hashColor(email || name),
+      }}
       aria-hidden="true"
     >
       {initialsOf(name || email)}
