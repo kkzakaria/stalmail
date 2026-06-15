@@ -14,6 +14,7 @@ export function MessageItem({
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(defaultOpen)
+  // intentionnel : sticky par session (ne ré-alerte pas au repli/dépli)
   const [showImages, setShowImages] = useState(false)
 
   const lead = message.from.at(0)
@@ -28,7 +29,18 @@ export function MessageItem({
 
   return (
     <div className={"msg" + (open ? "" : " collapsed")}>
-      <div className="msg-head" onClick={() => setOpen((o) => !o)}>
+      <div
+        className="msg-head"
+        onClick={() => setOpen((o) => !o)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            setOpen((o) => !o)
+          }
+        }}
+      >
         <Avatar name={leadName} email={lead?.email ?? ""} />
         <div className="who">
           <div className="nm">{leadName}</div>

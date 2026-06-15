@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "../../i18n/i18n"
 import { MessageItem } from "./message-item"
@@ -58,5 +58,42 @@ describe("MessageItem", () => {
     )
     expect(screen.getByText("cv.pdf")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /cv\.pdf/i })).toBeDisabled()
+  })
+
+  it("replie le corps au clic sur l'en-tête", () => {
+    const { container } = wrap(<MessageItem message={msg()} defaultOpen />)
+    expect(screen.getByText("corps en clair")).toBeInTheDocument()
+    fireEvent.click(container.querySelector(".msg-head")!)
+    expect(screen.queryByText("corps en clair")).not.toBeInTheDocument()
+  })
+
+  it("corps absent quand defaultOpen=false", () => {
+    wrap(<MessageItem message={msg()} />)
+    expect(screen.queryByText("corps en clair")).not.toBeInTheDocument()
+  })
+
+  it("bandeau images : visible puis masqué après 'afficher les images'", () => {
+    wrap(
+      <MessageItem
+        message={msg({
+          textBody: null,
+          htmlBody: '<img src="https://t/x.png">',
+        })}
+        defaultOpen
+      />
+    )
+    const banner = screen.getByText(/images distantes/i)
+    expect(banner).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole("button", { name: /afficher les images/i })
+    )
+    expect(screen.queryByText(/images distantes/i)).not.toBeInTheDocument()
+  })
+
+  it("expéditeur vide → '—' sans crash", () => {
+    const { container } = wrap(
+      <MessageItem message={msg({ from: [] })} defaultOpen />
+    )
+    expect(container.querySelector(".nm")?.textContent).toBe("—")
   })
 })
