@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import { setFlagsFn, moveThreadFn } from "../../server/mail-actions"
-import type { EmailListPage } from "../../server/mail-types"
+import type { EmailListPage, AppThreadDetail } from "../../server/mail-types"
 import { useToast } from "./toast"
 
 // Pur : renvoie une page avec l'AppThread (par threadId) patché, ou la page inchangée (référence) si absent.
@@ -50,12 +50,15 @@ export function useThreadActions(
   ) {
     if (emailIds.length === 0) return // F6 : pas d'action tant que le fil n'est pas chargé (évite un rejet Zod .min(1))
     await qc.cancelQueries({ queryKey: listKey })
+    await qc.cancelQueries({ queryKey: detailKey })
     const prevList = qc.getQueriesData<EmailListPage>({ queryKey: listKey })
     const prevDetail = qc.getQueryData(detailKey)
     qc.setQueriesData<EmailListPage>({ queryKey: listKey }, (page) =>
       page ? patchThreadInPages(page, threadId, patch) : page
     )
-    qc.setQueryData(detailKey, (d: unknown) => (d ? { ...d, ...patch } : d))
+    qc.setQueryData<AppThreadDetail>(detailKey, (d) =>
+      d ? { ...d, ...patch } : d
+    )
     try {
       await setFlagsFn({ data: { emailIds, flag, value } })
       notify(okMsg, "success")
