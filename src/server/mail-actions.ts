@@ -466,21 +466,13 @@ export const setFlagsFn = createServerFn({ method: "POST" })
 
 export type MoveTarget = "archive" | "trash" | "junk" | "inbox"
 
-// La cible 'spam' de l'UI = role 'junk' ; les autres targets = role homonyme.
-const ROLE_BY_TARGET: Record<MoveTarget, string> = {
-  archive: "archive",
-  trash: "trash",
-  junk: "junk",
-  inbox: "inbox",
-}
-
 // Pur : target (UI) → mailboxId, résolu côté serveur depuis Mailbox/get. Accepte 'spam' alias de 'junk'.
 export function resolveTargetMailbox(
   target: MoveTarget | "spam",
   mailboxes: MailboxRef[]
 ): string | undefined {
-  const t: MoveTarget = target === "spam" ? "junk" : target
-  return mailboxIdByRole(mailboxes, ROLE_BY_TARGET[t])
+  const role: string = target === "spam" ? "junk" : target
+  return mailboxIdByRole(mailboxes, role)
 }
 
 // Pur : extrait {id, mailboxIds[]} depuis les réponses Email/get.
@@ -489,10 +481,10 @@ export function parseEmailMailboxes(
 ): { id: string; mailboxIds: string[] }[] {
   const get = responses.find(([name]) => name === "Email/get")
   const raw = get?.[1].list
-  const list: { id: string; mailboxIds?: Record<string, boolean> }[] =
-    Array.isArray(raw)
-      ? (raw as { id: string; mailboxIds?: Record<string, boolean> }[])
-      : []
+  const list = (Array.isArray(raw) ? raw : []) as {
+    id: string
+    mailboxIds?: Record<string, boolean>
+  }[]
   return list.map((e) => ({
     id: e.id,
     mailboxIds: e.mailboxIds ? Object.keys(e.mailboxIds) : [],

@@ -489,6 +489,24 @@ describe("buildMovePatch", () => {
     expect(patch).toEqual({ "mailboxIds/ma": true, "mailboxIds/mi": null })
     expect(patch["mailboxIds/lbl"]).toBeUndefined()
   })
+  it("batch : patche chaque email indépendamment et préserve les labels", () => {
+    const result = buildMovePatch(
+      "acc",
+      [
+        { id: "e1", mailboxIds: ["mi"] },
+        { id: "e2", mailboxIds: ["mi", "lbl"] },
+      ],
+      MOVE_MBX,
+      "ma"
+    )
+    const { update } = result[0][1] as {
+      update: Record<string, Record<string, unknown>>
+    }
+    expect(Object.keys(update)).toEqual(["e1", "e2"])
+    expect(update.e1).toEqual({ "mailboxIds/ma": true, "mailboxIds/mi": null })
+    expect(update.e2).toEqual({ "mailboxIds/ma": true, "mailboxIds/mi": null })
+    expect(update.e2["mailboxIds/lbl"]).toBeUndefined()
+  })
   it("idempotent si déjà dans la cible", () => {
     expect(
       buildMovePatch("acc", [{ id: "e1", mailboxIds: ["ma"] }], MOVE_MBX, "ma")
@@ -519,6 +537,9 @@ describe("parseEmailMailboxes", () => {
     expect(
       parseEmailMailboxes([["Email/get", { list: [{ id: "e1" }] }, "0"]])
     ).toEqual([{ id: "e1", mailboxIds: [] }])
+  })
+  it("liste vide → []", () => {
+    expect(parseEmailMailboxes([["Email/get", { list: [] }, "0"]])).toEqual([])
   })
 })
 
