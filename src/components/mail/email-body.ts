@@ -56,11 +56,12 @@ export function sanitizeLinks(html: string): string {
   })
 }
 
-// Détecte des ressources distantes (img src/srcset, url()) pour afficher le bandeau.
+// Détecte des ressources distantes (img src/srcset, background=, url()) pour afficher le bandeau.
 export function hasRemoteImages(html: string): boolean {
   return (
     /<img\b[^>]*\bsrc\s*=\s*["']?(?:https?:|\/\/)/i.test(html) ||
     /\bsrcset\s*=\s*["']?[^>]*(?:https?:|\/\/)/i.test(html) ||
+    /\bbackground\s*=\s*["']?(?:https?:|\/\/)/i.test(html) ||
     /url\(\s*["']?(?:https?:|\/\/)/i.test(html)
   )
 }

@@ -102,6 +102,9 @@ describe("hasRemoteImages", () => {
     expect(hasRemoteImages("<img src=https://t/x.png>")).toBe(true)
     expect(hasRemoteImages('<img srcset="https://t/x.png 2x">')).toBe(true)
   })
+  it("détecte un background= distant", () => {
+    expect(hasRemoteImages('<table background="https://t/bg.png">')).toBe(true)
+  })
   it("faux si seulement data:/cid:", () => {
     expect(hasRemoteImages('<img src="data:image/png;base64,AAA">')).toBe(false)
   })
