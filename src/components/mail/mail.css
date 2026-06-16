@@ -76,7 +76,7 @@
 
 .app, .app * { box-sizing: border-box; }
 .app button { font-family: inherit; cursor: pointer; }
-.app button:disabled { cursor: not-allowed; }
+.app button:disabled { cursor: not-allowed; opacity: .45; }
 .app ::selection { background: var(--accent-soft); }
 .row-attach { color: var(--muted); }
 
@@ -1428,4 +1428,50 @@
   .help-inner { padding: 18px 14px 80px; }
   .kbd-list { grid-template-columns: 1fr; }
   .help-hero h1 { font-size: 21px; }
+}
+
+/* ============================================================
+   READER — iframe HTML + bandeau images bloquées
+   ============================================================ */
+.msg-html-frame {
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+  background: #fff;
+}
+.img-block-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  background: var(--surface-2, #f3f4f6);
+  border-radius: 8px;
+  color: var(--ink-2, #4b5563);
+}
+/* Avertissement de confidentialité : italique + jaune orangé "warn" (cohérent avec .act-warn). */
+.img-block-banner .banner-note {
+  font-style: italic;
+  color: #c98a17;
+}
+/* Bouton texte du bandeau (≠ .mini-btn qui est un carré icône 28px) : largeur auto,
+   sur une ligne, poussé à droite. Évite l'écrasement du libellé en 3 lignes. */
+.img-block-banner .banner-btn {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.img-block-banner .banner-btn:hover {
+  border-color: var(--accent);
+  background: var(--hover);
 }
