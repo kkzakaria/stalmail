@@ -140,7 +140,7 @@ function ReaderPane({
       autoReadRef.current !== detail.threadId
     ) {
       autoReadRef.current = detail.threadId
-      void markReadRef.current(true)
+      void markReadRef.current(true, { silent: true }) // pas de toast pour l'auto-marquage lu
     }
   }, [detail?.threadId, detail?.unread, detail?.emailIds.length])
 

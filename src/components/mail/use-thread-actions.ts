@@ -25,7 +25,9 @@ export type MoveTo = "archive" | "trash" | "junk" | "inbox" | "spam"
 
 export interface ThreadActions {
   star: (value: boolean) => Promise<void>
-  markRead: (value: boolean) => Promise<void>
+  // opts.silent : marque lu sans toast (auto-marquage à l'ouverture — feedback déjà donné
+  // par la disparition du point non-lu). Les actions explicites toastent normalement.
+  markRead: (value: boolean, opts?: { silent?: boolean }) => Promise<void>
   move: (to: MoveTo) => Promise<void>
 }
 
@@ -47,7 +49,7 @@ export function useThreadActions(
     flag: "$seen" | "$flagged",
     value: boolean,
     patch: Partial<{ unread: boolean; starred: boolean }>,
-    okMsg: string
+    okMsg: string | null // null = succès silencieux (pas de toast)
   ) {
     if (emailIds.length === 0) return // F6 : pas d'action tant que le fil n'est pas chargé (évite un rejet Zod .min(1))
     await qc.cancelQueries({ queryKey: listKey })
@@ -62,7 +64,7 @@ export function useThreadActions(
     )
     try {
       await setFlagsFn({ data: { emailIds, flag, value } })
-      notify(okMsg, "success")
+      if (okMsg) notify(okMsg, "success")
     } catch {
       for (const [key, data] of prevList) qc.setQueryData(key, data)
       qc.setQueryData(detailKey, prevDetail)
@@ -78,12 +80,17 @@ export function useThreadActions(
         { starred: value },
         value ? t("mail.actions.starred") : t("mail.actions.unstarred")
       ),
-    markRead: (value) =>
+    markRead: (value, opts) =>
       optimisticFlag(
         "$seen",
         value,
         { unread: !value },
-        value ? t("mail.actions.markedRead") : t("mail.actions.markedUnread")
+        // Auto-marquage lu (silent) → aucun toast ; « marquer non-lu » explicite → toast.
+        opts?.silent
+          ? null
+          : value
+            ? t("mail.actions.markedRead")
+            : t("mail.actions.markedUnread")
       ),
     move: async (to) => {
       if (emailIds.length === 0) return // F6 : fil non chargé → no-op
