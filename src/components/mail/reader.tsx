@@ -97,13 +97,6 @@ export function Reader({
         >
           <Icon name="trash2" size={17} />
         </button>
-        <button
-          className="icon-btn sm act-warn"
-          title={t("mail.reader.snooze")}
-          disabled
-        >
-          <Icon name="clock" size={17} />
-        </button>
         {inSpam ? (
           <button
             className="icon-btn sm act-pos"
@@ -121,13 +114,6 @@ export function Reader({
             <Icon name="spam" size={17} />
           </button>
         )}
-        <button
-          className="icon-btn sm act-accent"
-          title={t("mail.reader.label")}
-          disabled
-        >
-          <Icon name="tag" size={17} />
-        </button>
         <span className="sp" />
         <button
           className={"icon-btn sm act-star" + (detail?.starred ? " on" : "")}
