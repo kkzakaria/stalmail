@@ -39,12 +39,21 @@ function RouteComponent() {
   const { mailboxes } = Route.useLoaderData()
   const { accountName } = Route.useRouteContext()
   const { thread: threadId } = Route.useSearch()
+  const navigate = useNavigate()
+  // Les hooks de route restent dans RouteComponent ; la navigation est injectée en prop.
   return (
     <MailPage
       folder={folder}
       mailboxes={mailboxes}
       accountName={accountName}
       threadId={threadId}
+      onOpenThread={(id) =>
+        void navigate({
+          to: "/mail/$folder",
+          params: { folder },
+          search: { thread: id },
+        })
+      }
     />
   )
 }
@@ -55,14 +64,15 @@ export function MailPage({
   mailboxes,
   accountName = "",
   threadId,
+  onOpenThread,
 }: {
   folder: string
   mailboxes: AppMailbox[]
   accountName?: string
   threadId?: string
+  onOpenThread?: (id: string) => void
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const activeMailbox = mailboxes.find((m) => m.role === folder)
 
   return (
@@ -85,13 +95,7 @@ export function MailPage({
               folder={folder}
               provisionalCount={activeMailbox?.totalEmails}
               selectedId={threadId}
-              onOpen={(id) =>
-                void navigate({
-                  to: "/mail/$folder",
-                  params: { folder },
-                  search: { thread: id },
-                })
-              }
+              onOpen={onOpenThread}
             />
           )
         }
