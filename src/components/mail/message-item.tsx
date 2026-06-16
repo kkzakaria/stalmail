@@ -58,7 +58,9 @@ export function MessageItem({
         <div className="msg-body">
           {remote && !showImages && (
             <div className="img-block-banner">
-              {t("mail.reader.imagesBlocked")}{" "}
+              <span className="banner-note">
+                {t("mail.reader.imagesBlocked")}
+              </span>{" "}
               <button
                 className="banner-btn"
                 onClick={() => setShowImages(true)}
