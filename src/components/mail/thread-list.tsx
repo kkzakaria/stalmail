@@ -74,7 +74,10 @@ export function ThreadList({
             <ThreadRow
               thread={windowed.threadAt(item.index)}
               folder={folder}
-              selected={windowed.threadAt(item.index)?.id === selectedId}
+              selected={
+                selectedId != null &&
+                windowed.threadAt(item.index)?.id === selectedId
+              }
               onOpen={onOpen}
             />
           </div>
