@@ -57,8 +57,13 @@ export function sanitizeLinks(html: string): string {
       /\bhref\s*=\s*(["']?)\s*(?:javascript|data|vbscript):[^\s"'>]*\1/gi,
       'href="#"'
     )
-    a = a.replace(/\srel\s*=\s*(["'])[^"']*\1/gi, "")
-    return `<a${a} rel="noopener noreferrer">`
+    // Retire rel ET target fournis par l'email (quotés ou non), puis force des valeurs sûres.
+    // Sans le strip de `target`, un <a target="_self"> outrepasserait notre <base target="_blank">
+    // et rouvrirait le lien DANS l'iframe du reader. Le préfixe `\s` épargne data-rel/data-target.
+    a = a
+      .replace(/\srel\s*=\s*(?:(["'])[^"']*\1|[^\s"'>]+)/gi, "")
+      .replace(/\starget\s*=\s*(?:(["'])[^"']*\1|[^\s"'>]+)/gi, "")
+    return `<a${a} target="_blank" rel="noopener noreferrer">`
   })
 }
 

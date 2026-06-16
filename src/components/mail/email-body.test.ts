@@ -77,6 +77,22 @@ describe("sanitizeLinks", () => {
       "mailto:a@b.c"
     )
   })
+  it("force target=_blank et écrase un target=_self de l'email", () => {
+    const out = sanitizeLinks('<a href="https://x.com" target="_self">x</a>')
+    expect(out).toContain('target="_blank"')
+    expect(out).not.toContain("_self")
+  })
+  it("écrase un target non quoté", () => {
+    const out = sanitizeLinks("<a href=https://x.com target=_top>x</a>")
+    expect(out).toContain('target="_blank"')
+    expect(out).not.toContain("_top")
+  })
+  it("ne touche pas data-rel / data-target (préfixe \\s)", () => {
+    const out = sanitizeLinks(
+      '<a href="https://x.com" data-target="keep">x</a>'
+    )
+    expect(out).toContain('data-target="keep"')
+  })
 })
 
 describe("buildFrameDoc", () => {
