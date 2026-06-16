@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { render, screen, act } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "../../i18n/i18n"
-import { ToastProvider, useToast } from "./toast"
+import { ToastProvider, ToastViewport, useToast } from "./toast"
 
 function Trigger() {
   const notify = useToast()
@@ -12,7 +12,10 @@ function Trigger() {
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
     <I18nextProvider i18n={createI18n("fr")}>
-      <ToastProvider>{children}</ToastProvider>
+      <ToastProvider>
+        {children}
+        <ToastViewport />
+      </ToastProvider>
     </I18nextProvider>
   )
 }

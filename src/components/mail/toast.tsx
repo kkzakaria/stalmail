@@ -13,14 +13,26 @@ export type ToastKind = "success" | "error"
 type ToastItem = { id: number; message: string; kind: ToastKind }
 type Notify = (message: string, kind?: ToastKind) => void
 
-const ToastCtx = createContext<Notify>(() => {})
-
-export function useToast(): Notify {
-  return useContext(ToastCtx)
+interface ToastCtxValue {
+  notify: Notify
+  toasts: ToastItem[]
+  dismiss: (id: number) => void
 }
 
+const ToastCtx = createContext<ToastCtxValue>({
+  notify: () => {},
+  toasts: [],
+  dismiss: () => {},
+})
+
+// API stable pour les consommateurs : ne renvoie que notify.
+export function useToast(): Notify {
+  return useContext(ToastCtx).notify
+}
+
+// Fournit le contexte (état + notify) ; ne rend AUCUN visuel — le rendu est délégué à
+// <ToastViewport/>, qui doit vivre à l'intérieur de `.app` (cf. note sur ToastViewport).
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslation()
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const counter = useRef(0)
   const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
@@ -52,23 +64,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Markup fidèle à la maquette : .toast-wrap > .toast > .toast-msg + bouton de fermeture.
   return (
-    <ToastCtx.Provider value={notify}>
+    <ToastCtx.Provider value={{ notify, toasts, dismiss }}>
       {children}
-      <div className="toast-wrap" role="status" aria-live="polite">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={"toast" + (toast.kind === "error" ? " toast-error" : "")}
-          >
-            <span className="toast-msg">{toast.message}</span>
-            <button onClick={() => dismiss(toast.id)}>
-              {t("mail.reader.dismiss")}
-            </button>
-          </div>
-        ))}
-      </div>
     </ToastCtx.Provider>
+  )
+}
+
+// Rendu visuel des toasts. DOIT être monté À L'INTÉRIEUR de `.app` : les tokens de thème
+// maquette (--ink/--bg/--accent) ET les règles responsive `@container app` y sont scopés.
+// Hors de `.app`, le toast perdrait l'accent maquette (→ couleur grise non thémée) et son
+// positionnement responsive. Markup fidèle maquette : .toast-wrap > .toast > .toast-msg + bouton.
+export function ToastViewport() {
+  const { toasts, dismiss } = useContext(ToastCtx)
+  const { t } = useTranslation()
+  return (
+    <div className="toast-wrap" role="status" aria-live="polite">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={"toast" + (toast.kind === "error" ? " toast-error" : "")}
+        >
+          <span className="toast-msg">{toast.message}</span>
+          <button onClick={() => dismiss(toast.id)}>
+            {t("mail.reader.dismiss")}
+          </button>
+        </div>
+      ))}
+    </div>
   )
 }

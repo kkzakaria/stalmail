@@ -10,6 +10,7 @@ import {
   ThreadList,
   Reader,
   ToastProvider,
+  ToastViewport,
   useThreadActions,
 } from "@/components/mail"
 import type { AppMailbox } from "@/server/mail-types"
@@ -99,6 +100,8 @@ export function MailPage({
             <ReaderPane folder={folder} threadId={threadId} />
           ) : undefined
         }
+        // Toast rendu DANS `.app` (tokens/thème maquette + container queries y sont scopés).
+        overlay={<ToastViewport />}
       />
     </ToastProvider>
   )
