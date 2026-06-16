@@ -76,7 +76,7 @@
 
 .app, .app * { box-sizing: border-box; }
 .app button { font-family: inherit; cursor: pointer; }
-.app button:disabled { cursor: not-allowed; }
+.app button:disabled { cursor: not-allowed; opacity: .45; }
 .app ::selection { background: var(--accent-soft); }
 .row-attach { color: var(--muted); }
 

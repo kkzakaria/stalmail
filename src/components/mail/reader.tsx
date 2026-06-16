@@ -84,21 +84,21 @@ export function Reader({
           <Icon name="chev-left" size={18} />
         </button>
         <button
-          className="icon-btn sm"
+          className="icon-btn sm act-pos"
           title={t("mail.reader.archive")}
           onClick={() => move("archive")}
         >
           <Icon name="archive" size={17} />
         </button>
         <button
-          className="icon-btn sm"
+          className="icon-btn sm act-danger"
           title={t("mail.reader.trash")}
           onClick={() => move("trash")}
         >
           <Icon name="trash2" size={17} />
         </button>
         <button
-          className="icon-btn sm"
+          className="icon-btn sm act-warn"
           title={t("mail.reader.snooze")}
           disabled
         >
@@ -106,7 +106,7 @@ export function Reader({
         </button>
         {inSpam ? (
           <button
-            className="icon-btn sm"
+            className="icon-btn sm act-pos"
             title={t("mail.reader.notSpam")}
             onClick={() => move("inbox")}
           >
@@ -114,19 +114,24 @@ export function Reader({
           </button>
         ) : (
           <button
-            className="icon-btn sm"
+            className="icon-btn sm act-danger"
             title={t("mail.reader.spam")}
             onClick={() => move("spam")}
           >
             <Icon name="spam" size={17} />
           </button>
         )}
-        <button className="icon-btn sm" title={t("mail.reader.label")} disabled>
+        <button
+          className="icon-btn sm act-accent"
+          title={t("mail.reader.label")}
+          disabled
+        >
           <Icon name="tag" size={17} />
         </button>
         <span className="sp" />
         <button
-          className={"icon-btn sm" + (detail?.starred ? " on" : "")}
+          className={"icon-btn sm act-star" + (detail?.starred ? " on" : "")}
+          style={detail?.starred ? { color: "#e8b23a" } : undefined}
           title={t("mail.reader.star")}
           onClick={() => star(!detail?.starred)}
         >
