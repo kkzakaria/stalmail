@@ -34,23 +34,41 @@ Couverture :
 
 ---
 
-## 2. Revue CodeRabbit CLI
+## 2. Revue CodeRabbit
 
-`coderabbit review --base main --type committed` — 2 findings.
+### 2a. CLI (`coderabbit review --base main --type committed`) — 2 findings
 
 | # | Sévérité | Emplacement | Statut |
 |---|----------|-------------|--------|
-| 1 | Critical | `thread-list.tsx:77` | ✅ Corrigé (`d2911e2`) |
-| 2 | Major | `email-body.ts:5` | ❌ Rejeté (faux positif) |
+| C1 | Critical | `thread-list.tsx:77` | ✅ Corrigé (`d2911e2`) |
+| C2 | Major | `email-body.ts:5` | ❌ Rejeté (faux positif) |
 
-**#1 — Garde `selectedId`** : `selected={threadAt(i)?.id === selectedId}` valait `true` quand les deux étaient `undefined` (pas de sélection + ligne skeleton). Bénin en pratique (le skeleton de `ThreadRow` sort tôt et n'applique pas `.sel`, et une ligne chargée a un `id` string ≠ undefined), mais garde ajoutée par robustesse/anti-régression : `selectedId != null && …`.
+**C1 — Garde `selectedId`** : `selected={threadAt(i)?.id === selectedId}` valait `true` quand les deux étaient `undefined` (pas de sélection + ligne skeleton). Bénin en pratique (le skeleton de `ThreadRow` sort tôt et n'applique pas `.sel`, et une ligne chargée a un `id` string ≠ undefined), mais garde ajoutée par robustesse/anti-régression : `selectedId != null && …`.
 
-**#2 — Export de `FRAME_CSP`** : faux positif. `FRAME_CSP` n'est consommé que dans `email-body.ts` (encapsulé par `buildFrameDoc`) ; `message-item.tsx` appelle `buildFrameDoc`, pas `FRAME_CSP`. L'exporter exposerait inutilement un détail interne — conservé privé.
+**C2 — Export de `FRAME_CSP`** : faux positif. `FRAME_CSP` n'est consommé que dans `email-body.ts` (encapsulé par `buildFrameDoc`) ; `message-item.tsx` appelle `buildFrameDoc`, pas `FRAME_CSP`. Conservé privé.
+
+### 2b. Bot GitHub (PR #36) — 5 findings sur le code
+
+Récupérés via `gh api`. Triagés contre le code courant.
+
+| # | Sévérité | Emplacement | Statut |
+|---|----------|-------------|--------|
+| 1 | Major | `email-body.ts` — CSP bloque les images même après « Afficher les images » | ✅ Corrigé (`736dc7b~1`) |
+| 2 | Minor | `mail.css` — bandeau ne wrap pas sur mobile | ✅ Corrigé |
+| 3 | Major | `reader.tsx` — boutons icônes sans `aria-label` | ✅ Corrigé |
+| 4 | Major | `use-thread-actions.ts` — rollback écrase une maj concurrente | ↪️ Différé → issue #38 |
+| 5 | Major | `$folder.tsx` — `MailPage` utilise `useNavigate` | ✅ Corrigé (`736dc7b`) |
+
+**#1** était un **vrai bug fonctionnel** : la CSP figée `img-src data: cid:` bloquait les images distantes côté navigateur même quand l'utilisateur cliquait « Afficher les images ». CSP désormais élargie à `https: http:` quand `showImages=true` (toujours sans `allow-scripts`). **#5** sort `useNavigate` de `MailPage` (navigation injectée via prop `onOpenThread` depuis `RouteComponent`). **#4** (cas limite double-action + échec serveur) différé en issue #38.
+
+Les 3 autres commentaires du bot portaient sur le **doc de plan** (noms de fonctions, contrat `ThreadList`, cleanup toast) — obsolètes, déjà alignés dans le code final.
 
 ---
 
 ## Conclusion
 
-Phase 4b validée pour merge. Sécurité : RAS. CodeRabbit : 1 correctif appliqué, 1 faux positif rejeté.
+Phase 4b validée pour merge. Sécurité : RAS. CodeRabbit : 5 correctifs appliqués (dont le bug fonctionnel « Afficher les images »), 1 faux positif rejeté, 1 cas limite différé.
 
-Reste différé : issue **#37** (configurer `defaultFolders` Stalwart pour provisionner le dossier Archive nativement) — l'action Archiver échoue tant que le compte n'a pas de dossier role `archive`.
+Restes différés :
+- Issue **#37** — configurer `defaultFolders` Stalwart pour provisionner le dossier Archive nativement (l'action Archiver échoue tant que le compte n'a pas de mailbox role `archive`).
+- Issue **#38** — rollback optimiste ciblé pour éviter l'écrasement entre actions concurrentes.
