@@ -110,7 +110,7 @@ export function Reader({
             title={t("mail.reader.notSpam")}
             onClick={() => move("inbox")}
           >
-            <Icon name="mail-open" size={17} />
+            <Icon name="inbox" size={17} />
           </button>
         ) : (
           <button
@@ -142,7 +142,7 @@ export function Reader({
           title={t("mail.reader.markUnread")}
           onClick={() => markRead(false)}
         >
-          <Icon name="mail-open" size={17} />
+          <Icon name="mail" size={17} />
         </button>
       </div>
 

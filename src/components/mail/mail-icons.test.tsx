@@ -38,6 +38,7 @@ describe("Icon — nouvelles icônes 4b", () => {
     "archive",
     "trash2",
     "mail-open",
+    "mail",
     "more-v",
     "chev-left",
     "spam",
