@@ -63,6 +63,16 @@ Récupérés via `gh api`. Triagés contre le code courant.
 
 Les 3 autres commentaires du bot portaient sur le **doc de plan** (noms de fonctions, contrat `ThreadList`, cleanup toast) — obsolètes, déjà alignés dans le code final.
 
+### 2c. Bot GitHub — re-revue incrémentale (après corrections) — 1 finding
+
+Revue auto-suspendue par CodeRabbit (`auto_pause_after_reviewed_commits`, afflux de commits) puis redéclenchée via `@coderabbitai review`.
+
+| # | Sévérité | Emplacement | Statut |
+|---|----------|-------------|--------|
+| 6 | Major | `email-body.ts` — `sanitizeLinks` | ✅ Corrigé (`cc66887`) |
+
+**#6** : une ancre `<a target="_self">` d'un email outrepassait le `<base target="_blank">` injecté et rouvrait le lien **dans l'iframe du reader**. `sanitizeLinks` strippe désormais les `target`/`rel` fournis par l'email (quotés et non quotés) et force `target="_blank" rel="noopener noreferrer"`. Complément du strip de `<base>` (#1 de la passe sécurité). Préfixe `\s` conservé (épargne `data-*`).
+
 ---
 
 ## Conclusion
