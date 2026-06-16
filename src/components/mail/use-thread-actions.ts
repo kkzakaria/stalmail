@@ -5,18 +5,19 @@ import { setFlagsFn, moveThreadFn } from "../../server/mail-actions"
 import type { EmailListPage, AppThreadDetail } from "../../server/mail-types"
 import { useToast } from "./toast"
 
-// Pur : renvoie une page avec l'AppThread (par threadId) patché, ou la page inchangée (référence) si absent.
+// Pur : patche l'AppThread ouvert dans une page, ou renvoie la page inchangée (même référence)
+// si absent. Le handle est **AppThread.id** (id de l'email représentatif = param `?thread` /
+// `selectedId`), PAS `AppThread.threadId` — les deux diffèrent côté JMAP (ex. id "eaaaaab" vs
+// threadId "b"). Matcher par threadId ne touchait jamais la ligne → le point non-lu persistait.
 export function patchThreadInPages(
   page: EmailListPage,
-  threadId: string,
+  id: string,
   patch: Partial<{ unread: boolean; starred: boolean }>
 ): EmailListPage {
-  if (!page.threads.some((t) => t.threadId === threadId)) return page
+  if (!page.threads.some((t) => t.id === id)) return page
   return {
     ...page,
-    threads: page.threads.map((t) =>
-      t.threadId === threadId ? { ...t, ...patch } : t
-    ),
+    threads: page.threads.map((t) => (t.id === id ? { ...t, ...patch } : t)),
   }
 }
 

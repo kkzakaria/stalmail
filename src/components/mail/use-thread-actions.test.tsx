@@ -31,36 +31,58 @@ const thread = (over: Partial<AppThread> = {}): AppThread => ({
 })
 
 describe("patchThreadInPages (pur)", () => {
-  it("patch l'AppThread par threadId dans toutes les pages", () => {
-    const page: EmailListPage = { threads: [thread()], total: 1, position: 0 }
-    const out = patchThreadInPages(page, "t1", { unread: false })
+  it("patche l'AppThread par id (handle = email représentatif)", () => {
+    const page: EmailListPage = {
+      threads: [thread({ id: "e1", threadId: "t1" })],
+      total: 1,
+      position: 0,
+    }
+    const out = patchThreadInPages(page, "e1", { unread: false })
     expect(out.threads[0].unread).toBe(false)
   })
-  it("laisse la page inchangée si threadId absent", () => {
-    const page: EmailListPage = { threads: [thread()], total: 1, position: 0 }
-    expect(patchThreadInPages(page, "tX", { unread: false })).toBe(page)
+  it("matche par id et PAS par threadId (régression : point non-lu persistant)", () => {
+    // Handle = AppThread.id ('e1'), threadId distinct ('t1') — cas réel JMAP (id ≠ threadId).
+    const page: EmailListPage = {
+      threads: [thread({ id: "e1", threadId: "t1", unread: true })],
+      total: 1,
+      position: 0,
+    }
+    // Patcher par l'id (le vrai handle ?thread/selectedId) doit marcher…
+    expect(
+      patchThreadInPages(page, "e1", { unread: false }).threads[0].unread
+    ).toBe(false)
+    // …et patcher par le threadId ne doit RIEN toucher (no-op, même référence).
+    expect(patchThreadInPages(page, "t1", { unread: false })).toBe(page)
   })
-  it("ne patche que le thread cible, laisse les autres intacts", () => {
+  it("laisse la page inchangée (même réf) si id absent", () => {
+    const page: EmailListPage = {
+      threads: [thread({ id: "e1" })],
+      total: 1,
+      position: 0,
+    }
+    expect(patchThreadInPages(page, "eX", { unread: false })).toBe(page)
+  })
+  it("ne patche que la cible, laisse les autres intactes", () => {
     const page: EmailListPage = {
       threads: [
-        thread({ threadId: "t1", unread: true }),
-        thread({ threadId: "t2", unread: true }),
+        thread({ id: "e1", threadId: "t1", unread: true }),
+        thread({ id: "e2", threadId: "t2", unread: true }),
       ],
       total: 2,
       position: 0,
     }
-    const out = patchThreadInPages(page, "t1", { unread: false })
+    const out = patchThreadInPages(page, "e1", { unread: false })
     expect(out.threads[0].unread).toBe(false)
     expect(out.threads[1].unread).toBe(true)
     expect(out).not.toBe(page)
   })
   it("préserve les champs non patchés", () => {
     const page: EmailListPage = {
-      threads: [thread({ threadId: "t1", unread: true, starred: false })],
+      threads: [thread({ id: "e1", unread: true, starred: false })],
       total: 1,
       position: 0,
     }
-    const out = patchThreadInPages(page, "t1", { starred: true })
+    const out = patchThreadInPages(page, "e1", { starred: true })
     expect(out.threads[0].starred).toBe(true)
     expect(out.threads[0].unread).toBe(true)
   })
