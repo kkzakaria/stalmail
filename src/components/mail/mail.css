@@ -1450,3 +1450,22 @@
   border-radius: 8px;
   color: var(--ink-2, #4b5563);
 }
+/* Bouton texte du bandeau (≠ .mini-btn qui est un carré icône 28px) : largeur auto,
+   sur une ligne, poussé à droite. Évite l'écrasement du libellé en 3 lignes. */
+.img-block-banner .banner-btn {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.img-block-banner .banner-btn:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+}
