@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/kkzakaria/stalmail/compare/v0.1.12...v0.1.13) (2026-06-16)
+
+
+### Features
+
+* Plan 4b — Reader & Actions (lecteur de fil + 5 actions) ([#36](https://github.com/kkzakaria/stalmail/issues/36)) ([e87e2fb](https://github.com/kkzakaria/stalmail/commit/e87e2fb7ae0e31241f16f48d94459998c18444fc))
+
 ## [0.1.12](https://github.com/kkzakaria/stalmail/compare/v0.1.11...v0.1.12) (2026-06-14)
 
 Premier écran fonctionnel du webmail : navigation des dossiers et liste de mails virtualisée, en lecture seule (BFF JMAP).
