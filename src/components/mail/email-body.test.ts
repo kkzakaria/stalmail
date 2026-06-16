@@ -95,6 +95,13 @@ describe("buildFrameDoc", () => {
       buildFrameDoc('<img src="https://t/x.png">', { showImages: true })
     ).toContain("https://t")
   })
+  it("élargit la CSP img-src aux schémas distants quand showImages=true", () => {
+    const off = buildFrameDoc("<p>x</p>", { showImages: false })
+    expect(off).toContain("img-src data: cid:;")
+    expect(off).not.toContain("https:")
+    const on = buildFrameDoc("<p>x</p>", { showImages: true })
+    expect(on).toContain("img-src data: cid: https: http:;")
+  })
   it("force l'ouverture des liens dans un nouvel onglet (base target=_blank)", () => {
     const doc = buildFrameDoc('<a href="https://x.com">x</a>', {
       showImages: false,

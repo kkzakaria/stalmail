@@ -2,8 +2,14 @@
 // Ici : choix texte/html (pur), blocage des ressources distantes (anti-traceur),
 // assainissement des liens (défense en profondeur), assemblage du document srcdoc.
 
-const FRAME_CSP =
-  "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'"
+// CSP de l'iframe. Par défaut : aucune ressource distante (anti-traceur). Quand l'utilisateur
+// demande explicitement « Afficher les images », on élargit `img-src` aux schémas distants —
+// sinon le navigateur bloquerait les images malgré la levée du filtrage regex (le bouton
+// « Afficher les images » restait alors sans effet). Toujours pas de scripts ni same-origin.
+function frameCsp(showImages: boolean): string {
+  const imgSrc = showImages ? "data: cid: https: http:" : "data: cid:"
+  return `default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'`
+}
 
 export function pickBody(msg: {
   textBody: string | null
@@ -80,5 +86,5 @@ export function buildFrameDoc(
   // la *cible* ; un <base href="https://evil/"> injecté détournerait la résolution des liens
   // relatifs (phishing). On le supprime → seul notre <base> subsiste (URL relatives → about:srcdoc, inerte).
   body = body.replace(/<base\b[^>]*>/gi, "")
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}"><base target="_blank"></head><body>${body}</body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${frameCsp(opts.showImages)}"><base target="_blank"></head><body>${body}</body></html>`
 }

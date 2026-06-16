@@ -79,12 +79,14 @@ export function Reader({
         <button
           className="icon-btn sm"
           onClick={onBack}
+          aria-label={t("mail.reader.back")}
           title={t("mail.reader.back")}
         >
           <Icon name="chev-left" size={18} />
         </button>
         <button
           className="icon-btn sm act-pos"
+          aria-label={t("mail.reader.archive")}
           title={t("mail.reader.archive")}
           onClick={() => move("archive")}
         >
@@ -92,6 +94,7 @@ export function Reader({
         </button>
         <button
           className="icon-btn sm act-danger"
+          aria-label={t("mail.reader.trash")}
           title={t("mail.reader.trash")}
           onClick={() => move("trash")}
         >
@@ -100,6 +103,7 @@ export function Reader({
         {inSpam ? (
           <button
             className="icon-btn sm act-pos"
+            aria-label={t("mail.reader.notSpam")}
             title={t("mail.reader.notSpam")}
             onClick={() => move("inbox")}
           >
@@ -108,6 +112,7 @@ export function Reader({
         ) : (
           <button
             className="icon-btn sm act-danger"
+            aria-label={t("mail.reader.spam")}
             title={t("mail.reader.spam")}
             onClick={() => move("spam")}
           >
@@ -118,6 +123,8 @@ export function Reader({
         <button
           className={"icon-btn sm act-star" + (detail?.starred ? " on" : "")}
           style={detail?.starred ? { color: "#e8b23a" } : undefined}
+          aria-label={t("mail.reader.star")}
+          aria-pressed={detail?.starred ?? false}
           title={t("mail.reader.star")}
           onClick={() => star(!detail?.starred)}
         >
@@ -125,6 +132,7 @@ export function Reader({
         </button>
         <button
           className="icon-btn sm"
+          aria-label={t("mail.reader.markUnread")}
           title={t("mail.reader.markUnread")}
           onClick={() => markRead(false)}
         >
