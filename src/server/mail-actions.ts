@@ -316,14 +316,20 @@ interface RawDetailEmail {
   }[]
 }
 
-// Pur : résout le 1er part d'un type donné en sa valeur texte (via bodyValues).
+// Pur : résout la valeur texte de la 1ère part du type MIME voulu (via bodyValues).
+// RFC 8621 §4.1.4 : `textBody`/`htmlBody` peuvent contenir la MÊME part lorsqu'il n'existe
+// pas d'alternative (ex. email html-only → la part text/html apparaît aussi dans textBody).
+// On filtre donc par `type` pour ne pas afficher du code HTML comme du texte brut.
 function resolveBody(
   parts: RawBodyPart[] | undefined,
-  values: RawDetailEmail["bodyValues"]
+  values: RawDetailEmail["bodyValues"],
+  wantType: "text/plain" | "text/html"
 ): string | null {
-  const first = Array.isArray(parts) ? parts[0] : undefined
-  if (!first?.partId) return null
-  const v = values?.[first.partId]?.value
+  const part = Array.isArray(parts)
+    ? parts.find((p) => p.type === wantType)
+    : undefined
+  if (!part?.partId) return null
+  const v = values?.[part.partId]?.value
   return typeof v === "string" && v !== "" ? v : null
 }
 
@@ -397,8 +403,8 @@ export function parseThreadDetail(
     receivedAt: e.receivedAt ?? "",
     unread: (e.keywords ?? {}).$seen !== true,
     hasAttachment: e.hasAttachment === true,
-    textBody: resolveBody(e.textBody, e.bodyValues),
-    htmlBody: resolveBody(e.htmlBody, e.bodyValues),
+    textBody: resolveBody(e.textBody, e.bodyValues, "text/plain"),
+    htmlBody: resolveBody(e.htmlBody, e.bodyValues, "text/html"),
     attachments: (e.attachments ?? []).map(
       (a): AppAttachment => ({
         blobId: a.blobId,

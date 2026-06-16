@@ -330,7 +330,7 @@ describe("parseThreadDetail", () => {
             keywords: { $seen: true },
             hasAttachment: false,
             textBody: [],
-            htmlBody: [{ partId: "q2" }],
+            htmlBody: [{ partId: "q2", type: "text/html" }],
             bodyValues: { q2: { value: "<b>e2</b>" } },
             attachments: [],
           },
@@ -342,7 +342,7 @@ describe("parseThreadDetail", () => {
             receivedAt: "2026-06-10T00:00:00Z",
             keywords: {},
             hasAttachment: true,
-            textBody: [{ partId: "q1" }],
+            textBody: [{ partId: "q1", type: "text/plain" }],
             htmlBody: [],
             bodyValues: { q1: { value: "texte e1" } },
             attachments: [
@@ -369,6 +369,35 @@ describe("parseThreadDetail", () => {
     const d = parseThreadDetail(responses)
     expect(d.messages[0].textBody).toBe("texte e1")
     expect(d.messages[1].htmlBody).toBe("<b>e2</b>")
+  })
+
+  // RFC 8621 §4.1.4 : pour un email text/html SANS alternative text/plain, le serveur place
+  // la part HTML dans textBody ET htmlBody. textBody NE DOIT PAS être traité comme du texte
+  // brut (sinon le code HTML s'affiche littéralement). On filtre par type MIME.
+  it("ne traite pas une part text/html comme du texte brut (email html-only)", () => {
+    const htmlOnly: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t9", emailIds: ["h"] }] }, "0"],
+      [
+        "Email/get",
+        {
+          list: [
+            {
+              id: "h",
+              receivedAt: "2026-06-10T10:00:00Z",
+              keywords: { $seen: true },
+              textBody: [{ partId: "p", type: "text/html" }],
+              htmlBody: [{ partId: "p", type: "text/html" }],
+              bodyValues: { p: { value: "<p>coucou</p>" } },
+              attachments: [],
+            },
+          ],
+        },
+        "1",
+      ],
+    ]
+    const d = parseThreadDetail(htmlOnly)
+    expect(d.messages[0].textBody).toBeNull()
+    expect(d.messages[0].htmlBody).toBe("<p>coucou</p>")
   })
 
   it("calcule les agrégats unread/starred et emailIds", () => {
