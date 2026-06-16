@@ -73,7 +73,13 @@ export function MessageItem({
             <iframe
               className="msg-html-frame"
               title={message.subject || leadName}
-              sandbox=""
+              // sandbox SANS allow-scripts/allow-same-origin/allow-forms : le HTML reste
+              // inerte et en origine opaque. allow-popups laisse les liens user-cliqués s'ouvrir
+              // dans un nouvel onglet (base target=_blank) au lieu du reader ; -to-escape-sandbox
+              // est REQUIS pour que cet onglet soit un contexte NORMAL (sinon le site externe
+              // hériterait du sandbox : pas de JS, origine opaque → cassé). Revue sécu : non
+              // exploitable (pas de scripts pour auto-ouvrir, rel="noopener noreferrer" coupe opener).
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
               srcDoc={frameDoc}
             />
           )}

@@ -95,6 +95,27 @@ describe("buildFrameDoc", () => {
       buildFrameDoc('<img src="https://t/x.png">', { showImages: true })
     ).toContain("https://t")
   })
+  it("force l'ouverture des liens dans un nouvel onglet (base target=_blank)", () => {
+    const doc = buildFrameDoc('<a href="https://x.com">x</a>', {
+      showImages: false,
+    })
+    expect(doc).toContain('<base target="_blank">')
+    // notre <base> doit précéder le <body> (sinon un <base> de l'email gagnerait)
+    expect(doc.indexOf('<base target="_blank">')).toBeLessThan(
+      doc.indexOf("<body>")
+    )
+  })
+  it("strippe un <base href> injecté par l'email (revue sécu F-1)", () => {
+    const doc = buildFrameDoc(
+      '<base href="https://evil.example/"><a href="x">x</a>',
+      {
+        showImages: false,
+      }
+    )
+    expect(doc).not.toContain("evil.example")
+    // un seul <base> subsiste : le nôtre (target=_blank, sans href)
+    expect(doc.match(/<base\b/gi)).toHaveLength(1)
+  })
 })
 
 describe("hasRemoteImages", () => {

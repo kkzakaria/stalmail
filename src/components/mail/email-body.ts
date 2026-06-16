@@ -67,11 +67,18 @@ export function hasRemoteImages(html: string): boolean {
 }
 
 // Assemble le document injecté dans <iframe srcdoc> : CSP + liens assainis + images (selon showImages).
+// `<base target="_blank">` (placé AVANT le body, donc prioritaire sur tout <base> de l'email) :
+// les liens cliqués ouvrent un nouvel onglet au lieu de naviguer DANS le reader. Nécessite que
+// l'iframe autorise les popups (sandbox allow-popups allow-popups-to-escape-sandbox, cf. message-item).
 export function buildFrameDoc(
   html: string,
   opts: { showImages: boolean }
 ): string {
   let body = sanitizeLinks(html)
   if (!opts.showImages) body = blockRemoteImages(body)
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}"></head><body>${body}</body></html>`
+  // Revue sécu F-1 : retire tout <base> de l'email. Notre <base target="_blank"> ne fixe que
+  // la *cible* ; un <base href="https://evil/"> injecté détournerait la résolution des liens
+  // relatifs (phishing). On le supprime → seul notre <base> subsiste (URL relatives → about:srcdoc, inerte).
+  body = body.replace(/<base\b[^>]*>/gi, "")
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}"><base target="_blank"></head><body>${body}</body></html>`
 }
