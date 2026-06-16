@@ -124,25 +124,30 @@ function ReaderPane({
   const detail = query.data
   const actions = useThreadActions(folder, threadId, detail?.emailIds ?? [])
 
-  // Ref stable vers markRead pour que l'useEffect n'ait pas à dépendre de `actions` (nouvel objet à chaque render).
+  // Refs stables : markRead + dernier detail, pour que l'useEffect ne dépende NI de `actions`
+  // (nouvel objet à chaque render) NI de `detail.unread`.
   const markReadRef = useRef(actions.markRead)
   markReadRef.current = actions.markRead
+  const detailRef = useRef(detail)
+  detailRef.current = detail
 
-  // Garde : mémorise le dernier threadId auto-lu pour éviter le double-appel StrictMode/re-render.
+  // Garde : threadId déjà auto-lu (évite le double-appel StrictMode/re-render).
   const autoReadRef = useRef<string | null>(null)
+  const tid = detail?.threadId
 
-  // Auto-marquage lu à l'ouverture d'un fil non lu (design §2.1) — via setFlags (POST), pas dans readThreadFn.
+  // Auto-marquage lu à l'ouverture d'un fil non lu (design §2.1) — via setFlags (POST).
+  // IMPORTANT : on NE dépend PAS de `detail.unread`. Sinon « marquer comme non lu » (qui
+  // repasse unread→true en optimiste) re-déclenchait cet effet → relecture immédiate
+  // ($seen=true) → le point non-lu réapparaissait puis disparaissait. On déclenche donc
+  // une seule fois par fil chargé (dép = threadId), en lisant l'état non-lu via une ref.
   useEffect(() => {
-    if (
-      detail &&
-      detail.unread &&
-      detail.emailIds.length > 0 &&
-      autoReadRef.current !== detail.threadId
-    ) {
-      autoReadRef.current = detail.threadId
+    if (!tid || autoReadRef.current === tid) return
+    autoReadRef.current = tid
+    const d = detailRef.current
+    if (d?.unread && d.emailIds.length > 0) {
       void markReadRef.current(true, { silent: true }) // pas de toast pour l'auto-marquage lu
     }
-  }, [detail?.threadId, detail?.unread, detail?.emailIds.length])
+  }, [tid])
 
   return (
     <Reader
