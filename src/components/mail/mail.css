@@ -1450,10 +1450,10 @@
   border-radius: 8px;
   color: var(--ink-2, #4b5563);
 }
-/* Avertissement de confidentialité : italique + gris doux assorti au ton du bandeau. */
+/* Avertissement de confidentialité : italique + jaune orangé "warn" (cohérent avec .act-warn). */
 .img-block-banner .banner-note {
   font-style: italic;
-  color: var(--muted);
+  color: #c98a17;
 }
 /* Bouton texte du bandeau (≠ .mini-btn qui est un carré icône 28px) : largeur auto,
    sur une ligne, poussé à droite. Évite l'écrasement du libellé en 3 lignes. */
