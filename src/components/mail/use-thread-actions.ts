@@ -45,13 +45,14 @@ export function useThreadActions(
   const detailKey = ["thread", threadId] as const
 
   // Patch optimiste en place (liste + détail) avec snapshot pour rollback.
+  // Renvoie true si l'écriture serveur a réussi (pour déclencher d'éventuels effets post-succès).
   async function optimisticFlag(
     flag: "$seen" | "$flagged",
     value: boolean,
     patch: Partial<{ unread: boolean; starred: boolean }>,
     okMsg: string | null // null = succès silencieux (pas de toast)
-  ) {
-    if (emailIds.length === 0) return // F6 : pas d'action tant que le fil n'est pas chargé (évite un rejet Zod .min(1))
+  ): Promise<boolean> {
+    if (emailIds.length === 0) return false // F6 : pas d'action tant que le fil n'est pas chargé (évite un rejet Zod .min(1))
     await qc.cancelQueries({ queryKey: listKey })
     await qc.cancelQueries({ queryKey: detailKey })
     const prevList = qc.getQueriesData<EmailListPage>({ queryKey: listKey })
@@ -65,23 +66,26 @@ export function useThreadActions(
     try {
       await setFlagsFn({ data: { emailIds, flag, value } })
       if (okMsg) notify(okMsg, "success")
+      return true
     } catch {
       for (const [key, data] of prevList) qc.setQueryData(key, data)
       qc.setQueryData(detailKey, prevDetail)
       notify(t("mail.actions.error"), "error")
+      return false
     }
   }
 
   return {
-    star: (value) =>
-      optimisticFlag(
+    star: async (value) => {
+      await optimisticFlag(
         "$flagged",
         value,
         { starred: value },
         value ? t("mail.actions.starred") : t("mail.actions.unstarred")
-      ),
-    markRead: (value, opts) =>
-      optimisticFlag(
+      )
+    },
+    markRead: async (value, opts) => {
+      const ok = await optimisticFlag(
         "$seen",
         value,
         { unread: !value },
@@ -91,7 +95,19 @@ export function useThreadActions(
           : value
             ? t("mail.actions.markedRead")
             : t("mail.actions.markedUnread")
-      ),
+      )
+      // « Marquer comme non lu » explicite depuis le reader (value=false, non-silencieux) :
+      // on ferme le reader + désélectionne et on rafraîchit le compteur non-lus de la sidebar,
+      // en miroir de `move`. La liste est déjà mise à jour (patch optimiste : point non-lu rétabli).
+      if (ok && value === false && !opts?.silent) {
+        await router.invalidate() // compteurs sidebar (loader mailboxesFn)
+        await router.navigate({
+          to: "/mail/$folder",
+          params: { folder },
+          search: { thread: undefined },
+        })
+      }
+    },
     move: async (to) => {
       if (emailIds.length === 0) return // F6 : fil non chargé → no-op
       try {
