@@ -1,6 +1,6 @@
 import type { MailAddress, AppThreadDetail } from "./mail-types"
 import { sanitizeComposeHtml } from "../lib/compose-html"
-import type { JmapMethodResponse } from "./jmap"
+import type { JmapMethodResponse, JmapMethodCall } from "./jmap"
 
 // Rejette les caractères de contrôle interdits dans une valeur d'en-tête (B3 anti-CRLF).
 export function isCleanHeaderValue(s: string): boolean {
@@ -142,4 +142,75 @@ export function pickSendIdentity(
     list.find((i) => i.email.toLowerCase() === accountEmail.toLowerCase()) ??
     list[0]
   return { id: match.id, name: match.name ?? "", email: match.email }
+}
+
+export interface SendBody {
+  to: MailAddress[]
+  cc: MailAddress[]
+  bcc: MailAddress[]
+  subject: string
+  html: string
+  text: string
+  inReplyTo?: string
+  references: string[]
+}
+
+const EMAIL_CREATE_ID = "draft"
+const SUBMISSION_CREATE_ID = "sub"
+
+// Construit le batch Email/set (brouillon) + EmailSubmission/set (envoi). bcc UNIQUEMENT
+// dans l'enveloppe (R2). from depuis l'identité serveur (R1). Threading via headers (B3).
+export function buildSendMethodCalls(
+  accountId: string,
+  body: SendBody,
+  ctx: { draftsId: string; sentId: string; identity: SendIdentity }
+): JmapMethodCall[] {
+  const draft: Record<string, unknown> = {
+    mailboxIds: { [ctx.draftsId]: true },
+    keywords: { $draft: true, $seen: true },
+    from: [{ name: ctx.identity.name, email: ctx.identity.email }],
+    to: body.to,
+    subject: body.subject,
+    bodyValues: {
+      html: { value: body.html },
+      plain: { value: body.text },
+    },
+    htmlBody: [{ partId: "html", type: "text/html" }],
+    textBody: [{ partId: "plain", type: "text/plain" }],
+  }
+  if (body.cc.length > 0) draft.cc = body.cc
+  if (body.inReplyTo)
+    draft["header:In-Reply-To:asMessageIds"] = [body.inReplyTo]
+  if (body.references.length > 0)
+    draft["header:References:asMessageIds"] = body.references
+
+  // Enveloppe SMTP : tous les destinataires, bcc compris (mais jamais en en-tête).
+  const rcptTo = [...body.to, ...body.cc, ...body.bcc].map((a) => ({
+    email: a.email,
+  }))
+
+  return [
+    ["Email/set", { accountId, create: { [EMAIL_CREATE_ID]: draft } }, "0"],
+    [
+      "EmailSubmission/set",
+      {
+        accountId,
+        create: {
+          [SUBMISSION_CREATE_ID]: {
+            emailId: `#${EMAIL_CREATE_ID}`,
+            identityId: ctx.identity.id,
+            envelope: { mailFrom: { email: ctx.identity.email }, rcptTo },
+          },
+        },
+        onSuccessUpdateEmail: {
+          [`#${SUBMISSION_CREATE_ID}`]: {
+            "keywords/$draft": null,
+            [`mailboxIds/${ctx.draftsId}`]: null,
+            [`mailboxIds/${ctx.sentId}`]: true,
+          },
+        },
+      },
+      "1",
+    ],
+  ]
 }

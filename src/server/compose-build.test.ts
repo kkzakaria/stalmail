@@ -4,9 +4,11 @@ import {
   isCleanHeaderValue,
   buildReplyContext,
   pickSendIdentity,
+  buildSendMethodCalls,
 } from "./compose-build"
 import type { AppThreadDetail, AppMessage } from "./mail-types"
 import type { JmapMethodResponse } from "./jmap"
+import type { SendBody } from "./compose-build"
 
 const msg = (over: Partial<AppMessage> = {}): AppMessage => ({
   id: "m1",
@@ -198,5 +200,80 @@ describe("pickSendIdentity", () => {
 
   it("renvoie null si aucune identité", () => {
     expect(pickSendIdentity(identityGet([]), "me@x.fr")).toBeNull()
+  })
+})
+
+const body = (over: Partial<SendBody> = {}): SendBody => ({
+  to: [{ name: "Alice", email: "alice@x.fr" }],
+  cc: [],
+  bcc: [{ name: "", email: "secret@x.fr" }],
+  subject: "Bonjour",
+  html: "<p>Salut</p>",
+  text: "Salut",
+  references: [],
+  ...over,
+})
+
+const ctx = {
+  draftsId: "mb-drafts",
+  sentId: "mb-sent",
+  identity: { id: "i1", name: "Moi", email: "me@x.fr" },
+}
+
+describe("buildSendMethodCalls", () => {
+  const calls = buildSendMethodCalls("acc1", body(), ctx)
+  const emailSet = calls.find((c) => c[0] === "Email/set")!
+  const submissionSet = calls.find((c) => c[0] === "EmailSubmission/set")!
+  const created = emailSet[1].create as Record<string, Record<string, unknown>>
+  const draft = Object.values(created)[0]
+
+  it("crée l'Email dans Drafts avec keywords $draft/$seen", () => {
+    expect(draft.mailboxIds).toEqual({ "mb-drafts": true })
+    expect(draft.keywords).toEqual({ $draft: true, $seen: true })
+  })
+
+  it("from = identité serveur (R1)", () => {
+    expect(draft.from).toEqual([{ name: "Moi", email: "me@x.fr" }])
+  })
+
+  it("bcc absent des propriétés de l'Email stocké (R2)", () => {
+    expect(draft.bcc).toBeUndefined()
+    expect(JSON.stringify(draft)).not.toContain("secret@x.fr")
+  })
+
+  it("EmailSubmission référence l'Email créé et inclut bcc dans rcptTo (R2)", () => {
+    const subCreate = Object.values(
+      submissionSet[1].create as Record<string, Record<string, unknown>>
+    )[0]
+    expect(subCreate.identityId).toBe("i1")
+    const env = subCreate.envelope as { rcptTo: { email: string }[] }
+    expect(env.rcptTo.map((r) => r.email)).toContain("secret@x.fr")
+  })
+
+  it("onSuccessUpdateEmail : retire $draft, déplace Drafts→Sent", () => {
+    const upd = submissionSet[1].onSuccessUpdateEmail as Record<
+      string,
+      Record<string, unknown>
+    >
+    const patch = Object.values(upd)[0]
+    expect(patch["keywords/$draft"]).toBeNull()
+    expect(patch["mailboxIds/mb-drafts"]).toBeNull()
+    expect(patch["mailboxIds/mb-sent"]).toBe(true)
+  })
+
+  it("threading : Message-ID via header:*:asMessageIds (B3)", () => {
+    const withRef = buildSendMethodCalls(
+      "acc1",
+      body({ inReplyTo: "<mid@x.fr>", references: ["<mid@x.fr>"] }),
+      ctx
+    )
+    const d = Object.values(
+      withRef.find((c) => c[0] === "Email/set")![1].create as Record<
+        string,
+        Record<string, unknown>
+      >
+    )[0]
+    expect(d["header:In-Reply-To:asMessageIds"]).toEqual(["<mid@x.fr>"])
+    expect(d["header:References:asMessageIds"]).toEqual(["<mid@x.fr>"])
   })
 })
