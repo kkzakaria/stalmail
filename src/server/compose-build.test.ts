@@ -39,6 +39,12 @@ describe("parseAddressList", () => {
     expect(out.invalid).toHaveLength(1)
   })
 
+  it("rejette un email contenant un caractère de contrôle NUL (B3)", () => {
+    const out = parseAddressList("a\x00b@x.fr")
+    expect(out.valid).toEqual([])
+    expect(out.invalid).toHaveLength(1)
+  })
+
   it("rejette une adresse malformée à doubles chevrons (R-B)", () => {
     const out = parseAddressList("X <a@b.fr> <c@d.fr>")
     expect(out.valid).toEqual([])

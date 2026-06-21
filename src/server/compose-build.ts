@@ -2,7 +2,7 @@ import type { MailAddress } from "./mail-types"
 
 // Rejette les caractères de contrôle interdits dans une valeur d'en-tête (B3 anti-CRLF).
 export function isCleanHeaderValue(s: string): boolean {
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- intention sécurité B3 : caractères de contrôle volontairement recherchés
   return !/[\r\n\x00]/.test(s)
 }
 
@@ -24,7 +24,11 @@ export function parseAddressList(raw: string): {
     const m = /^([^<>]*)<([^<>\s]+@[^<>\s]+)>$/.exec(seg)
     const name = m ? m[1].trim() : ""
     const email = (m ? m[2] : seg).trim()
-    if (EMAIL_RE.test(email) && isCleanHeaderValue(name)) {
+    if (
+      EMAIL_RE.test(email) &&
+      isCleanHeaderValue(email) &&
+      isCleanHeaderValue(name)
+    ) {
       valid.push({ name, email })
     } else {
       invalid.push(seg)
