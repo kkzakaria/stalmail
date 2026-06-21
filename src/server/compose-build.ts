@@ -214,3 +214,39 @@ export function buildSendMethodCalls(
     ],
   ]
 }
+
+export type SendErrorCode = "rejected" | "quota" | "failed"
+export type SendResult =
+  | { ok: true; emailId: string }
+  | { ok: false; code: SendErrorCode }
+
+function firstSetError(args: Record<string, unknown>): string | null {
+  const nc = args.notCreated as
+    | Record<string, { type?: string } | undefined>
+    | undefined
+  if (!nc) return null
+  const first = Object.values(nc)[0]
+  if (!first) return null
+  return first.type ?? "unknown"
+}
+
+// Mappe les SetError JMAP/SMTP vers un code i18n fixe (R6 : aucun détail propagé).
+export function parseSendResult(responses: JmapMethodResponse[]): SendResult {
+  const emailSet = responses.find(([n]) => n === "Email/set")
+  const submission = responses.find(([n]) => n === "EmailSubmission/set")
+
+  const emailErr = emailSet ? firstSetError(emailSet[1]) : "unknown"
+  if (emailErr) return { ok: false, code: "failed" }
+
+  const subErr = submission ? firstSetError(submission[1]) : "unknown"
+  if (subErr) {
+    if (subErr === "overQuota") return { ok: false, code: "quota" }
+    if (subErr === "forbiddenFrom" || subErr === "forbiddenToSend")
+      return { ok: false, code: "rejected" }
+    return { ok: false, code: "failed" }
+  }
+
+  const created = emailSet![1].created as Record<string, { id: string }>
+  const emailId = Object.values(created)[0]?.id ?? ""
+  return { ok: true, emailId }
+}

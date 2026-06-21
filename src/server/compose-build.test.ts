@@ -5,6 +5,7 @@ import {
   buildReplyContext,
   pickSendIdentity,
   buildSendMethodCalls,
+  parseSendResult,
 } from "./compose-build"
 import type { AppThreadDetail, AppMessage } from "./mail-types"
 import type { JmapMethodResponse } from "./jmap"
@@ -275,5 +276,59 @@ describe("buildSendMethodCalls", () => {
     )[0]
     expect(d["header:In-Reply-To:asMessageIds"]).toEqual(["<mid@x.fr>"])
     expect(d["header:References:asMessageIds"]).toEqual(["<mid@x.fr>"])
+  })
+})
+
+describe("parseSendResult", () => {
+  it("succès : renvoie l'id de l'email soumis", () => {
+    const r: JmapMethodResponse[] = [
+      ["Email/set", { created: { draft: { id: "e-9" } } }, "0"],
+      ["EmailSubmission/set", { created: { sub: { id: "s-1" } } }, "1"],
+    ]
+    expect(parseSendResult(r)).toEqual({ ok: true, emailId: "e-9" })
+  })
+
+  it("notCreated sur EmailSubmission → code mappé (sans détail JMAP, R6)", () => {
+    const r: JmapMethodResponse[] = [
+      ["Email/set", { created: { draft: { id: "e-9" } } }, "0"],
+      [
+        "EmailSubmission/set",
+        {
+          notCreated: {
+            sub: { type: "forbiddenFrom", description: "relay info interne" },
+          },
+        },
+        "1",
+      ],
+    ]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "rejected" })
+  })
+
+  it("notCreated overQuota → code quota", () => {
+    const r: JmapMethodResponse[] = [
+      ["Email/set", { created: { draft: { id: "e-9" } } }, "0"],
+      [
+        "EmailSubmission/set",
+        { notCreated: { sub: { type: "overQuota" } } },
+        "1",
+      ],
+    ]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "quota" })
+  })
+
+  it("échec Email/set → code failed", () => {
+    const r: JmapMethodResponse[] = [
+      [
+        "Email/set",
+        { notCreated: { draft: { type: "invalidProperties" } } },
+        "0",
+      ],
+    ]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "failed" })
+  })
+
+  it("erreur JMAP niveau méthode (['error',…]) → failed, jamais faux succès (R-E)", () => {
+    const r: JmapMethodResponse[] = [["error", { type: "unknownMethod" }, "1"]]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "failed" })
   })
 })
