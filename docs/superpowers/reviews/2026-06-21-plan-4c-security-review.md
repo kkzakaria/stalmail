@@ -111,8 +111,64 @@ F8 de la 4b).
 | A09 Logging Failures | R6. |
 | A10 SSRF | RAS en 4c (R4) ; recadrer aux phases blob/images. |
 
-## Verdict
+## Verdict (audit du spec)
 
 **Avant le plan** : intégrer B1–B4 au design (fait — révision spec 2026-06-21). R1–R6
 sont des durcissements (intégrés). B1 et B2 sont les plus sérieux : le composer franchit
 pour la première fois la frontière « HTML hostile hors de l'iframe sandbox ».
+
+---
+
+# Plan — Audit du code d'implémentation
+
+> Second passage, sur `docs/superpowers/plans/2026-06-21-plan-4c-composer.md` (code réel
+> TDD). Vérifie que le code porte bien les garanties du spec et ne réintroduit pas de
+> risque par ses choix concrets. **Statut** : P1, P2 + durcissements **intégrés au plan**
+> (révision 2026-06-21).
+
+## Bloquants (corrigés)
+
+### P1 — Sanitisation du RteEditor à chaque frappe : curseur cassé → tentation de désactiver la barrière ; + import depuis `src/server` côté client
+- **Emplacement** : Task 10 (`rte-editor.tsx`), Task 1 (`compose-html.ts`).
+- **OWASP** : A04 – Insecure Design (robustesse de la barrière B1) ; A03.
+- **Risque** : `onChange(sanitizeComposeHtml(innerHTML))` à chaque `onInput` + réinjection
+  `el.innerHTML` font sauter le curseur (DOMPurify re-sérialise) → un implémenteur
+  désactiverait la sanitisation, supprimant la défense B1 au collage. De plus le composant
+  client importait depuis `src/server/` (frontière BFF).
+- **Correctif intégré** : frappe = émet le HTML **brut** (serveur autoritaire B2) ;
+  sanitisation uniquement au **collage** (`onPaste`) et à l'**injection de citation**
+  (drapeau `lastInjected`, une seule fois). `compose-html.ts` déplacé dans **`src/lib/`**.
+
+### P2 — `currentSession(sid)?.email` inexistant : clé de rate-limit vide → throttle global au lieu de par-compte
+- **Emplacement** : Task 9 (`sendMailFn`).
+- **OWASP** : A04 – Insecure Design (anti-abus B4).
+- **Risque** : `currentSession` renvoie `{ accountId, accountName }` (vérifié, `session.ts:83`).
+  `?.email` → `undefined` → clé `""` partagée par tous les comptes (DoS croisé / quota
+  partagé). La « Décision » inline ne suffisait pas : le code écrit doit être déterministe.
+- **Correctif intégré** : clé de rate-limit = **`accountId`** ; `pickSendIdentity(_, "")`
+  (→ première identité du compte, scopée par `Identity/get`) ; suppression de
+  `currentSession`/`accountEmail`.
+
+## Recommandations (intégrées ou actées)
+
+- **R-A** — `htmlToPlainText` ne sert que de corps `text/plain`, jamais d'en-tête (aucun
+  vecteur d'injection) ; noté en commentaire.
+- **R-B** — regex de `parseAddressList` resserrée (rejette `<>` dans le name et les
+  adresses à doubles chevrons) + test ajouté.
+- **R-C** — tests `mailto:` supplémentaires ; note sur le hook DOMPurify **global au
+  process** (inoffensif aujourd'hui, `email-body.ts` n'utilise pas DOMPurify).
+- **R-D** — R1 correctement implémenté : `from` et `mailFrom` dérivent tous deux de
+  l'identité serveur. RAS.
+- **R-E** — `parseSendResult` échoue **fermé** sur une erreur JMAP niveau méthode
+  (`["error",…]`) : aucun faux succès. Test fail-closed ajouté.
+- **R-F** — garde synchrone `useRef` anti-double-soumission dans `useComposer`.
+- **R-G** — le serveur revalide intégralement (Zod) ; la confiance n'est pas côté client. RAS.
+- **R-H** — rate-limit 30/h/compte, fenêtre glissante ; limite in-memory mono-process
+  assumée (notée dans les limites connues du plan). `bun audit` ajouté en Task 1 (R3).
+
+## Verdict (audit du plan)
+
+Pas de XSS exécutable garanti dans le code proposé (B1/B2/B3 portés ; bcc hors en-tête ;
+identité serveur ; fail-closed). Les deux pièges concrets — sanitisation couplée à la
+frappe (P1) et clé de rate-limit fantôme (P2) — sont corrigés dans le plan avant écriture
+du code.

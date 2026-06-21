@@ -30,8 +30,8 @@
 ## File Structure
 
 **Créés :**
-- `src/server/compose-html.ts` — `sanitizeComposeHtml`, `htmlToPlainText` (purs, isomorphes)
-- `src/server/compose-html.test.ts`
+- `src/lib/compose-html.ts` — `sanitizeComposeHtml`, `htmlToPlainText` (purs, isomorphes). **Hors `src/server/`** (P1) : importé à la fois par le serveur (`mail-actions`, `compose-build`) et le client (`rte-editor`) sans franchir la frontière BFF.
+- `src/lib/compose-html.test.ts`
 - `src/server/compose-build.ts` — `parseAddressList`, `buildReplyContext`, `pickSendIdentity`, `buildSendMethodCalls`, `parseSendResult` + types `ComposeMode`, `SendInput`, `SendResult`, `ReplyContext`, `SendIdentity` (purs, isomorphes)
 - `src/server/compose-build.test.ts`
 - `src/server/send-rate-limit.ts` — throttle d'envoi par compte (miroir de `login-rate-limit.ts`)
@@ -59,8 +59,8 @@
 ## Task 1: Sanitiseur HTML (`sanitizeComposeHtml`, `htmlToPlainText`)
 
 **Files:**
-- Create: `src/server/compose-html.ts`
-- Test: `src/server/compose-html.test.ts`
+- Create: `src/lib/compose-html.ts` (hors `src/server/` — P1)
+- Test: `src/lib/compose-html.test.ts`
 - Modify: `package.json` (ajout `isomorphic-dompurify` via `bun add`)
 
 **Interfaces:**
@@ -72,13 +72,14 @@
 
 ```bash
 bun add isomorphic-dompurify
+bun audit   # R3 : la dépendance de sanitisation est soumise au scan
 ```
 
-Expected : `isomorphic-dompurify` ajouté à `dependencies` dans `package.json`, `bun.lock` régénéré.
+Expected : `isomorphic-dompurify` ajouté à `dependencies` dans `package.json`, `bun.lock` régénéré, `bun audit` sans vulnérabilité bloquante.
 
 - [ ] **Step 2: Write the failing test**
 
-`src/server/compose-html.test.ts` :
+`src/lib/compose-html.test.ts` :
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -115,6 +116,12 @@ describe("sanitizeComposeHtml", () => {
       '<a href="mailto:a@b.fr">l</a>'
     )
   })
+
+  it("retire la query mailto: même avec un seul paramètre (R-C)", () => {
+    expect(sanitizeComposeHtml('<a href="mailto:a@b.fr?bcc=x@y.fr">l</a>')).toBe(
+      '<a href="mailto:a@b.fr">l</a>'
+    )
+  })
 })
 
 describe("htmlToPlainText", () => {
@@ -136,7 +143,13 @@ Expected: FAIL (`Cannot find module './compose-html'`).
 
 - [ ] **Step 4: Write minimal implementation**
 
-`src/server/compose-html.ts` :
+> Note hook global (R-C) : `DOMPurify.addHook` est **global au process**. Le strip de
+> query `mailto:` s'applique donc à toute sanitisation DOMPurify. C'est inoffensif
+> (aucun autre code n'utilise `isomorphic-dompurify` aujourd'hui — `email-body.ts` est
+> en regex best-effort). Si un futur appelant DOMPurify dépend d'un `mailto:?…`, scoper
+> le hook. Le drapeau `hookInstalled` garantit une seule installation.
+
+`src/lib/compose-html.ts` :
 
 ```ts
 import DOMPurify from "isomorphic-dompurify"
@@ -180,6 +193,8 @@ export function sanitizeComposeHtml(html: string): string {
 }
 
 // Alternative text/plain : bloc → saut de ligne, <br> → \n, entités décodées, balises retirées.
+// R-A : sert UNIQUEMENT de corps text/plain (bodyValues.plain), jamais de valeur d'en-tête —
+// aucun vecteur d'injection (Stalwart encode le corps). Décodage d'entités volontairement partiel.
 export function htmlToPlainText(html: string): string {
   const withBreaks = html
     .replace(/<\/(p|div|li|ul|ol)>/gi, "\n")
@@ -208,7 +223,7 @@ Expected: PASS (6 + 2 assertions).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add package.json bun.lock src/server/compose-html.ts src/server/compose-html.test.ts
+git add package.json bun.lock src/lib/compose-html.ts src/lib/compose-html.test.ts
 git commit -m "feat(4c): sanitizeComposeHtml + htmlToPlainText (allowlist DOMPurify)"
 ```
 
@@ -271,6 +286,12 @@ describe("parseAddressList", () => {
     expect(out.valid).toEqual([])
     expect(out.invalid).toHaveLength(1)
   })
+
+  it("rejette une adresse malformée à doubles chevrons (R-B)", () => {
+    const out = parseAddressList("X <a@b.fr> <c@d.fr>")
+    expect(out.valid).toEqual([])
+    expect(out.invalid).toEqual(["X <a@b.fr> <c@d.fr>"])
+  })
 })
 
 describe("isCleanHeaderValue", () => {
@@ -315,7 +336,8 @@ export function parseAddressList(raw: string): {
   for (const segment of raw.split(",")) {
     const seg = segment.trim()
     if (seg === "") continue
-    const m = /^(.*)<([^>]+)>$/.exec(seg)
+    // R-B : name sans <>, email sans <>@espace — refuse "X <a@b> <c@d>" plutôt que de l'absorber.
+    const m = /^([^<>]*)<([^<>\s]+@[^<>\s]+)>$/.exec(seg)
     const name = m ? m[1].trim() : ""
     const email = (m ? m[2] : seg).trim()
     if (EMAIL_RE.test(email) && isCleanHeaderValue(name)) {
@@ -447,7 +469,7 @@ Expected: FAIL (`buildReplyContext is not a function`).
 
 ```ts
 import type { AppThreadDetail } from "./mail-types"
-import { sanitizeComposeHtml } from "./compose-html"
+import { sanitizeComposeHtml } from "../lib/compose-html" // P1 : module neutre hors src/server
 
 export type ComposeMode = "compose" | "reply" | "replyAll" | "forward"
 
@@ -875,6 +897,11 @@ describe("parseSendResult", () => {
     ]
     expect(parseSendResult(r)).toEqual({ ok: false, code: "failed" })
   })
+
+  it("erreur JMAP niveau méthode (['error',…]) → failed, jamais faux succès (R-E)", () => {
+    const r: JmapMethodResponse[] = [["error", { type: "unknownMethod" }, "1"]]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "failed" })
+  })
 })
 ```
 
@@ -1070,7 +1097,9 @@ Expected: FAIL (`Cannot find module './send-rate-limit'`).
 
 ```ts
 // Throttle d'envoi par compte (in-memory, BFF mono-process). Borne le spam sortant
-// avant EmailSubmission/set (audit 4c B4).
+// avant EmailSubmission/set (audit 4c B4). La clé `account` est l'accountId de session
+// fourni par sendMailFn (P2) — jamais une chaîne vide (sinon throttle global).
+// Limite assumée (R-H) : mono-process, remis à zéro au redémarrage (comme login-rate-limit).
 const WINDOW_MS = 60 * 60 * 1000
 const MAX_PER_ACCOUNT = 30
 
@@ -1120,7 +1149,7 @@ git commit -m "feat(4c): rate-limit d'envoi par compte (anti-spam sortant)"
 - Test: `src/server/mail-actions.test.ts` (ajout)
 
 **Interfaces:**
-- Consumes : `sanitizeComposeHtml`, `htmlToPlainText` (`./compose-html`) ; `buildSendMethodCalls`, `parseSendResult`, `pickSendIdentity`, `isCleanHeaderValue`, types (`./compose-build`) ; `mailboxRefs` (déjà présent) ; `SUBMISSION_CAPABILITIES`, `jmapUserCall` (`./jmap-user`) ; `isSendRateLimited`, `recordSend` (`./send-rate-limit`).
+- Consumes : `sanitizeComposeHtml`, `htmlToPlainText` (`../lib/compose-html`) ; `buildSendMethodCalls`, `parseSendResult`, `pickSendIdentity`, `isCleanHeaderValue`, types (`./compose-build`) ; `mailboxRefs` (déjà présent) ; `SUBMISSION_CAPABILITIES`, `jmapUserCall` (`./jmap-user`) ; `isSendRateLimited`, `recordSend` (`./send-rate-limit`).
 - Produces : `sendMailFn` (server fn POST) ; `sendMailSchema` (Zod) ; `mailboxIdByRole` est déjà défini dans le fichier (réutilisé).
 
 > Le schéma valide une saisie **déjà parsée** côté client (le client transmet des
@@ -1175,7 +1204,7 @@ Expected: FAIL (`sendMailSchema` non exporté).
 - [ ] **Step 3: Write minimal implementation** (ajouter à `mail-actions.ts`)
 
 ```ts
-import { sanitizeComposeHtml, htmlToPlainText } from "./compose-html"
+import { sanitizeComposeHtml, htmlToPlainText } from "../lib/compose-html"
 import {
   buildSendMethodCalls,
   parseSendResult,
@@ -1224,10 +1253,11 @@ export const sendMailFn = createServerFn({ method: "POST" })
       const { jmapUserCall, SUBMISSION_CAPABILITIES } = await import("./jmap-user")
       const { isSendRateLimited, recordSend } = await import("./send-rate-limit")
       const { sid, accountId } = await requireSession()
-      const { currentSession } = await import("./session")
-      const accountEmail = currentSession(sid)?.email ?? ""
 
-      if (isSendRateLimited(accountEmail)) {
+      // P2 : currentSession n'expose PAS d'email (uniquement { accountId, accountName }).
+      // La clé de rate-limit anti-spam est donc l'accountId (stable, par compte) — surtout
+      // pas une chaîne vide partagée par tous les comptes (ce serait un rate-limit global).
+      if (isSendRateLimited(accountId)) {
         throw new Error("send rate limited") // mappé en toast générique côté client
       }
 
@@ -1243,7 +1273,9 @@ export const sendMailFn = createServerFn({ method: "POST" })
       const mailboxes = mailboxRefs(readResponses)
       const draftsId = mailboxIdByRole(mailboxes, "drafts")
       const sentId = mailboxIdByRole(mailboxes, "sent")
-      const identity = pickSendIdentity(readResponses, accountEmail)
+      // accountEmail inconnu côté session → "" : pickSendIdentity retombe sur la première
+      // identité du compte (toujours scopée à l'accountId de session par Identity/get, R1).
+      const identity = pickSendIdentity(readResponses, "")
       if (!draftsId || !sentId || !identity) {
         throw new Error("send: mailbox/identity unavailable")
       }
@@ -1269,7 +1301,7 @@ export const sendMailFn = createServerFn({ method: "POST" })
       )
       const result = parseSendResult(responses)
       if (!result.ok) throw new Error(`send failed: ${result.code}`)
-      recordSend(accountEmail)
+      recordSend(accountId)
       return { ok: true, emailId: result.emailId }
     } catch (e) {
       if (isRedirect(e)) throw e
@@ -1279,12 +1311,10 @@ export const sendMailFn = createServerFn({ method: "POST" })
   })
 ```
 
-> Prérequis : vérifier que `currentSession(sid)` expose bien `email`. Si la session ne
-> stocke pas l'email, utiliser l'email de la première identité retournée par
-> `Identity/get` comme `accountEmail` pour `pickSendIdentity` (fallback : `list[0]`).
-> Adapter `recordSend`/`isSendRateLimited` à `accountId` si l'email n'est pas
-> disponible. **Décision** : si `session.email` absent, passer `accountId` comme clé
-> de rate-limit et `pickSendIdentity(readResponses, "")` (→ première identité).
+> Fait établi (vérifié) : `currentSession(sid)` renvoie `{ accountId, accountName }`,
+> **sans email**. Le code ci-dessus utilise donc `accountId` comme clé de rate-limit et
+> `pickSendIdentity(readResponses, "")`. Ne pas réintroduire de lecture de
+> `session.email` (inexistant).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1307,16 +1337,23 @@ git commit -m "feat(4c): sendMailFn (server function d'envoi + schéma Zod durci
 - Test: `src/components/mail/rte-editor.test.tsx`
 
 **Interfaces:**
-- Consumes : `sanitizeComposeHtml` (`../../server/compose-html`).
+- Consumes : `sanitizeComposeHtml` (`../../lib/compose-html` — P1, module neutre).
 - Produces :
   - `interface RteEditorProps { value: string; onChange: (html: string) => void; placeholder?: string; ariaLabel: string }`
-  - `RteEditor(props): JSX.Element` — `contentEditable` + toolbar (gras/italique/lien/listes). Toute valeur injectée (citation) passe par `sanitizeComposeHtml` (B1).
+  - `RteEditor(props): JSX.Element` — `contentEditable` + toolbar (gras/italique/lien/listes).
 
+> **Sanitisation découplée (P1).** Ne PAS sanitiser à chaque frappe : DOMPurify
+> re-sérialise le DOM, et réinjecter le résultat dans `el.innerHTML` à chaque `onInput`
+> fait sauter le curseur (UX cassée → tentation de désactiver la barrière). Règle :
+> - `onInput` → `onChange(el.innerHTML)` **brut** (le serveur reste la barrière
+>   autoritaire B2 ; le contenu vient de l'utilisateur lui-même).
+> - `onPaste` → on **sanitise le presse-papier** avant insertion (défense B1 : contenu
+>   collé depuis un email hostile).
+> - Injection de `value` (citation pré-remplie) → sanitisée **une seule fois** à
+>   l'initialisation / quand `value` change réellement (drapeau `initialized`), jamais
+>   en boucle de rendu.
 > Le `RteEditor` utilise `document.execCommand` (`bold`, `italic`,
-> `insertUnorderedList`, `insertOrderedList`, `createLink`) comme la maquette. Au
-> `onInput`, il **sanitise** le HTML courant avant d'appeler `onChange` (défense B1 :
-> contenu collé). La prop `value` n'écrase le DOM que si elle diffère (évite de casser
-> le curseur).
+> `insertUnorderedList`, `insertOrderedList`, `createLink`).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1334,22 +1371,19 @@ describe("RteEditor", () => {
     expect(screen.getByRole("button", { name: /gras/i })).toBeInTheDocument()
   })
 
-  it("appelle onChange avec du HTML sanitisé à la saisie (B1)", () => {
+  it("émet le HTML brut à la frappe (P1 : pas de sanitize à chaque onInput)", () => {
     const onChange = vi.fn()
     render(<RteEditor value="" onChange={onChange} ariaLabel="Corps" />)
     const editable = screen.getByLabelText("Corps")
-    editable.innerHTML = '<p>ok</p><img src=x onerror="alert(1)">'
+    editable.innerHTML = "<p>bonjour</p>"
     fireEvent.input(editable)
-    expect(onChange).toHaveBeenCalled()
-    const arg = onChange.mock.calls.at(-1)![0] as string
-    expect(arg).not.toContain("onerror")
-    expect(arg).not.toContain("<img")
+    expect(onChange).toHaveBeenLastCalledWith("<p>bonjour</p>")
   })
 
-  it("injecte une value initiale sanitisée", () => {
+  it("injecte une value (citation) sanitisée — barrière B1 à l'injection", () => {
     render(
       <RteEditor
-        value='<p>cite</p><script>alert(1)</script>'
+        value='<p>cite</p><script>alert(1)</script><img src=x onerror="alert(1)">'
         onChange={() => {}}
         ariaLabel="Corps"
       />
@@ -1357,8 +1391,14 @@ describe("RteEditor", () => {
     const editable = screen.getByLabelText("Corps")
     expect(editable.innerHTML).toContain("cite")
     expect(editable.innerHTML).not.toContain("script")
+    expect(editable.innerHTML).not.toContain("onerror")
+    expect(editable.innerHTML).not.toContain("<img")
   })
 })
+
+// Note : le `onPaste` sanitise via document.execCommand('insertHTML'), no-op sous jsdom —
+// la défense B1 au collage est donc couverte par revue de code + la barrière serveur
+// autoritaire (Task 1 + Task 9), pas par ce test composant.
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1374,7 +1414,7 @@ Expected: FAIL (`Cannot find module './rte-editor'`).
 import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
-import { sanitizeComposeHtml } from "../../server/compose-html"
+import { sanitizeComposeHtml } from "../../lib/compose-html"
 
 export interface RteEditorProps {
   value: string
@@ -1386,20 +1426,31 @@ export interface RteEditorProps {
 export function RteEditor({ value, onChange, placeholder, ariaLabel }: RteEditorProps) {
   const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
+  const lastInjected = useRef<string | null>(null)
 
-  // Synchronise la value externe (citation pré-remplie) — sanitisée (B1) — sans casser
-  // le curseur pendant la frappe (n'écrit que si le DOM diffère réellement).
+  // Injecte la value externe (citation pré-remplie) — sanitisée (B1) — UNIQUEMENT quand
+  // elle change réellement (P1 : pas à chaque rendu, sinon le curseur saute pendant la frappe).
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const safe = sanitizeComposeHtml(value)
-    if (el.innerHTML !== safe) el.innerHTML = safe
+    if (value === lastInjected.current) return
+    lastInjected.current = value
+    el.innerHTML = sanitizeComposeHtml(value)
   }, [value])
 
+  // Frappe : on émet le HTML brut (le serveur sanitise à l'envoi, barrière autoritaire B2).
   function emit() {
     const el = ref.current
     if (!el) return
-    onChange(sanitizeComposeHtml(el.innerHTML))
+    onChange(el.innerHTML)
+  }
+
+  // Collage : sanitise le presse-papier avant insertion (défense B1 : contenu hostile collé).
+  function onPaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const raw = e.clipboardData.getData("text/html") || e.clipboardData.getData("text/plain")
+    document.execCommand("insertHTML", false, sanitizeComposeHtml(raw))
+    emit()
   }
 
   function exec(cmd: string, arg?: string) {
@@ -1450,6 +1501,7 @@ export function RteEditor({ value, onChange, placeholder, ariaLabel }: RteEditor
         aria-label={ariaLabel}
         data-placeholder={placeholder}
         onInput={emit}
+        onPaste={onPaste}
       />
     </div>
   )
@@ -1580,7 +1632,7 @@ Expected: FAIL (`Cannot find module './use-composer'`).
 `src/components/mail/use-composer.ts` :
 
 ```ts
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import { sendMailFn } from "../../server/mail-actions"
@@ -1608,8 +1660,10 @@ export function useComposer(folder: string): UseComposer {
   const notify = useToast()
   const { t } = useTranslation()
   const [sending, setSending] = useState(false)
+  const inFlight = useRef(false) // R-F : garde synchrone anti-double-soumission (avant re-render)
 
   async function send(draft: ComposerDraft): Promise<boolean> {
+    if (inFlight.current) return false
     const to = parseAddressList(draft.to)
     const cc = parseAddressList(draft.cc)
     const bcc = parseAddressList(draft.bcc)
@@ -1621,6 +1675,7 @@ export function useComposer(folder: string): UseComposer {
       notify(t("mail.compose.noRecipient"), "error")
       return false
     }
+    inFlight.current = true
     setSending(true)
     try {
       await sendMailFn({
@@ -1642,6 +1697,7 @@ export function useComposer(folder: string): UseComposer {
       notify(t("mail.compose.error"), "error")
       return false
     } finally {
+      inFlight.current = false
       setSending(false)
     }
   }
@@ -2250,7 +2306,12 @@ git commit -m "feat(4c): câblage Composer (sidebar, route, i18n, quick-reply)"
 
 **Type consistency** : `ComposeMode`, `ComposerDraft`, `SendBody`, `ReplyContext`, `SendIdentity`, `SendResult` sont définis une fois (Tasks 3–6) et réutilisés avec les mêmes noms en Tasks 9–13. `sendMailFn({ data })` cohérent entre Task 9 (définition) et Task 11 (appel). `jmapUserCall(sid, calls, caps?)` cohérent Tasks 7/9.
 
-**Limites connues 4c à porter en revue** : transfert sans réémission des pièces jointes d'origine (upload hors scope) ; `selfEmail` côté UI best-effort (le serveur fait foi pour l'identité) ; `blockquote` non stylé (allowlist minimale).
+**Limites connues 4c à porter en revue** : transfert sans réémission des pièces jointes d'origine (upload hors scope) ; `selfEmail` côté UI best-effort (le serveur fait foi pour l'identité) ; `blockquote` non stylé (allowlist minimale) ; rate-limit in-memory mono-process (reset au redémarrage, comme `login-rate-limit`).
+
+**Audit sécurité du plan** (intégré, voir `docs/superpowers/reviews/2026-06-21-plan-4c-security-review.md` §Plan) :
+- **P1** (Task 1/10) — sanitisation découplée (frappe = brut, collage + injection citation = sanitisés) ; `compose-html.ts` déplacé dans `src/lib/` (hors frontière BFF).
+- **P2** (Task 9) — clé de rate-limit = `accountId` (`currentSession` n'expose pas d'email) ; plus de chaîne vide partagée.
+- Durcissements intégrés : R-B (regex name), R-C (tests mailto + note hook global), R-E (test fail-closed), R-F (garde anti-double-soumission), `bun audit` (Task 1).
 
 ---
 
