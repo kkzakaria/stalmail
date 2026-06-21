@@ -246,7 +246,15 @@ export function parseSendResult(responses: JmapMethodResponse[]): SendResult {
     return { ok: false, code: "failed" }
   }
 
-  const created = emailSet![1].created as Record<string, { id: string }>
-  const emailId = Object.values(created)[0]?.id ?? ""
+  // Succès réel uniquement si l'Email a un id ET la submission a été créée.
+  const created = emailSet![1].created as
+    | Record<string, { id?: string }>
+    | undefined
+  const emailId = created ? (Object.values(created)[0]?.id ?? null) : null
+  const subCreated = submission![1].created as
+    | Record<string, unknown>
+    | undefined
+  const submissionOk = subCreated ? Object.keys(subCreated).length > 0 : false
+  if (!emailId || !submissionOk) return { ok: false, code: "failed" }
   return { ok: true, emailId }
 }

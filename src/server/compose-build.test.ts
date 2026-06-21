@@ -331,4 +331,32 @@ describe("parseSendResult", () => {
     const r: JmapMethodResponse[] = [["error", { type: "unknownMethod" }, "1"]]
     expect(parseSendResult(r)).toEqual({ ok: false, code: "failed" })
   })
+
+  it("notCreated forbiddenToSend → rejected", () => {
+    const r: JmapMethodResponse[] = [
+      ["Email/set", { created: { draft: { id: "e-9" } } }, "0"],
+      [
+        "EmailSubmission/set",
+        { notCreated: { sub: { type: "forbiddenToSend" } } },
+        "1",
+      ],
+    ]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "rejected" })
+  })
+
+  it("EmailSubmission created vide → failed (pas de faux succès)", () => {
+    const r: JmapMethodResponse[] = [
+      ["Email/set", { created: { draft: { id: "e-9" } } }, "0"],
+      ["EmailSubmission/set", { created: {} }, "1"],
+    ]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "failed" })
+  })
+
+  it("Email/set sans created (réponse vide) → failed, sans throw", () => {
+    const r: JmapMethodResponse[] = [
+      ["Email/set", {}, "0"],
+      ["EmailSubmission/set", { created: { sub: { id: "s-1" } } }, "1"],
+    ]
+    expect(parseSendResult(r)).toEqual({ ok: false, code: "failed" })
+  })
 })
