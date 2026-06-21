@@ -11,6 +11,14 @@ import type {
   EmailListPage,
   MailAddress,
 } from "./mail-types"
+import { sanitizeComposeHtml, htmlToPlainText } from "../lib/compose-html"
+import {
+  buildSendMethodCalls,
+  parseSendResult,
+  pickSendIdentity,
+  isCleanHeaderValue,
+} from "./compose-build"
+import type { SendBody } from "./compose-build"
 
 interface RawMailbox {
   id: string
@@ -592,5 +600,107 @@ export const readThreadFn = createServerFn({ method: "GET" })
       if (isRedirect(e)) throw e
       console.error("mail action failed", e)
       throw new Error("mail action failed")
+    }
+  })
+
+// ─── Composer / Envoi ────────────────────────────────────────────────────────
+
+const addressSchema = z.object({
+  name: z
+    .string()
+    .max(255)
+    .refine(isCleanHeaderValue, "name: caractère interdit"),
+  email: z.string().email().max(320),
+})
+
+const headerLine = z
+  .string()
+  .max(998)
+  .refine(isCleanHeaderValue, "en-tête: caractère interdit")
+
+const messageId = z.string().min(3).max(998).refine(isCleanHeaderValue)
+
+export const sendMailSchema = z
+  .object({
+    mode: z.enum(["compose", "reply", "replyAll", "forward"]),
+    to: z.array(addressSchema).max(100),
+    cc: z.array(addressSchema).max(100),
+    bcc: z.array(addressSchema).max(100),
+    subject: headerLine,
+    html: z.string().max(256 * 1024),
+    inReplyTo: messageId.optional(),
+    references: z.array(messageId).max(50),
+  })
+  .refine((d) => d.to.length + d.cc.length + d.bcc.length <= 100, {
+    message: "trop de destinataires",
+  })
+  .refine((d) => d.to.length + d.cc.length + d.bcc.length >= 1, {
+    message: "au moins un destinataire",
+  })
+
+type SendMailInput = z.infer<typeof sendMailSchema>
+
+export const sendMailFn = createServerFn({ method: "POST" })
+  .validator((d: SendMailInput) => sendMailSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true; emailId: string }> => {
+    try {
+      const { jmapUserCall, SUBMISSION_CAPABILITIES } =
+        await import("./jmap-user")
+      const { isSendRateLimited, recordSend } =
+        await import("./send-rate-limit")
+      const { sid, accountId } = await requireSession()
+
+      // P2 : currentSession n'expose PAS d'email (uniquement { accountId, accountName }).
+      // La clé de rate-limit anti-spam est donc l'accountId (stable, par compte).
+      if (isSendRateLimited(accountId)) {
+        throw new Error("send rate limited")
+      }
+
+      // Lecture : dossiers drafts/sent + identités (R1).
+      const readResponses = await jmapUserCall(sid, [
+        [
+          "Mailbox/get",
+          { accountId, ids: null, properties: ["id", "role"] },
+          "0",
+        ],
+        ["Identity/get", { accountId, ids: null }, "1"],
+      ])
+      const mailboxes = mailboxRefs(readResponses)
+      const draftsId = mailboxIdByRole(mailboxes, "drafts")
+      const sentId = mailboxIdByRole(mailboxes, "sent")
+      // accountEmail inconnu côté session → "" : pickSendIdentity retombe sur la première
+      // identité du compte (toujours scopée à l'accountId de session par Identity/get, R1).
+      const identity = pickSendIdentity(readResponses, "")
+      if (!draftsId || !sentId || !identity) {
+        throw new Error("send: mailbox/identity unavailable")
+      }
+
+      // Sanitisation autoritaire serveur (B2) + alternative texte.
+      const html = sanitizeComposeHtml(data.html)
+      const text = htmlToPlainText(html)
+      const body: SendBody = {
+        to: data.to,
+        cc: data.cc,
+        bcc: data.bcc,
+        subject: data.subject,
+        html,
+        text,
+        inReplyTo: data.inReplyTo,
+        references: data.references,
+      }
+
+      const responses = await jmapUserCall(
+        sid,
+        buildSendMethodCalls(accountId, body, { draftsId, sentId, identity }),
+        SUBMISSION_CAPABILITIES
+      )
+      const result = parseSendResult(responses)
+      if (!result.ok) throw new Error(`send failed: ${result.code}`)
+      recordSend(accountId)
+      return { ok: true, emailId: result.emailId }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("send mail failed", e) // R6 : détail en logs serveur uniquement
+      throw new Error("send mail failed")
     }
   })

@@ -10,6 +10,7 @@ import {
   buildMovePatch,
   parseEmailMailboxes,
   resolveTargetMailbox,
+  sendMailSchema,
 } from "./mail-actions"
 import type { JmapMethodResponse } from "./jmap"
 import type { AppMailbox } from "./mail-types"
@@ -587,5 +588,47 @@ describe("resolveTargetMailbox", () => {
     expect(
       resolveTargetMailbox("trash", [{ id: "mi", role: "inbox" }])
     ).toBeUndefined()
+  })
+})
+
+describe("sendMailSchema", () => {
+  const base = {
+    mode: "compose",
+    to: [{ name: "Alice", email: "alice@x.fr" }],
+    cc: [],
+    bcc: [],
+    subject: "Bonjour",
+    html: "<p>Salut</p>",
+    references: [],
+  }
+
+  it("accepte une entrée valide", () => {
+    expect(() => sendMailSchema.parse(base)).not.toThrow()
+  })
+
+  it("rejette un subject avec CRLF (B3)", () => {
+    expect(() =>
+      sendMailSchema.parse({ ...base, subject: "a\r\nBcc: x" })
+    ).toThrow()
+  })
+
+  it("rejette > 100 destinataires cumulés (B4)", () => {
+    const many = Array.from({ length: 101 }, (_, i) => ({
+      name: "",
+      email: `u${i}@x.fr`,
+    }))
+    expect(() => sendMailSchema.parse({ ...base, to: many })).toThrow()
+  })
+
+  it("rejette un html > 256 Ko (B4)", () => {
+    expect(() =>
+      sendMailSchema.parse({ ...base, html: "a".repeat(256 * 1024 + 1) })
+    ).toThrow()
+  })
+
+  it("rejette un email invalide", () => {
+    expect(() =>
+      sendMailSchema.parse({ ...base, to: [{ name: "", email: "x" }] })
+    ).toThrow()
   })
 })
