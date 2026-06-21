@@ -1,5 +1,6 @@
 import type { MailAddress, AppThreadDetail } from "./mail-types"
 import { sanitizeComposeHtml } from "../lib/compose-html"
+import type { JmapMethodResponse } from "./jmap"
 
 // Rejette les caractères de contrôle interdits dans une valeur d'en-tête (B3 anti-CRLF).
 export function isCleanHeaderValue(s: string): boolean {
@@ -113,4 +114,32 @@ export function buildReplyContext(
     references,
     quotedHtml,
   }
+}
+
+export interface SendIdentity {
+  id: string
+  name: string
+  email: string
+}
+
+interface RawIdentity {
+  id: string
+  name?: string | null
+  email: string
+}
+
+// Choisit l'identité d'expédition (R1 : jamais fournie par le client). Priorité à
+// celle dont l'email == compte de session ; sinon la première.
+export function pickSendIdentity(
+  responses: JmapMethodResponse[],
+  accountEmail: string
+): SendIdentity | null {
+  const get = responses.find(([name]) => name === "Identity/get")
+  const raw = get?.[1].list
+  const list: RawIdentity[] = Array.isArray(raw) ? (raw as RawIdentity[]) : []
+  if (list.length === 0) return null
+  const match =
+    list.find((i) => i.email.toLowerCase() === accountEmail.toLowerCase()) ??
+    list[0]
+  return { id: match.id, name: match.name ?? "", email: match.email }
 }

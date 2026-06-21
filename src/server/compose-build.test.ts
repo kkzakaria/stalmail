@@ -3,8 +3,10 @@ import {
   parseAddressList,
   isCleanHeaderValue,
   buildReplyContext,
+  pickSendIdentity,
 } from "./compose-build"
 import type { AppThreadDetail, AppMessage } from "./mail-types"
+import type { JmapMethodResponse } from "./jmap"
 
 const msg = (over: Partial<AppMessage> = {}): AppMessage => ({
   id: "m1",
@@ -165,5 +167,36 @@ describe("isCleanHeaderValue", () => {
   it("rejette CR, LF, NUL", () => {
     expect(isCleanHeaderValue("a\r\nb")).toBe(false)
     expect(isCleanHeaderValue("a\x00b")).toBe(false)
+  })
+})
+
+const identityGet = (list: unknown[]): JmapMethodResponse[] => [
+  ["Identity/get", { list }, "0"],
+]
+
+describe("pickSendIdentity", () => {
+  it("retient l'identité dont l'email correspond au compte", () => {
+    const r = identityGet([
+      { id: "i1", name: "Pro", email: "other@x.fr" },
+      { id: "i2", name: "Moi", email: "me@x.fr" },
+    ])
+    expect(pickSendIdentity(r, "me@x.fr")).toEqual({
+      id: "i2",
+      name: "Moi",
+      email: "me@x.fr",
+    })
+  })
+
+  it("retombe sur la première identité si aucune ne correspond", () => {
+    const r = identityGet([{ id: "i1", name: "A", email: "a@x.fr" }])
+    expect(pickSendIdentity(r, "me@x.fr")).toEqual({
+      id: "i1",
+      name: "A",
+      email: "a@x.fr",
+    })
+  })
+
+  it("renvoie null si aucune identité", () => {
+    expect(pickSendIdentity(identityGet([]), "me@x.fr")).toBeNull()
   })
 })
