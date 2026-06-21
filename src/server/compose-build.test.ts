@@ -84,6 +84,26 @@ describe("buildReplyContext", () => {
     const ctx = buildReplyContext(detail([evil]), "reply", "me@x.fr")
     expect(ctx.quotedHtml).not.toContain("onerror")
     expect(ctx.quotedHtml).not.toContain("<img")
+    expect(ctx.quotedHtml).toContain("ok")
+  })
+
+  it("jette si le fil est vide", () => {
+    expect(() =>
+      buildReplyContext(
+        { ...detail([msg()]), messages: [], emailIds: [] },
+        "reply",
+        "me@x.fr"
+      )
+    ).toThrow()
+  })
+
+  it("ne double pas le préfixe Fwd: déjà présent", () => {
+    const ctx = buildReplyContext(
+      detail([msg({ subject: "Fwd: Sujet" })]),
+      "forward",
+      "me@x.fr"
+    )
+    expect(ctx.subject).toBe("Fwd: Sujet")
   })
 })
 

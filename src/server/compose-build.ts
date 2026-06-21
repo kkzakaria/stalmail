@@ -77,7 +77,8 @@ export function buildReplyContext(
   selfEmail: string,
   lastMessageId?: string
 ): ReplyContext {
-  const last = detail.messages[detail.messages.length - 1]
+  const last = detail.messages.at(-1)
+  if (!last) throw new Error("buildReplyContext: fil sans message")
   const references = lastMessageId ? [lastMessageId] : []
 
   const quotedHtml = last.htmlBody
