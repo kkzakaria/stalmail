@@ -1,9 +1,13 @@
 # Test E2E — Composer (envoi & réponse) — Design
 
-> Statut : validé en brainstorming (2026-06-22).
-> Contexte : la phase 4c (Composer) est mergée (`feat(4c)`, PR #41). Avant la 4d, on
-> veut une garantie de bout en bout que l'envoi et la réponse fonctionnent contre un
-> Stalwart réel.
+> **Statut : REPORTÉ (2026-06-22).** Cette automatisation Playwright + stack Docker
+> éphémère est mise de côté au profit d'une **validation en conditions réelles** sur
+> serveur Hetzner + vrai domaine (voir `2026-06-22-validation-reelle-socle-design.md`).
+> À reconsidérer plus tard pour une couverture E2E automatisée en CI.
+>
+> Contexte initial : la phase 4c (Composer) est mergée (`feat(4c)`, PR #41). Avant la
+> 4d, on veut une garantie de bout en bout que l'envoi et la réponse fonctionnent
+> contre un Stalwart réel.
 
 ## 1. Objectif
 
