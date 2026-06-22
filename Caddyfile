@@ -1,34 +1,38 @@
-# Public ingress for Stalmail. Caddy terminates TLS on 443 and routes:
-#   - Stalwart's public HTTP surface (discovery/federation) -> the stalwart service
-#   - everything else (webmail + setup wizard)              -> the app service
-# tls internal = self-signed local CA cert (dev / pre-domain).
-# Replace the site address with your real hostname for automatic ACME HTTPS.
-# The app & stalwart services are NOT published directly; only this proxy is.
-{
-  # Ensures Caddy issues a cert for bare-IP/no-SNI connections (dev/smoke-test).
-  default_sni localhost
+# Ingress public Stalmail. Caddy termine le TLS sur :443 et route :
+#   - surface HTTP publique de Stalwart (discovery / JMAP / autoconfig) -> stalwart:8080
+#   - tout le reste (webmail + wizard de setup)                          -> app:3000
+#
+# UN SEUL Caddyfile pour dev ET prod, via la variable d'env STALMAIL_HOSTNAME :
+#   - non définie (dev / smoke) -> hostname = `localhost` (cert local auto par Caddy)
+#   - définie (prod)            -> hostname réel, HTTPS automatique via ACME
+#
+# Le site fallback `:443` (tls internal, auto-signé) sert le wizard via l'IP du serveur
+# AVANT l'existence du DNS : le wizard publie ensuite l'A record + le reste de la zone,
+# puis le site nommé obtient son certificat ACME. Caddy gère :80 automatiquement
+# (challenges ACME HTTP-01 + redirection vers HTTPS).
+
+# Routes communes aux deux sites (DRY).
+(stalmail_routes) {
+	# Surface Stalwart publique, MAIS jamais le challenge ACME (Caddy y répond lui-même).
+	@stalwart {
+		path /.well-known/* /jmap /jmap/* /autodiscover/* /mail/config-v1.1.xml
+		not path /.well-known/acme-challenge/*
+	}
+	handle @stalwart {
+		reverse_proxy stalwart:8080
+	}
+	handle {
+		reverse_proxy app:3000
+	}
 }
 
-localhost {
-  tls internal
-
-  # ACME NOTE: when switching from `tls internal` to automatic HTTPS for a real domain,
-  # exclude /.well-known/acme-challenge/* from this matcher BEFORE enabling ACME.
-  # If that path is matched here, Caddy proxies its own ACME challenge to Stalwart and
-  # certificate issuance fails. Add a preceding handle like:
-  #   handle /.well-known/acme-challenge/* { /* let Caddy answer this itself */ }
-  # or tighten @stalwart to exclude acme-challenge explicitly. `tls internal` issues no
-  # challenge today so this is documentation-only — the routing is intentionally unchanged.
-  @stalwart path /.well-known/* /jmap /jmap/* /autodiscover/* /mail/config-v1.1.xml
-  handle @stalwart {
-    reverse_proxy stalwart:8080
-  }
-
-  handle {
-    reverse_proxy app:3000
-  }
+# Fallback : accès via IP / hôte non nommé (bootstrap pré-DNS), certificat auto-signé.
+:443 {
+	tls internal
+	import stalmail_routes
 }
 
-:80 {
-  redir https://{host}{uri} 308
+# Site nommé : domaine réel en prod (ACME), `localhost` en dev (cert local auto).
+{$STALMAIL_HOSTNAME:localhost} {
+	import stalmail_routes
 }
