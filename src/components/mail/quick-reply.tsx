@@ -28,6 +28,7 @@ export function QuickReply({
 }: QuickReplyProps) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<ComposerDraft | null>(null)
+  const [showFormat, setShowFormat] = useState(false)
 
   function open(mode: ComposeMode) {
     const last = detail.messages.at(-1)
@@ -83,23 +84,31 @@ export function QuickReply({
   const set = (patch: Partial<ComposerDraft>) =>
     setDraft((d) => (d ? { ...d, ...patch } : d))
 
+  const modeIcon =
+    draft.mode === "forward"
+      ? "forward"
+      : draft.mode === "replyAll"
+        ? "replyAll"
+        : "reply"
+  const modeLabel =
+    draft.mode === "forward"
+      ? t("mail.compose.forward")
+      : draft.mode === "replyAll"
+        ? t("mail.compose.replyAll")
+        : t("mail.compose.reply")
+
   return (
     <div className="quick-reply">
-      <div className="composer-field">
-        <label htmlFor="qr-to">{t("mail.compose.to")}</label>
+      {/* En-tête unique (maquette) : mode + destinataire éditable + fermer à droite. */}
+      <div className="qr-head">
+        <Icon name={modeIcon} size={15} />
+        <span>{modeLabel}</span>
         <input
-          id="qr-to"
+          className="qr-to"
           aria-label={t("mail.compose.to")}
           value={draft.to}
           onChange={(e) => set({ to: e.target.value })}
         />
-      </div>
-      <RteEditor
-        value={draft.html}
-        onChange={(html) => set({ html })}
-        ariaLabel={t("mail.compose.body")}
-      />
-      <div className="composer-actions">
         <button
           type="button"
           className="icon-btn sm"
@@ -108,6 +117,14 @@ export function QuickReply({
         >
           <Icon name="x" size={16} />
         </button>
+      </div>
+      <RteEditor
+        value={draft.html}
+        onChange={(html) => set({ html })}
+        ariaLabel={t("mail.compose.body")}
+        showToolbar={showFormat}
+      />
+      <div className="composer-actions">
         <button
           type="button"
           className="btn-primary"
@@ -116,6 +133,15 @@ export function QuickReply({
           onClick={() => onSend(draft)}
         >
           <Icon name="send" size={16} /> {t("mail.compose.send")}
+        </button>
+        <button
+          type="button"
+          className={showFormat ? "icon-btn on" : "icon-btn"}
+          aria-label={t("mail.compose.formatting")}
+          aria-pressed={showFormat}
+          onClick={() => setShowFormat((v) => !v)}
+        >
+          <span className="aa-glyph">Aa</span>
         </button>
       </div>
     </div>

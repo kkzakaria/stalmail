@@ -21,11 +21,23 @@ vi.mock("react-i18next", () => ({
 }))
 
 describe("RteEditor", () => {
-  it("rend une zone éditable avec aria-label et toolbar", () => {
-    render(
+  it("rend la zone éditable ; la toolbar est masquée par défaut, visible si showToolbar", () => {
+    const { rerender } = render(
       <RteEditor value="" onChange={() => {}} ariaLabel="Corps du message" />
     )
     expect(screen.getByLabelText("Corps du message")).toBeInTheDocument()
+    // Masquée par défaut (togglée par « Aa » dans le parent).
+    expect(
+      screen.queryByRole("button", { name: /gras/i })
+    ).not.toBeInTheDocument()
+    rerender(
+      <RteEditor
+        value=""
+        onChange={() => {}}
+        ariaLabel="Corps du message"
+        showToolbar
+      />
+    )
     expect(screen.getByRole("button", { name: /gras/i })).toBeInTheDocument()
   })
 
@@ -64,7 +76,9 @@ describe("RteEditor", () => {
     const prompt = vi
       .spyOn(window, "prompt")
       .mockReturnValue("javascript:alert(1)")
-    render(<RteEditor value="" onChange={() => {}} ariaLabel="Corps" />)
+    render(
+      <RteEditor value="" onChange={() => {}} ariaLabel="Corps" showToolbar />
+    )
     fireEvent.click(screen.getByRole("button", { name: /lien/i }))
     expect(exec).not.toHaveBeenCalledWith("createLink", expect.anything())
     prompt.mockReturnValue("https://exemple.fr")

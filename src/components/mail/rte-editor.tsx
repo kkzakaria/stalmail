@@ -8,6 +8,9 @@ export interface RteEditorProps {
   onChange: (html: string) => void
   placeholder?: string
   ariaLabel: string
+  // Barre de mise en forme affichée seulement quand true (togglée par le bouton « Aa »
+  // du parent, comme la maquette). Masquée par défaut.
+  showToolbar?: boolean
 }
 
 export function RteEditor({
@@ -15,6 +18,7 @@ export function RteEditor({
   onChange,
   placeholder,
   ariaLabel,
+  showToolbar = false,
 }: RteEditorProps) {
   const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
@@ -86,43 +90,6 @@ export function RteEditor({
 
   return (
     <div className="rte">
-      <div className="rte-toolbar" role="toolbar">
-        <button
-          type="button"
-          aria-label={t("mail.compose.bold")}
-          onClick={() => exec("bold")}
-        >
-          <Icon name="bold" size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label={t("mail.compose.italic")}
-          onClick={() => exec("italic")}
-        >
-          <Icon name="italic" size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label={t("mail.compose.link")}
-          onClick={addLink}
-        >
-          <Icon name="link" size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label={t("mail.compose.bulletList")}
-          onClick={() => exec("insertUnorderedList")}
-        >
-          <Icon name="list" size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label={t("mail.compose.numberList")}
-          onClick={() => exec("insertOrderedList")}
-        >
-          <Icon name="listOrdered" size={15} />
-        </button>
-      </div>
       <div
         ref={ref}
         className="rte-body"
@@ -135,6 +102,51 @@ export function RteEditor({
         onInput={emit}
         onPaste={onPaste}
       />
+      {/* Barre de mise en forme sous la zone de texte (placement maquette), togglée par « Aa ». */}
+      {showToolbar && (
+        <div className="rte-toolbar" role="toolbar">
+          <button
+            type="button"
+            className="tb-btn"
+            aria-label={t("mail.compose.bold")}
+            onClick={() => exec("bold")}
+          >
+            <Icon name="bold" size={15} />
+          </button>
+          <button
+            type="button"
+            className="tb-btn"
+            aria-label={t("mail.compose.italic")}
+            onClick={() => exec("italic")}
+          >
+            <Icon name="italic" size={15} />
+          </button>
+          <button
+            type="button"
+            className="tb-btn"
+            aria-label={t("mail.compose.link")}
+            onClick={addLink}
+          >
+            <Icon name="link" size={15} />
+          </button>
+          <button
+            type="button"
+            className="tb-btn"
+            aria-label={t("mail.compose.bulletList")}
+            onClick={() => exec("insertUnorderedList")}
+          >
+            <Icon name="list" size={15} />
+          </button>
+          <button
+            type="button"
+            className="tb-btn"
+            aria-label={t("mail.compose.numberList")}
+            onClick={() => exec("insertOrderedList")}
+          >
+            <Icon name="listOrdered" size={15} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -18,6 +18,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
   const [draft, setDraft] = useState<ComposerDraft>(initial)
   const [showCc, setShowCc] = useState(initial.cc !== "" || initial.bcc !== "")
   const [mode, setMode] = useState<Mode>("normal")
+  const [showFormat, setShowFormat] = useState(false)
   const set = (patch: Partial<ComposerDraft>) =>
     setDraft((d) => ({ ...d, ...patch }))
 
@@ -27,7 +28,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
         <b>{draft.subject.trim() || t("mail.compose.newMessage")}</b>
         <button
           type="button"
-          className="icon-btn sm"
+          className="icon-btn sm composer-mode-btn"
           style={{ marginLeft: "auto" }}
           aria-label={
             mode === "min"
@@ -36,11 +37,11 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
           }
           onClick={() => setMode(mode === "min" ? "normal" : "min")}
         >
-          <Icon name={mode === "min" ? "expand" : "minimize"} size={16} />
+          <Icon name="minimize" size={16} />
         </button>
         <button
           type="button"
-          className="icon-btn sm"
+          className="icon-btn sm composer-mode-btn"
           aria-label={
             mode === "max"
               ? t("mail.compose.restoreSize")
@@ -119,6 +120,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
             onChange={(html) => set({ html })}
             placeholder={t("mail.compose.bodyPlaceholder")}
             ariaLabel={t("mail.compose.body")}
+            showToolbar={showFormat}
           />
 
           <div className="composer-actions">
@@ -130,6 +132,15 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
               onClick={() => onSend(draft)}
             >
               <Icon name="send" size={16} /> {t("mail.compose.send")}
+            </button>
+            <button
+              type="button"
+              className={showFormat ? "icon-btn on" : "icon-btn"}
+              aria-label={t("mail.compose.formatting")}
+              aria-pressed={showFormat}
+              onClick={() => setShowFormat((v) => !v)}
+            >
+              <span className="aa-glyph">Aa</span>
             </button>
           </div>
         </div>

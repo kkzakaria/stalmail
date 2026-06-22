@@ -761,6 +761,8 @@
   background: var(--surface); box-shadow: var(--shadow-sm);
 }
 .quick-reply .qr-head { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+/* destinataire éditable inline dans l'en-tête (fusion mode + À sur une seule ligne) */
+.quick-reply .qr-to { flex: 1; min-width: 0; border: none; background: none; outline: none; font-family: inherit; font-size: 13.5px; color: var(--ink); }
 .quick-reply textarea {
   width: 100%; border: none; background: none; outline: none; resize: none;
   font-family: inherit; font-size: 14px; color: var(--ink); padding: 14px; min-height: 84px; line-height: 1.6;
@@ -824,6 +826,8 @@
 .composer-body { flex: 1; min-height: 0; overflow: auto; }
 .composer-body textarea { width: 100%; height: 100%; border: none; outline: none; resize: none; padding: 16px; font-family: inherit; font-size: 14px; line-height: 1.6; color: var(--ink); background: none; }
 .composer-foot { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); }
+/* barre d'actions du Composer (bouton Envoyer) — même cadre que .composer-foot */
+.composer-actions { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); }
 .composer-ai { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--accent-softer); border-bottom: 1px solid var(--line-2); }
 
 /* barre de mise en forme (toggle « Aa ») — au-dessus de la barre d'envoi */
@@ -902,13 +906,20 @@
 }
 .emoji-cell:hover { background: var(--line-2); }
 
-/* éditeur de message enrichi */
-.rte {
-  min-height: 100%; padding: 16px; outline: none;
+/* éditeur de message enrichi — RteEditor partagé : conteneur .rte > .rte-toolbar + .rte-body */
+.rte { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.rte-toolbar {
+  display: flex; align-items: center; gap: 1px; flex-wrap: wrap;
+  padding: 5px 10px; border-top: 1px solid var(--line-2);
+  background: var(--surface-2);
+}
+.rte-body {
+  flex: 1; min-height: 120px; overflow: auto;
+  padding: 16px; outline: none;
   font-family: inherit; font-size: 14px; line-height: 1.6; color: var(--ink);
 }
-.rte:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
-.rte:focus { outline: none; }
+.rte-body:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+.rte-body:focus { outline: none; }
 .rte p { margin: 0 0 .6em; }
 .rte ul, .rte ol { margin: 0 0 .6em; padding-left: 1.5em; }
 .rte a { color: var(--accent); text-decoration: underline; }
