@@ -7,6 +7,17 @@
 
 * **wizard:** ACME DNS-01 au lieu de TLS-ALPN-01 (compat reverse proxy) ([#43](https://github.com/kkzakaria/stalmail/issues/43)) ([f8473d9](https://github.com/kkzakaria/stalmail/commit/f8473d99c8d0a575abd8d36feeb15a227bf61c55))
 
+  Correctif de socle indispensable au déploiement derrière un reverse proxy (Caddy).
+  Le wizard configurait Stalwart en ACME **TLS-ALPN-01**, qui exige le **port 443
+  joignable** : or Caddy possède :443, donc le défi frappait le proxy → **certificat
+  jamais émis** (ports mail sans TLS valide, étape SSL du wizard en échec).
+  * Bascule sur **ACME DNS-01** : la validation publie un TXT `_acme-challenge` via le
+    fournisseur DNS déjà configuré (Cloudflare), **sans port 443** — Stalwart obtient son
+    certificat indépendamment de Caddy.
+  * S'appuie sur le `dnsManagement: Automatic` (dnsServerId) déjà posé sur le domaine aux
+    étapes DNS du wizard ; aucun input supplémentaire.
+  * Libellés i18n de l'étape SSL mis à jour (DNS-01 au lieu de TLS-ALPN-01) ; tests alignés.
+
 ## [0.1.14](https://github.com/kkzakaria/stalmail/compare/v0.1.13...v0.1.14) (2026-06-22)
 
 
