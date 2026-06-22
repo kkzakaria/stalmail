@@ -22,6 +22,12 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
   const set = (patch: Partial<ComposerDraft>) =>
     setDraft((d) => ({ ...d, ...patch }))
 
+  // Libellés des bascules de fenêtre (aria-label + title/tooltip, comme la maquette).
+  const minimizeLabel =
+    mode === "min" ? t("mail.compose.expand") : t("mail.compose.minimize")
+  const maximizeLabel =
+    mode === "max" ? t("mail.compose.restoreSize") : t("mail.compose.maximize")
+
   return (
     <div className={`composer composer--${mode}`}>
       <div className="composer-head">
@@ -30,11 +36,8 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
           type="button"
           className="icon-btn sm composer-mode-btn"
           style={{ marginLeft: "auto" }}
-          aria-label={
-            mode === "min"
-              ? t("mail.compose.expand")
-              : t("mail.compose.minimize")
-          }
+          aria-label={minimizeLabel}
+          title={minimizeLabel}
           onClick={() => setMode(mode === "min" ? "normal" : "min")}
         >
           <Icon name="minimize" size={16} />
@@ -42,11 +45,8 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
         <button
           type="button"
           className="icon-btn sm composer-mode-btn"
-          aria-label={
-            mode === "max"
-              ? t("mail.compose.restoreSize")
-              : t("mail.compose.maximize")
-          }
+          aria-label={maximizeLabel}
+          title={maximizeLabel}
           onClick={() => setMode(mode === "max" ? "normal" : "max")}
         >
           <Icon name={mode === "max" ? "shrink" : "expand"} size={15} />
@@ -55,6 +55,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
           type="button"
           className="icon-btn sm"
           aria-label={t("mail.compose.close")}
+          title={t("mail.compose.close")}
           onClick={onClose}
         >
           <Icon name="x" size={16} />
@@ -75,6 +76,8 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
               <button
                 type="button"
                 className="icon-btn sm"
+                aria-label={t("mail.compose.ccToggle")}
+                title={t("mail.compose.ccToggle")}
                 onClick={() => setShowCc(true)}
               >
                 {t("mail.compose.ccToggle")}
@@ -137,6 +140,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
               type="button"
               className={showFormat ? "icon-btn on" : "icon-btn"}
               aria-label={t("mail.compose.formatting")}
+              title={t("mail.compose.formatting")}
               aria-pressed={showFormat}
               onClick={() => setShowFormat((v) => !v)}
             >

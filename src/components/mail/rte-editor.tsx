@@ -109,6 +109,7 @@ export function RteEditor({
             type="button"
             className="tb-btn"
             aria-label={t("mail.compose.bold")}
+            title={t("mail.compose.bold")}
             onClick={() => exec("bold")}
           >
             <Icon name="bold" size={15} />
@@ -117,6 +118,7 @@ export function RteEditor({
             type="button"
             className="tb-btn"
             aria-label={t("mail.compose.italic")}
+            title={t("mail.compose.italic")}
             onClick={() => exec("italic")}
           >
             <Icon name="italic" size={15} />
@@ -125,6 +127,7 @@ export function RteEditor({
             type="button"
             className="tb-btn"
             aria-label={t("mail.compose.link")}
+            title={t("mail.compose.link")}
             onClick={addLink}
           >
             <Icon name="link" size={15} />
@@ -133,6 +136,7 @@ export function RteEditor({
             type="button"
             className="tb-btn"
             aria-label={t("mail.compose.bulletList")}
+            title={t("mail.compose.bulletList")}
             onClick={() => exec("insertUnorderedList")}
           >
             <Icon name="list" size={15} />
@@ -141,6 +145,7 @@ export function RteEditor({
             type="button"
             className="tb-btn"
             aria-label={t("mail.compose.numberList")}
+            title={t("mail.compose.numberList")}
             onClick={() => exec("insertOrderedList")}
           >
             <Icon name="listOrdered" size={15} />

@@ -57,6 +57,7 @@ export function QuickReply({
           type="button"
           className="reply-bar-main"
           aria-label={t("mail.compose.reply")}
+          title={t("mail.compose.reply")}
           onClick={() => open("reply")}
         >
           <Icon name="reply" size={16} /> {t("mail.compose.reply")}
@@ -65,6 +66,7 @@ export function QuickReply({
           type="button"
           className="icon-btn sm"
           aria-label={t("mail.compose.replyAll")}
+          title={t("mail.compose.replyAll")}
           onClick={() => open("replyAll")}
         >
           <Icon name="replyAll" size={17} />
@@ -73,6 +75,7 @@ export function QuickReply({
           type="button"
           className="icon-btn sm"
           aria-label={t("mail.compose.forward")}
+          title={t("mail.compose.forward")}
           onClick={() => open("forward")}
         >
           <Icon name="forward" size={17} />
@@ -113,6 +116,7 @@ export function QuickReply({
           type="button"
           className="icon-btn sm"
           aria-label={t("mail.compose.close")}
+          title={t("mail.compose.close")}
           onClick={() => setDraft(null)}
         >
           <Icon name="x" size={16} />
@@ -138,6 +142,7 @@ export function QuickReply({
           type="button"
           className={showFormat ? "icon-btn on" : "icon-btn"}
           aria-label={t("mail.compose.formatting")}
+          title={t("mail.compose.formatting")}
           aria-pressed={showFormat}
           onClick={() => setShowFormat((v) => !v)}
         >
