@@ -921,8 +921,10 @@
   font-family: inherit; font-size: 14px; line-height: 1.6; color: var(--ink);
 }
 .rte-body:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
-/* focus clavier discret (a11y) : liseré interne soft plutôt qu'un outline accent franc */
-.rte-body:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent-soft); }
+/* pas d'indicateur de focus sur la zone d'édition : la barre de mise en forme sert
+   de repère visuel d'édition (choix produit). Le champ destinataire garde son focus accent. */
+.rte-body:focus,
+.rte-body:focus-visible { outline: none; box-shadow: none; }
 .rte p { margin: 0 0 .6em; }
 /* restaure les marqueurs (Tailwind preflight reset list-style: none) */
 .rte ul, .rte ol { margin: 0 0 .6em; padding-left: 1.5em; }
