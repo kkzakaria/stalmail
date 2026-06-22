@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { sanitizeComposeHtml } from "../../lib/compose-html"
@@ -25,6 +25,19 @@ export function RteEditor({
   // Garde le track de la dernière value injectée pour éviter la boucle de rendu
   // (réinjection à chaque frappe = curseur qui saute, P1).
   const lastInjected = useRef<string | null>(null)
+  // Retour visuel : état actif gras/italique sous le curseur (boutons .tb-btn.on).
+  const [active, setActive] = useState({ bold: false, italic: false })
+
+  function refreshActive() {
+    try {
+      setActive({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+      })
+    } catch {
+      // queryCommandState indisponible (ex. jsdom) — pas de retour visuel, sans crash.
+    }
+  }
 
   // Injecte la value externe (citation pré-remplie) — sanitisée (B1) — UNIQUEMENT quand
   // elle change réellement (P1 : pas à chaque rendu, sinon le curseur saute pendant la frappe).
@@ -67,6 +80,7 @@ export function RteEditor({
     ref.current?.focus()
     document.execCommand(cmd, false, arg)
     emit()
+    refreshActive()
   }
 
   function addLink() {
@@ -101,24 +115,29 @@ export function RteEditor({
         data-placeholder={placeholder}
         onInput={emit}
         onPaste={onPaste}
+        onKeyUp={refreshActive}
+        onMouseUp={refreshActive}
+        onFocus={refreshActive}
       />
       {/* Barre de mise en forme sous la zone de texte (placement maquette), togglée par « Aa ». */}
       {showToolbar && (
         <div className="rte-toolbar" role="toolbar">
           <button
             type="button"
-            className="tb-btn"
+            className={active.bold ? "tb-btn on" : "tb-btn"}
             aria-label={t("mail.compose.bold")}
             title={t("mail.compose.bold")}
+            aria-pressed={active.bold}
             onClick={() => exec("bold")}
           >
             <Icon name="bold" size={15} />
           </button>
           <button
             type="button"
-            className="tb-btn"
+            className={active.italic ? "tb-btn on" : "tb-btn"}
             aria-label={t("mail.compose.italic")}
             title={t("mail.compose.italic")}
+            aria-pressed={active.italic}
             onClick={() => exec("italic")}
           >
             <Icon name="italic" size={15} />
