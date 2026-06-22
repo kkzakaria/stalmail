@@ -106,7 +106,11 @@ export function MailPage({
         }
         reader={
           threadId ? (
-            <ReaderPane folder={folder} threadId={threadId} />
+            <ReaderPane
+              folder={folder}
+              threadId={threadId}
+              accountName={accountName}
+            />
           ) : undefined
         }
         // Toast rendu DANS `.app` (tokens/thème maquette + container queries y sont scopés).
@@ -143,9 +147,11 @@ export function MailPage({
 function ReaderPane({
   folder,
   threadId,
+  accountName,
 }: {
   folder: string
   threadId: string
+  accountName: string
 }) {
   const navigate = useNavigate()
   const query = useQuery({
@@ -200,7 +206,7 @@ function ReaderPane({
       }
       onSend={composer.send}
       sending={composer.sending}
-      selfEmail=""
+      selfEmail={accountName}
     />
   )
 }

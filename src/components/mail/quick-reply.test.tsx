@@ -31,6 +31,33 @@ const detail: AppThreadDetail = {
   unread: false,
 }
 
+// Fil avec messageId pour tester le threading RFC
+const detailWithMessageId: AppThreadDetail = {
+  ...detail,
+  messages: [
+    {
+      ...detail.messages[0],
+      messageId: "<m1@host>",
+    },
+  ],
+}
+
+// Fil avec Cc pour tester l'auto-exclusion replyAll
+const detailWithCc: AppThreadDetail = {
+  ...detail,
+  messages: [
+    {
+      ...detail.messages[0],
+      messageId: "<m1@host>",
+      to: [{ name: "Alice", email: "alice@x.fr" }],
+      cc: [
+        { name: "Moi", email: "me@x.fr" },
+        { name: "Bob", email: "bob@x.fr" },
+      ],
+    },
+  ],
+}
+
 describe("QuickReply", () => {
   it("affiche la barre de réponse et passe en mode édition au clic", () => {
     render(
@@ -64,5 +91,46 @@ describe("QuickReply", () => {
         subject: "Re: Sujet",
       })
     )
+  })
+
+  it("threading reply : inReplyTo et references reprennent le Message-ID du dernier message", () => {
+    const onSend = vi.fn()
+    render(
+      <QuickReply
+        detail={detailWithMessageId}
+        selfEmail="me@x.fr"
+        sending={false}
+        onSend={onSend}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inReplyTo: "<m1@host>",
+        references: ["<m1@host>"],
+      })
+    )
+  })
+
+  it("replyAll : selfEmail est exclu du Cc du brouillon émis", () => {
+    const onSend = vi.fn()
+    render(
+      <QuickReply
+        detail={detailWithCc}
+        selfEmail="me@x.fr"
+        sending={false}
+        onSend={onSend}
+      />
+    )
+    fireEvent.click(
+      screen.getByRole("button", { name: "mail.compose.replyAll" })
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
+    const draft = onSend.mock.calls[0][0]
+    // me@x.fr ne doit pas apparaître dans le Cc
+    expect(draft.cc).not.toMatch(/me@x\.fr/)
+    // Bob doit être présent
+    expect(draft.cc).toMatch(/bob@x\.fr/)
   })
 })

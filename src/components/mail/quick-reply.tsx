@@ -2,8 +2,8 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { RteEditor } from "./rte-editor"
-import { buildReplyContext  } from "../../server/compose-build"
-import type {ComposeMode} from "../../server/compose-build";
+import { buildReplyContext } from "../../server/compose-build"
+import type { ComposeMode } from "../../server/compose-build"
 import type { AppThreadDetail, MailAddress } from "../../server/mail-types"
 import type { ComposerDraft } from "./use-composer"
 
@@ -30,7 +30,13 @@ export function QuickReply({
   const [draft, setDraft] = useState<ComposerDraft | null>(null)
 
   function open(mode: ComposeMode) {
-    const ctx = buildReplyContext(detail, mode, selfEmail)
+    const last = detail.messages.at(-1)
+    const ctx = buildReplyContext(
+      detail,
+      mode,
+      selfEmail,
+      last?.messageId ?? undefined
+    )
     setDraft({
       mode,
       to: formatAddrs(ctx.to),
