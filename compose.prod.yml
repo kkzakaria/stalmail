@@ -8,11 +8,13 @@
 # de les construire (le repo n'a pas besoin d'être présent sur le serveur). Le repo est
 # public → aucun `docker login ghcr.io` requis.
 #
-# .env requis (cf. .env.example) :
+# .env requis (cf. .env.example) — généré par install.sh :
 #   STALMAIL_SECRET=<64+ caractères aléatoires>
+#   STALMAIL_HOSTNAME=mail.getstalmail.com
 #   STALMAIL_PUBLIC_URL=https://mail.getstalmail.com
 #
-# Caddyfile requis : version domaine réel (cf. Caddyfile.prod.example).
+# Caddyfile requis : le Caddyfile du repo (templété par STALMAIL_HOSTNAME) — récupéré
+# automatiquement par install.sh.
 services:
   stalwart:
     image: ghcr.io/kkzakaria/stalmail-stalwart:latest
@@ -61,6 +63,9 @@ services:
   caddy:
     image: caddy:2.9.1
     restart: unless-stopped
+    environment:
+      # Hostname public : site nommé ACME (le fallback :443 auto-signé sert l'accès par IP).
+      STALMAIL_HOSTNAME: "${STALMAIL_HOSTNAME:?set STALMAIL_HOSTNAME in .env (e.g. mail.getstalmail.com)}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - stalmail-caddy-data:/data

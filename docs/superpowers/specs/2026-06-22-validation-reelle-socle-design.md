@@ -33,26 +33,37 @@ d'automatisation (test manuel/réel assumé).
 | **Token API Cloudflare** | Scope DNS edit sur la zone ; fourni au wizard (mode provider automatisé) |
 | Boîte externe de contrôle | Gmail (ou équivalent) que l'utilisateur possède |
 
-## 3. Runbook de déploiement
+## 3. Runbook de déploiement (UNE commande, DNS automatique)
+
+Objectif : **une seule commande**, aucune copie de fichier, aucun enregistrement DNS
+manuel (le wizard publie tout, **A record inclus**).
 
 1. **Préparer le serveur** : installer Docker + Compose ; ouvrir les ports ; configurer
    le **PTR** ; vérifier que le port 25 sortant est débloqué (`nc -zv <mx-externe> 25`).
-2. **Déposer la configuration** : `compose.yml` + `Caddyfile` + un `.env`
-   (`STALMAIL_PUBLIC_URL=https://mail.<domaine>`, `STALMAIL_SECRET`,
-   `STALWART_RECOVERY_ADMIN`). **Tirer les images GHCR**
-   (`ghcr.io/kkzakaria/stalmail-app:latest` et `…-stalwart:latest`) — pas de build sur
-   le serveur. (Le `compose.yml` actuel `build:`+`image: stalmail-*:latest` ; le runbook
-   précisera l'override d'images GHCR, ou un `compose.prod.yml` dédié — tranché au plan.)
-3. **Démarrer** : `docker compose up -d` → Stalwart en **mode bootstrap**.
-4. **Wizard** : ouvrir `https://mail.<domaine>/setup` →
-   - saisir le domaine,
-   - **DNS = Cloudflare** + token API → le wizard **publie** A/MX/SPF/DKIM/DMARC,
-   - **SSL/ACME** (certificat émis),
-   - **DKIM** généré,
-   - **restart** bootstrap→normal via le superviseur,
-   - **done**.
-5. **Vérifications post-déploiement** : `dig MX/TXT` (SPF, DKIM `default._domainkey`,
-   DMARC) propagés ; certificat TLS valide ; **login admin** sur `https://mail.<domaine>`.
+2. **Installer en une commande** :
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/kkzakaria/stalmail/main/install.sh \
+     | bash -s -- mail.getstalmail.com
+   ```
+   `install.sh` récupère `compose.prod.yml` + `Caddyfile` (images **GHCR** publiques,
+   pas de build), génère `.env` (`STALMAIL_SECRET` + `STALMAIL_HOSTNAME` +
+   `STALMAIL_PUBLIC_URL`), tire les images et démarre la stack → Stalwart en **bootstrap**.
+3. **Wizard via l'IP** (pré-DNS) : ouvrir `https://<ip>/setup` (certificat **auto-signé**
+   servi par le fallback `:443` de Caddy ; accepter l'avertissement). Le DNS n'existe pas
+   encore, l'IP est le seul point d'entrée.
+   - saisir le domaine `getstalmail.com`,
+   - **DNS = Cloudflare** + token API → le wizard **publie toute la zone : A (mail→IP)**
+     + MX + SPF + DKIM + DMARC,
+   - **SSL** (cert mail) + **DKIM** générés,
+   - **restart** bootstrap→normal via le superviseur, **done**.
+4. **Bascule sur le domaine** : une fois l'A record propagé, Caddy émet le certificat
+   ACME pour `mail.getstalmail.com` (le site nommé) → on quitte l'accès par IP.
+5. **Vérifications** : `dig A/MX/TXT` (A `mail→IP`, SPF, DKIM `default._domainkey`,
+   DMARC) propagés ; certificat TLS valide ; **login admin** sur `https://mail.getstalmail.com`.
+
+> Le seul point d'entrée pré-DNS est l'IP (cert auto-signé). Caddy sert un site fallback
+> `:443 tls internal` pour ça, en plus du site nommé ACME — un unique `Caddyfile` templété
+> par `STALMAIL_HOSTNAME` couvre dev (`localhost`) et prod.
 
 ## 4. Checklist d'acceptation (par fonctionnalité)
 

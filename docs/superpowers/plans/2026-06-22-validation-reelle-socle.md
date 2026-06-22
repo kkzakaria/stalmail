@@ -8,14 +8,20 @@
 **Objectif :** éprouver le socle complet (wizard → envoi/réception réels, sanitisation,
 blocage d'images, délivrabilité) sur Hetzner + domaine `getstalmail.com` + Cloudflare DNS.
 
-**Artefacts repo associés (déjà créés) :** `compose.prod.yml`, `.env.example`,
-`Caddyfile.prod.example`.
+**Artefacts repo associés (déjà créés) :** `install.sh` (installeur one-command),
+`compose.prod.yml` (images GHCR), `Caddyfile` (templété par `STALMAIL_HOSTNAME`),
+`.env.example`.
+
+**Principe :** déploiement en **une commande** (`install.sh`), puis **tout** le reste
+(domaine, **DNS y compris l'A record**, SSL, DKIM) est publié par le **wizard in-app**.
+Aucune copie de fichier ni enregistrement DNS manuel.
 
 ## Global Constraints (valeurs exactes)
 
 - Hostname webmail : **`mail.getstalmail.com`** ; URL publique : **`https://mail.getstalmail.com`**.
 - Domaine mail : **`getstalmail.com`** ; DNS provider wizard : **Cloudflare** (token API scope *DNS edit* sur la zone).
 - Images : **`ghcr.io/kkzakaria/stalmail-app:latest`** + **`ghcr.io/kkzakaria/stalmail-stalwart:latest`** (repo public → pas de `docker login`).
+- `.env` (généré par `install.sh`) : `STALMAIL_SECRET`, `STALMAIL_HOSTNAME=mail.getstalmail.com`, `STALMAIL_PUBLIC_URL=https://mail.getstalmail.com`.
 - Boîte externe de contrôle : une adresse **que tu possèdes** (ex. Gmail) — notée `<gmail>` ci-dessous.
 - Placeholders à substituer : `<ip-hetzner>` (IP publique du serveur), `<gmail>`.
 - Secrets dans `.env` (chmod 600), **jamais commités**.
@@ -47,79 +53,59 @@ blocage d'images, délivrabilité) sur Hetzner + domaine `getstalmail.com` + Clo
   ```
   Attendu : `mail.getstalmail.com.`
 
-### Phase 1 — DNS initial (A record web)
+### Phase 1 — Déploiement (UNE commande)
 
-Caddy a besoin que `mail.getstalmail.com` résolve **avant** de pouvoir émettre le certificat ACME (le wizard publiera ensuite MX/SPF/DKIM/DMARC).
+Aucune copie de fichier, aucun DNS manuel.
 
-- [ ] **1.1 — Enregistrement A** dans Cloudflare : `mail.getstalmail.com` → `<ip-hetzner>`, **proxy désactivé (DNS only, nuage gris)** — l'ACME et les ports mail exigent un accès direct, pas le proxy Cloudflare.
-- [ ] **1.2 — Vérifier la résolution :**
+- [ ] **1.1 — Installer en une commande** (sur le serveur) :
   ```bash
-  dig +short mail.getstalmail.com
+  curl -fsSL https://raw.githubusercontent.com/kkzakaria/stalmail/main/install.sh \
+    | bash -s -- mail.getstalmail.com
   ```
-  Attendu : `<ip-hetzner>`.
-
-### Phase 2 — Déposer la configuration sur le serveur
-
-Dans un dossier dédié (ex. `~/stalmail`) sur le serveur, déposer **3 fichiers** :
-
-- [ ] **2.1 — `compose.prod.yml`** (copie depuis le repo, identique).
-- [ ] **2.2 — `Caddyfile`** = contenu de `Caddyfile.prod.example` (hostname déjà = `mail.getstalmail.com`).
-- [ ] **2.3 — `.env`** (chmod 600) :
+  Le script : vérifie Docker, récupère `compose.prod.yml` + `Caddyfile` dans `~/stalmail`, génère `.env` (secret + hostname), tire les images GHCR, démarre la stack.
+  Attendu : `✓ Services démarrés (stalwart, app, caddy)` puis l'encadré avec l'URL `https://<ip>/setup`.
+- [ ] **1.2 — Stalwart en mode bootstrap :**
   ```bash
-  printf 'STALMAIL_SECRET=%s\n' "$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 64)" > .env
-  printf 'STALMAIL_PUBLIC_URL=%s\n' 'https://mail.getstalmail.com' >> .env
-  chmod 600 .env
-  cat .env   # vérifier les deux lignes
-  ```
-
-### Phase 3 — Démarrage
-
-- [ ] **3.1 — Tirer les images & démarrer :**
-  ```bash
-  docker compose -f compose.prod.yml pull
-  docker compose -f compose.prod.yml up -d
-  docker compose -f compose.prod.yml ps
-  ```
-  Attendu : `stalwart`, `app`, `caddy` en `running`.
-- [ ] **3.2 — Stalwart en mode bootstrap :**
-  ```bash
-  docker compose -f compose.prod.yml logs stalwart | grep -i 'bootstrap mode'
+  cd ~/stalmail && docker compose -f compose.prod.yml logs stalwart | grep -i 'bootstrap mode'
   ```
   Attendu : une ligne « bootstrap mode ».
-- [ ] **3.3 — Certificat TLS Caddy émis** (peut prendre ~30 s) :
+
+### Phase 2 — Wizard (accès par IP, DNS publié automatiquement)
+
+Le DNS n'existe pas encore → on atteint le wizard via l'**IP** (certificat **auto-signé**,
+servi par le fallback `:443` de Caddy). Le wizard publie ensuite **toute** la zone via
+Cloudflare, **A record inclus**.
+
+- [ ] **2.1 — Ouvrir** `https://<ip-hetzner>/setup` ; **accepter l'avertissement de certificat auto-signé** (normal, c'est ton serveur). Attendu : écran du wizard (mode bootstrap).
+- [ ] **2.2 — Domaine :** saisir `getstalmail.com` (hostname serveur `mail.getstalmail.com`).
+- [ ] **2.3 — DNS = Cloudflare :** sélectionner **Cloudflare**, coller le **token API** (scope *DNS edit* sur la zone). Le wizard publie **A (mail→IP) + MX + SPF + DKIM + DMARC**.
+- [ ] **2.4 — SSL / DKIM :** laisser le wizard demander le certificat mail + générer les clés DKIM.
+- [ ] **2.5 — Terminer :** le superviseur redémarre Stalwart (bootstrap→normal) ; écran *done*.
+- [ ] **2.6 — Compte admin :** noter `admin@getstalmail.com` + mot de passe.
+
+### Phase 3 — Bascule sur le domaine & vérifications
+
+- [ ] **3.1 — DNS publié & propagé (1–5 min) :**
   ```bash
-  docker compose -f compose.prod.yml logs caddy | grep -iE 'certificate obtained|serving initial configuration'
+  dig +short A   mail.getstalmail.com      # → <ip-hetzner> (publié par le wizard)
+  dig +short MX  getstalmail.com
+  dig +short TXT getstalmail.com           # SPF (v=spf1 …)
+  dig +short TXT default._domainkey.getstalmail.com   # DKIM
+  dig +short TXT _dmarc.getstalmail.com    # DMARC
+  ```
+  Attendu : A → IP du serveur ; MX → serveur ; SPF, DKIM, DMARC présents. **Vérifier que l'A record est bien automatique (publié par le wizard, pas créé à la main).**
+- [ ] **3.2 — Certificat ACME du domaine :** une fois l'A record propagé, Caddy émet le certificat pour `mail.getstalmail.com` (au besoin forcer une nouvelle tentative : `docker compose -f compose.prod.yml restart caddy`).
+  ```bash
   curl -sI https://mail.getstalmail.com/ | head -1
   ```
-  Attendu : certif obtenu ; `HTTP/2 200` ou `307` (redirection vers /login ou /setup). Pas d'erreur TLS.
-
-### Phase 4 — Wizard de setup
-
-- [ ] **4.1 — Ouvrir** `https://mail.getstalmail.com/setup` dans le navigateur. Attendu : écran du wizard (mode bootstrap).
-- [ ] **4.2 — Domaine :** saisir `getstalmail.com`.
-- [ ] **4.3 — DNS = Cloudflare :** sélectionner le provider **Cloudflare**, coller le **token API** (scope *DNS edit* sur la zone). Le wizard publie A/MX/SPF/DKIM/DMARC.
-- [ ] **4.4 — SSL / ACME :** laisser le wizard demander le certificat (mail).
-- [ ] **4.5 — DKIM :** clés générées par le wizard.
-- [ ] **4.6 — Terminer :** le superviseur redémarre Stalwart (bootstrap→normal) ; écran *done*.
-- [ ] **4.7 — Compte admin :** noter l'adresse `admin@getstalmail.com` et son mot de passe (généré/saisi au wizard).
-
-### Phase 5 — Vérifications post-déploiement
-
-- [ ] **5.1 — Mode normal :**
+  Attendu : `HTTP/2 200` ou `307`, **sans** erreur TLS (cert valide, plus auto-signé).
+- [ ] **3.3 — Mode normal :**
   ```bash
-  docker compose -f compose.prod.yml logs stalwart | grep -i 'WITHOUT recovery admin'
+  cd ~/stalmail && docker compose -f compose.prod.yml logs stalwart | grep -i 'WITHOUT recovery admin'
   ```
-  Attendu : ligne indiquant le passage en mode normal (recovery admin retiré).
-- [ ] **5.2 — DNS publié (propagation 1–5 min) :**
-  ```bash
-  dig +short MX getstalmail.com
-  dig +short TXT getstalmail.com            # SPF (v=spf1 …)
-  dig +short TXT default._domainkey.getstalmail.com   # DKIM
-  dig +short TXT _dmarc.getstalmail.com     # DMARC
-  ```
-  Attendu : MX → le serveur ; SPF, DKIM, DMARC présents.
-- [ ] **5.3 — Login admin** sur `https://mail.getstalmail.com` avec `admin@getstalmail.com`. Attendu : accès à la boîte (Inbox vide).
-- [ ] **5.4 — Compte de test :** créer un second mailbox `user@getstalmail.com` (mot de passe connu) via l'admin Stalwart / le wizard de gestion. *(Si la création de compte utilisateur n'est pas exposée dans l'UI à ce stade, utiliser `admin@getstalmail.com` comme compte de test et `<gmail>` comme contrepartie externe.)*
+  Attendu : passage en mode normal (recovery admin retiré).
+- [ ] **3.4 — Login admin** sur `https://mail.getstalmail.com` avec `admin@getstalmail.com`. Attendu : accès à la boîte.
+- [ ] **3.5 — Compte de test :** créer `user@getstalmail.com` (mot de passe connu) via l'admin Stalwart / l'UI de gestion. *(Si la création de compte n'est pas exposée à ce stade, utiliser `admin@getstalmail.com` comme compte de test et `<gmail>` comme contrepartie externe.)*
 
 ---
 
@@ -129,10 +115,10 @@ Dans un dossier dédié (ex. `~/stalmail`) sur le serveur, déposer **3 fichiers
 > dans le tableau de résultats (Partie 3). En cas d'écart : noter *observé* + ouvrir une issue.
 
 ## A. Wizard & setup
-- [ ] **A1** Bootstrap → wizard accessible (Phase 4.1). *Attendu : écran wizard.*
-- [ ] **A2** DNS publié automatiquement par Cloudflare (5.2). *Attendu : MX/SPF/DKIM/DMARC présents.*
-- [ ] **A3** SSL émis, HTTPS valide (3.3). *Attendu : certif valide, pas d'avertissement navigateur.*
-- [ ] **A4** Restart bootstrap→normal (5.1). *Attendu : mode normal, recovery admin retiré.*
+- [ ] **A1** Bootstrap → wizard accessible via l'IP (Phase 2.1). *Attendu : écran wizard.*
+- [ ] **A2** DNS publié automatiquement par Cloudflare, **A record inclus** (Phase 3.1). *Attendu : A/MX/SPF/DKIM/DMARC présents, aucun créé à la main.*
+- [ ] **A3** SSL ACME émis pour le domaine, HTTPS valide (Phase 3.2). *Attendu : certif valide, plus d'avertissement.*
+- [ ] **A4** Restart bootstrap→normal (Phase 3.3). *Attendu : mode normal, recovery admin retiré.*
 - [ ] **A5** `/setup` re-protégé après configuration. *Étape : ouvrir `/setup` reconnecté.* *Attendu : redirection (plus le wizard).*
 
 ## B. Auth & session
