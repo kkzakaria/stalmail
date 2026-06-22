@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/kkzakaria/stalmail/compare/v0.1.14...v0.1.15) (2026-06-22)
+
+
+### Bug Fixes
+
+* **wizard:** ACME DNS-01 au lieu de TLS-ALPN-01 (compat reverse proxy) ([#43](https://github.com/kkzakaria/stalmail/issues/43)) ([f8473d9](https://github.com/kkzakaria/stalmail/commit/f8473d99c8d0a575abd8d36feeb15a227bf61c55))
+
 ## [0.1.14](https://github.com/kkzakaria/stalmail/compare/v0.1.13...v0.1.14) (2026-06-22)
 
 
