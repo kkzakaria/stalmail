@@ -7,6 +7,13 @@
 
 * **4c:** Composer — rédaction & envoi d'emails ([#41](https://github.com/kkzakaria/stalmail/issues/41)) ([c995d12](https://github.com/kkzakaria/stalmail/commit/c995d126b5ec3c56321c28a02a9995185c786479))
 
+  Première capacité d'**émission** de Stalmail : composer un nouveau message, **répondre**, **répondre à tous** et **transférer**.
+  * **Composer flottant** (champs À / Cc / Cci / Objet) + **barre de réponse rapide** dans le lecteur, avec un éditeur HTML minimal partagé (gras, italique, lien, listes) affichable via le bouton « Aa ».
+  * Envoi via la chaîne JMAP `Identity/get` → `Email/set` (brouillon) → `EmailSubmission/set`, avec bascule **Brouillons → Envoyés** au succès.
+  * **Threading** des réponses (`In-Reply-To` / `References` dérivés du Message-ID remonté du fil), objets `Re:` / `Fwd:` non dupliqués, citation du message d'origine.
+  * **Sécurité** : sanitisation HTML autoritaire côté serveur (allowlist DOMPurify), anti-injection d'en-têtes (rejet CR/LF/NUL), `bcc` jamais exposé en en-tête, identité d'expédition résolue côté serveur (non-usurpation), rate-limit d'envoi par compte, erreurs mappées sans fuite de détail JMAP/SMTP.
+  * i18n FR/EN, tooltips, retour visuel d'état (gras/italique), accessibilité.
+
 ## [0.1.13](https://github.com/kkzakaria/stalmail/compare/v0.1.12...v0.1.13) (2026-06-16)
 
 
