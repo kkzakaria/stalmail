@@ -16,20 +16,22 @@ function recent(key: string, now: number): number[] {
 
 // Garde défensive (P2) : un account vide ferait `a:` → pool global partagé entre tous
 // les comptes (contournement de l'anti-abus). On rejette plutôt que de dégrader en silence.
-function assertAccount(account: string): void {
-  if (!account.trim()) {
+// Clé normalisée (trim + lowercase) : `"me@x.fr"`, `" me@x.fr "` et `"ME@X.FR"` partagent
+// le même bucket (sinon les espaces de bord créeraient un bucket distinct — contournement).
+function keyFor(account: string): string {
+  const normalized = account.trim().toLowerCase()
+  if (!normalized) {
     throw new Error("send-rate-limit: account must be non-empty")
   }
+  return `a:${normalized}`
 }
 
 export function isSendRateLimited(account: string, now = Date.now()): boolean {
-  assertAccount(account)
-  return recent(`a:${account.toLowerCase()}`, now).length >= MAX_PER_ACCOUNT
+  return recent(keyFor(account), now).length >= MAX_PER_ACCOUNT
 }
 
 export function recordSend(account: string, now = Date.now()): void {
-  assertAccount(account)
-  const key = `a:${account.toLowerCase()}`
+  const key = keyFor(account)
   const list = recent(key, now)
   list.push(now)
   sends.set(key, list)
@@ -40,8 +42,7 @@ export function recordSend(account: string, now = Date.now()): void {
 // deux le check avant que l'un n'enregistre, dépassant le cap (CodeRabbit #7). Retourne false
 // si le compte est déjà au plafond (créneau NON consommé). Compte les tentatives, pas les succès.
 export function consumeSendSlot(account: string, now = Date.now()): boolean {
-  assertAccount(account)
-  const key = `a:${account.toLowerCase()}`
+  const key = keyFor(account)
   const list = recent(key, now)
   if (list.length >= MAX_PER_ACCOUNT) return false
   list.push(now)

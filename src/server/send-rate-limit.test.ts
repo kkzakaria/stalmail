@@ -60,4 +60,12 @@ describe("send-rate-limit", () => {
   it("consumeSendSlot : rejette un account vide", () => {
     expect(() => consumeSendSlot("", 1_000_000)).toThrow()
   })
+
+  it("normalise la clé (trim + casse) : les espaces de bord partagent le bucket", () => {
+    const now = 1_000_000
+    for (let i = 0; i < 30; i++) recordSend(" me@x.fr ", now)
+    // Même compte sans espaces / en majuscules → même bucket → plafond atteint.
+    expect(isSendRateLimited("me@x.fr", now)).toBe(true)
+    expect(consumeSendSlot("ME@X.FR", now)).toBe(false)
+  })
 })
