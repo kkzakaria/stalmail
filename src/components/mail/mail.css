@@ -921,8 +921,8 @@
   font-family: inherit; font-size: 14px; line-height: 1.6; color: var(--ink);
 }
 .rte-body:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
-/* focus clavier visible (a11y) ; invisible à la souris via :focus-visible */
-.rte-body:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* focus clavier discret (a11y) : liseré interne soft plutôt qu'un outline accent franc */
+.rte-body:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent-soft); }
 .rte p { margin: 0 0 .6em; }
 /* restaure les marqueurs (Tailwind preflight reset list-style: none) */
 .rte ul, .rte ol { margin: 0 0 .6em; padding-left: 1.5em; }
