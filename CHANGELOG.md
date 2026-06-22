@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/kkzakaria/stalmail/compare/v0.1.13...v0.1.14) (2026-06-22)
+
+
+### Features
+
+* **4c:** Composer — rédaction & envoi d'emails ([#41](https://github.com/kkzakaria/stalmail/issues/41)) ([c995d12](https://github.com/kkzakaria/stalmail/commit/c995d126b5ec3c56321c28a02a9995185c786479))
+
 ## [0.1.13](https://github.com/kkzakaria/stalmail/compare/v0.1.12...v0.1.13) (2026-06-16)
 
 
