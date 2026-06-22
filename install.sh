@@ -76,7 +76,16 @@ if [ ! -f .env ]; then
   chmod 600 .env
   echo "✓ .env créé (secret généré, hostname=${HOSTNAME_ARG})"
 else
-  echo "✓ .env existant conservé"
+  # .env existant : ne pas mentir sur le hostname affiché. Si l'argument diffère du
+  # STALMAIL_HOSTNAME déjà enregistré, on s'arrête (l'opérateur tranche) ; sinon on réutilise.
+  EXISTING_HOSTNAME=$(awk -F= '$1=="STALMAIL_HOSTNAME"{print $2}' .env | tail -n1)
+  if [ -n "${EXISTING_HOSTNAME}" ] && [ "${EXISTING_HOSTNAME}" != "${HOSTNAME_ARG}" ]; then
+    echo "❌ .env existant utilise STALMAIL_HOSTNAME=${EXISTING_HOSTNAME} (≠ ${HOSTNAME_ARG})."
+    echo "   Éditez/supprimez ${DIR}/.env puis relancez, ou relancez avec le bon hostname."
+    exit 1
+  fi
+  HOSTNAME_ARG="${EXISTING_HOSTNAME:-${HOSTNAME_ARG}}"
+  echo "✓ .env existant conservé (hostname=${HOSTNAME_ARG})"
 fi
 
 # 5. Démarrage.

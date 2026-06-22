@@ -72,7 +72,7 @@ d'implémentation tranchée au plan ; l'invariant testé est l'auto-exclusion + 
 
 ## 5. Architecture du test (unités isolées)
 
-```
+```text
 e2e/
   harness/stack.ts       # up/down de la stack éphémère + attente readiness
   harness/provision.ts   # bootstrap Stalwart + création du compte de test

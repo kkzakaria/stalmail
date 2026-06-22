@@ -30,7 +30,7 @@ Aucune copie de fichier ni enregistrement DNS manuel.
 
 # PARTIE 1 — Runbook de déploiement
 
-## Phase 0 — Pré-vol serveur & réseau
+## Phase 0 — Pré-vol serveur et réseau
 
 - [ ] **0.1 — Accès & Docker.** SSH sur le serveur ; vérifier Docker + Compose v2 :
   ```bash
@@ -83,7 +83,7 @@ Cloudflare, **A record inclus**.
 - [ ] **2.5 — Terminer :** le superviseur redémarre Stalwart (bootstrap→normal) ; écran *done*.
 - [ ] **2.6 — Compte admin :** noter `admin@getstalmail.com` + mot de passe.
 
-## Phase 3 — Bascule sur le domaine & vérifications
+## Phase 3 — Bascule sur le domaine et vérifications
 
 - [ ] **3.1 — DNS publié & propagé (1–5 min) :**
   ```bash
