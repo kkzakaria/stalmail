@@ -40,6 +40,10 @@ const ICON_PATHS: Record<string, string> = {
   download: '<path d="M12 3v12"/><path d="M7 11l5 4 5-4"/><path d="M5 19h14"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   pin: '<path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 14v7"/>',
+  // Icônes Composer — modes min/normal/max (ajoutées en Task 12)
+  minimize: '<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
+  expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+  shrink: '<path d="M4 14l6-6M4 14H10M4 14V8M20 10l-6 6M20 10H14M20 10V16"/>',
   // Icônes RTE (toolbar du Composer — ajoutées en Task 10)
   bold: '<path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4.5 4.5 0 0 1 0 9H6z"/>',
   italic:
