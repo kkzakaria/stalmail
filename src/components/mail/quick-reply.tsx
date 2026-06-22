@@ -1,0 +1,117 @@
+import { useState } from "react"
+import { useTranslation } from "react-i18next"
+import { Icon } from "./mail-icons"
+import { RteEditor } from "./rte-editor"
+import { buildReplyContext  } from "../../server/compose-build"
+import type {ComposeMode} from "../../server/compose-build";
+import type { AppThreadDetail, MailAddress } from "../../server/mail-types"
+import type { ComposerDraft } from "./use-composer"
+
+export interface QuickReplyProps {
+  detail: AppThreadDetail
+  selfEmail: string
+  sending: boolean
+  onSend: (draft: ComposerDraft) => void
+}
+
+function formatAddrs(addrs: MailAddress[]): string {
+  return addrs
+    .map((a) => (a.name ? `${a.name} <${a.email}>` : a.email))
+    .join(", ")
+}
+
+export function QuickReply({
+  detail,
+  selfEmail,
+  sending,
+  onSend,
+}: QuickReplyProps) {
+  const { t } = useTranslation()
+  const [draft, setDraft] = useState<ComposerDraft | null>(null)
+
+  function open(mode: ComposeMode) {
+    const ctx = buildReplyContext(detail, mode, selfEmail)
+    setDraft({
+      mode,
+      to: formatAddrs(ctx.to),
+      cc: formatAddrs(ctx.cc),
+      bcc: "",
+      subject: ctx.subject,
+      html: ctx.quotedHtml,
+      inReplyTo: ctx.inReplyTo,
+      references: ctx.references,
+    })
+  }
+
+  if (!draft) {
+    return (
+      <div className="reply-bar">
+        <button
+          type="button"
+          className="reply-bar-main"
+          aria-label={t("mail.compose.reply")}
+          onClick={() => open("reply")}
+        >
+          <Icon name="reply" size={16} /> {t("mail.compose.reply")}
+        </button>
+        <button
+          type="button"
+          className="icon-btn sm"
+          aria-label={t("mail.compose.replyAll")}
+          onClick={() => open("replyAll")}
+        >
+          <Icon name="replyAll" size={17} />
+        </button>
+        <button
+          type="button"
+          className="icon-btn sm"
+          aria-label={t("mail.compose.forward")}
+          onClick={() => open("forward")}
+        >
+          <Icon name="forward" size={17} />
+        </button>
+      </div>
+    )
+  }
+
+  const set = (patch: Partial<ComposerDraft>) =>
+    setDraft((d) => (d ? { ...d, ...patch } : d))
+
+  return (
+    <div className="quick-reply">
+      <div className="composer-field">
+        <label htmlFor="qr-to">{t("mail.compose.to")}</label>
+        <input
+          id="qr-to"
+          aria-label={t("mail.compose.to")}
+          value={draft.to}
+          onChange={(e) => set({ to: e.target.value })}
+        />
+      </div>
+      <RteEditor
+        value={draft.html}
+        onChange={(html) => set({ html })}
+        ariaLabel={t("mail.compose.body")}
+      />
+      <div className="composer-actions">
+        <button
+          type="button"
+          className="icon-btn sm"
+          aria-label={t("mail.compose.close")}
+          onClick={() => setDraft(null)}
+        >
+          <Icon name="x" size={16} />
+        </button>
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={sending}
+          aria-label={t("mail.compose.send")}
+          onClick={() => onSend(draft)}
+        >
+          <Icon name="send" size={16} /> {t("mail.compose.send")}
+        </button>
+      </div>
+    </div>
+  )
+}

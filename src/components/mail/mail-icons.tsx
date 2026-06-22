@@ -36,6 +36,8 @@ const ICON_PATHS: Record<string, string> = {
   reply: '<path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/>',
   "reply-all":
     '<path d="M7 7l-5 5 5 5"/><path d="M12 7l-5 5 5 5"/><path d="M7 12h9a4 4 0 0 1 4 4v1"/>',
+  replyAll:
+    '<path d="M7 7l-5 5 5 5"/><path d="M12 7l-5 5 5 5"/><path d="M7 12h9a4 4 0 0 1 4 4v1"/>',
   forward: '<path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 0 0-5 5v1"/>',
   download: '<path d="M12 3v12"/><path d="M7 11l5 4 5-4"/><path d="M5 19h14"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',

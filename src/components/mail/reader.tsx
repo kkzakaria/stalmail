@@ -1,8 +1,10 @@
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { MessageItem } from "./message-item"
+import { QuickReply } from "./quick-reply"
 import type { AppThreadDetail } from "../../server/mail-types"
 import type { MoveTo } from "./use-thread-actions"
+import type { ComposerDraft } from "./use-composer"
 
 export interface ReaderProps {
   folder: string
@@ -13,6 +15,9 @@ export interface ReaderProps {
   markRead: (value: boolean) => void
   move: (to: MoveTo) => void
   onBack: () => void
+  onSend?: (draft: ComposerDraft) => void
+  sending?: boolean
+  selfEmail?: string
 }
 
 export function Reader({
@@ -24,6 +29,9 @@ export function Reader({
   markRead,
   move,
   onBack,
+  onSend,
+  sending,
+  selfEmail,
 }: ReaderProps) {
   const { t } = useTranslation()
 
@@ -163,16 +171,14 @@ export function Reader({
                 />
               ))}
 
-              <div className="reply-bar">
-                <button
-                  className="reply-bar-main"
-                  disabled
-                  title={t("mail.reader.reply")}
-                >
-                  <Icon name="reply" size={16} />
-                  <span className="rb-text">{t("mail.reader.reply")}</span>
-                </button>
-              </div>
+              {onSend && (
+                <QuickReply
+                  detail={detail}
+                  selfEmail={selfEmail ?? ""}
+                  sending={sending ?? false}
+                  onSend={onSend}
+                />
+              )}
             </>
           )}
         </div>
