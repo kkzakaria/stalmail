@@ -15,7 +15,11 @@ set -euo pipefail
 #   - tire les images et démarre la stack.
 # Le reste (domaine, DNS, SSL, DKIM) se configure dans le wizard in-app.
 
-REPO_RAW="https://raw.githubusercontent.com/kkzakaria/stalmail/main"
+# Réf des fichiers récupérés (compose.prod.yml + Caddyfile). Défaut `main` : ce script
+# sert d'abord à valider le socle courant. Pour une install reproductible, épingler un
+# tag : STALMAIL_REF=v0.1.15 curl … | bash -s -- <hostname>.
+REF="${STALMAIL_REF:-main}"
+REPO_RAW="https://raw.githubusercontent.com/kkzakaria/stalmail/${REF}"
 DIR="${STALMAIL_DIR:-$HOME/stalmail}"
 
 echo "╔══════════════════════════════════╗"
@@ -30,6 +34,12 @@ if [ -z "${HOSTNAME_ARG}" ]; then
 fi
 if [ -z "${HOSTNAME_ARG}" ]; then
   echo "❌ Hostname requis."
+  exit 1
+fi
+# FQDN valide attendu (≥ un point, caractères DNS) — évite qu'un hostname erroné se
+# propage dans .env / Caddy (ACME) / le wizard.
+if ! printf '%s' "${HOSTNAME_ARG}" | grep -qE '^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'; then
+  echo "❌ Hostname invalide : « ${HOSTNAME_ARG} ». Attendu un FQDN, ex. mail.getstalmail.com"
   exit 1
 fi
 
@@ -91,7 +101,12 @@ if [ "${ok}" != 1 ]; then
 fi
 echo "✓ Services démarrés (stalwart, app, caddy)"
 
+# IP publique pour l'URL d'accès au wizard. `hostname -I` (Linux) puis fallbacks
+# portables (macOS/BSD) ; placeholder si rien n'est détecté (n'empêche pas l'install).
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[ -z "${IP}" ] && IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
+[ -z "${IP}" ] && IP=$(ipconfig getifaddr en0 2>/dev/null)
+[ -z "${IP}" ] && IP="<ip-du-serveur>"
 echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║  Stalmail démarré.                                               ║"

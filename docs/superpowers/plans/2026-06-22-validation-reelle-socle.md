@@ -30,7 +30,7 @@ Aucune copie de fichier ni enregistrement DNS manuel.
 
 # PARTIE 1 — Runbook de déploiement
 
-### Phase 0 — Pré-vol serveur & réseau
+## Phase 0 — Pré-vol serveur & réseau
 
 - [ ] **0.1 — Accès & Docker.** SSH sur le serveur ; vérifier Docker + Compose v2 :
   ```bash
@@ -53,7 +53,7 @@ Aucune copie de fichier ni enregistrement DNS manuel.
   ```
   Attendu : `mail.getstalmail.com.`
 
-### Phase 1 — Déploiement (UNE commande)
+## Phase 1 — Déploiement (UNE commande)
 
 Aucune copie de fichier, aucun DNS manuel.
 
@@ -70,7 +70,7 @@ Aucune copie de fichier, aucun DNS manuel.
   ```
   Attendu : une ligne « bootstrap mode ».
 
-### Phase 2 — Wizard (accès par IP, DNS publié automatiquement)
+## Phase 2 — Wizard (accès par IP, DNS publié automatiquement)
 
 Le DNS n'existe pas encore → on atteint le wizard via l'**IP** (certificat **auto-signé**,
 servi par le fallback `:443` de Caddy). Le wizard publie ensuite **toute** la zone via
@@ -83,7 +83,7 @@ Cloudflare, **A record inclus**.
 - [ ] **2.5 — Terminer :** le superviseur redémarre Stalwart (bootstrap→normal) ; écran *done*.
 - [ ] **2.6 — Compte admin :** noter `admin@getstalmail.com` + mot de passe.
 
-### Phase 3 — Bascule sur le domaine & vérifications
+## Phase 3 — Bascule sur le domaine & vérifications
 
 - [ ] **3.1 — DNS publié & propagé (1–5 min) :**
   ```bash
