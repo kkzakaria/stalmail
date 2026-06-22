@@ -57,7 +57,21 @@ export function RteEditor({
 
   function addLink() {
     const url = window.prompt(t("mail.compose.linkPrompt"), "https://")
-    if (url) exec("createLink", url)
+    if (!url) return
+    let parsed: URL
+    try {
+      parsed = new URL(url, window.location.origin)
+    } catch {
+      return
+    }
+    if (
+      parsed.protocol !== "http:" &&
+      parsed.protocol !== "https:" &&
+      parsed.protocol !== "mailto:"
+    ) {
+      return
+    }
+    exec("createLink", parsed.toString())
   }
 
   return (

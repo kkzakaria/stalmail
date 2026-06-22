@@ -52,6 +52,31 @@ describe("RteEditor", () => {
     expect(editable.innerHTML).not.toContain("onerror")
     expect(editable.innerHTML).not.toContain("<img")
   })
+
+  it("addLink ignore une URL au schéma javascript: (anti-XSS)", () => {
+    // jsdom ne définit pas document.execCommand — on le définit pour pouvoir l'espionner
+    Object.defineProperty(document, "execCommand", {
+      value: () => true,
+      writable: true,
+      configurable: true,
+    })
+    const exec = vi.spyOn(document, "execCommand").mockReturnValue(true)
+    const prompt = vi
+      .spyOn(window, "prompt")
+      .mockReturnValue("javascript:alert(1)")
+    render(<RteEditor value="" onChange={() => {}} ariaLabel="Corps" />)
+    fireEvent.click(screen.getByRole("button", { name: /lien/i }))
+    expect(exec).not.toHaveBeenCalledWith("createLink", expect.anything())
+    prompt.mockReturnValue("https://exemple.fr")
+    fireEvent.click(screen.getByRole("button", { name: /lien/i }))
+    expect(exec).toHaveBeenCalledWith(
+      "createLink",
+      false,
+      "https://exemple.fr/"
+    )
+    exec.mockRestore()
+    prompt.mockRestore()
+  })
 })
 
 // Note : le `onPaste` sanitise via document.execCommand('insertHTML'), no-op sous jsdom —
