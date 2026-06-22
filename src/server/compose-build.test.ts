@@ -13,6 +13,7 @@ import type { SendBody } from "./compose-build"
 
 const msg = (over: Partial<AppMessage> = {}): AppMessage => ({
   id: "m1",
+  messageId: null,
   from: [{ name: "Alice", email: "alice@x.fr" }],
   to: [{ name: "Moi", email: "me@x.fr" }],
   cc: [{ name: "Bob", email: "bob@x.fr" }],

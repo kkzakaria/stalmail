@@ -53,6 +53,7 @@ export interface AppAttachment {
 
 export interface AppMessage {
   id: string
+  messageId: string | null // Message-ID RFC (ex. "<abc@host>"), null si absent
   from: MailAddress[]
   to: MailAddress[]
   cc: MailAddress[]

@@ -306,6 +306,7 @@ interface RawBodyPart {
 
 interface RawDetailEmail {
   id: string
+  messageId?: string[] | null // RFC 8621 : tableau de message-ids
   from?: MailAddress[] | null
   to?: MailAddress[] | null
   cc?: MailAddress[] | null
@@ -355,6 +356,7 @@ export function buildReadThreadCalls(
         "#ids": { resultOf: "0", name: "Thread/get", path: "/list/*/emailIds" },
         properties: [
           "id",
+          "messageId",
           "from",
           "to",
           "cc",
@@ -404,6 +406,7 @@ export function parseThreadDetail(
 
   const messages: AppMessage[] = ordered.map((e) => ({
     id: e.id,
+    messageId: Array.isArray(e.messageId) ? (e.messageId[0] ?? null) : null,
     from: e.from ?? [],
     to: e.to ?? [],
     cc: e.cc ?? [],

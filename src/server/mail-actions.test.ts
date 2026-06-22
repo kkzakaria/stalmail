@@ -426,6 +426,59 @@ describe("parseThreadDetail", () => {
       unread: false,
     })
   })
+
+  it("remonte le premier Message-ID RFC quand présent", () => {
+    const withMsgId: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t2", emailIds: ["m1"] }] }, "0"],
+      [
+        "Email/get",
+        {
+          list: [
+            {
+              id: "m1",
+              receivedAt: "2026-06-10T00:00:00Z",
+              keywords: {},
+              hasAttachment: false,
+              messageId: ["<abc@host>"],
+              textBody: [],
+              htmlBody: [],
+              bodyValues: {},
+              attachments: [],
+            },
+          ],
+        },
+        "1",
+      ],
+    ]
+    const d = parseThreadDetail(withMsgId)
+    expect(d.messages[0].messageId).toBe("<abc@host>")
+  })
+
+  it("retourne null quand messageId absent", () => {
+    const withoutMsgId: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t3", emailIds: ["m2"] }] }, "0"],
+      [
+        "Email/get",
+        {
+          list: [
+            {
+              id: "m2",
+              receivedAt: "2026-06-10T00:00:00Z",
+              keywords: {},
+              hasAttachment: false,
+              textBody: [],
+              htmlBody: [],
+              bodyValues: {},
+              attachments: [],
+            },
+          ],
+        },
+        "1",
+      ],
+    ]
+    const d = parseThreadDetail(withoutMsgId)
+    expect(d.messages[0].messageId).toBeNull()
+  })
 })
 
 describe("buildSetFlagsCall", () => {
@@ -477,6 +530,7 @@ describe("buildReadThreadCalls", () => {
     const emailGet = calls[1][1] as { properties: string[] }
     expect(emailGet.properties).toContain("keywords")
     expect(emailGet.properties).toContain("bodyValues")
+    expect(emailGet.properties).toContain("messageId")
     expect(emailGet.properties).not.toContain("mailboxIds")
   })
 })

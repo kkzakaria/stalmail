@@ -13,6 +13,7 @@ const detail: AppThreadDetail = {
   messages: [
     {
       id: "m1",
+      messageId: null,
       from: [{ name: "Alice", email: "alice@x.fr" }],
       to: [{ name: "Moi", email: "me@x.fr" }],
       cc: [],
