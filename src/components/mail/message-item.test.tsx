@@ -7,6 +7,7 @@ import type { AppMessage } from "../../server/mail-types"
 
 const msg = (over: Partial<AppMessage> = {}): AppMessage => ({
   id: "e1",
+  messageId: null,
   from: [{ name: "Bob", email: "bob@x.io" }],
   to: [{ name: "Moi", email: "me@x.io" }],
   cc: [],

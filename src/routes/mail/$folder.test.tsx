@@ -7,7 +7,7 @@ import {
   it,
   vi,
 } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "../../i18n/i18n"
@@ -26,6 +26,7 @@ const { DETAIL } = vi.hoisted<{ DETAIL: AppThreadDetail }>(() => ({
     messages: [
       {
         id: "e1",
+        messageId: null,
         from: [{ name: "Bob", email: "bob@x.io" }],
         to: [],
         cc: [],
@@ -65,6 +66,7 @@ vi.mock("../../server/mail-actions", async (importActual) => ({
   readThreadFn: vi.fn().mockResolvedValue(DETAIL),
   setFlagsFn: vi.fn().mockResolvedValue({ ok: true }),
   moveThreadFn: vi.fn().mockResolvedValue({ ok: true }),
+  sendMailFn: vi.fn().mockResolvedValue({ ok: true, emailId: "e1" }),
 }))
 
 // eslint-disable-next-line import/first
@@ -145,6 +147,12 @@ describe("MailPage", () => {
     wrap(<MailPage folder="snoozed" mailboxes={MBX} accountName="me@x.fr" />)
     expect(screen.getByText("Disponible prochainement")).toBeInTheDocument()
     expect(emailListFn).not.toHaveBeenCalled()
+  })
+
+  it("ouvre le Composer au clic sur Nouveau message", async () => {
+    wrap(<MailPage folder="inbox" mailboxes={MBX} accountName="me@x.fr" />)
+    fireEvent.click(screen.getByRole("button", { name: /nouveau message/i }))
+    expect(await screen.findByLabelText("À")).toBeInTheDocument()
   })
 })
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
@@ -12,6 +12,8 @@ import {
   ToastProvider,
   ToastViewport,
   useThreadActions,
+  Composer,
+  useComposer,
 } from "@/components/mail"
 import type { AppMailbox } from "@/server/mail-types"
 import "@/components/mail/mail.css"
@@ -74,6 +76,8 @@ export function MailPage({
 }) {
   const { t } = useTranslation()
   const activeMailbox = mailboxes.find((m) => m.role === folder)
+  const [composeOpen, setComposeOpen] = useState(false)
+  const composer = useComposer(folder)
 
   return (
     <ToastProvider>
@@ -83,6 +87,7 @@ export function MailPage({
             mailboxes={mailboxes}
             activeFolder={folder}
             accountName={accountName}
+            onCompose={() => setComposeOpen(true)}
           />
         }
         list={
@@ -101,11 +106,38 @@ export function MailPage({
         }
         reader={
           threadId ? (
-            <ReaderPane folder={folder} threadId={threadId} />
+            <ReaderPane
+              folder={folder}
+              threadId={threadId}
+              accountName={accountName}
+            />
           ) : undefined
         }
         // Toast rendu DANS `.app` (tokens/thème maquette + container queries y sont scopés).
-        overlay={<ToastViewport />}
+        overlay={
+          <>
+            <ToastViewport />
+            {composeOpen && (
+              <Composer
+                initial={{
+                  mode: "compose",
+                  to: "",
+                  cc: "",
+                  bcc: "",
+                  subject: "",
+                  html: "",
+                  references: [],
+                }}
+                sending={composer.sending}
+                onSend={async (draft) => {
+                  const ok = await composer.send(draft)
+                  if (ok) setComposeOpen(false)
+                }}
+                onClose={() => setComposeOpen(false)}
+              />
+            )}
+          </>
+        }
       />
     </ToastProvider>
   )
@@ -115,9 +147,11 @@ export function MailPage({
 function ReaderPane({
   folder,
   threadId,
+  accountName,
 }: {
   folder: string
   threadId: string
+  accountName: string
 }) {
   const navigate = useNavigate()
   const query = useQuery({
@@ -127,6 +161,7 @@ function ReaderPane({
   })
   const detail = query.data
   const actions = useThreadActions(folder, threadId, detail?.emailIds ?? [])
+  const composer = useComposer(folder)
 
   // Refs stables : markRead + dernier detail, pour que l'useEffect ne dépende NI de `actions`
   // (nouvel objet à chaque render) NI de `detail.unread`.
@@ -169,6 +204,9 @@ function ReaderPane({
           search: { thread: undefined },
         })
       }
+      onSend={composer.send}
+      sending={composer.sending}
+      selfEmail={accountName}
     />
   )
 }

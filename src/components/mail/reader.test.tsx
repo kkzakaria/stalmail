@@ -14,6 +14,7 @@ const detail = (): AppThreadDetail => ({
   messages: [
     {
       id: "e1",
+      messageId: null,
       from: [{ name: "Bob", email: "bob@x.io" }],
       to: [],
       cc: [],
@@ -85,7 +86,7 @@ describe("Reader", () => {
     expect(move).toHaveBeenCalledWith("archive")
   })
 
-  it("bouton Répondre est désactivé (4c)", () => {
+  it("sans onSend, pas de barre de réponse (4c)", () => {
     wrap(
       <Reader
         folder="inbox"
@@ -95,7 +96,9 @@ describe("Reader", () => {
         {...noop}
       />
     )
-    expect(screen.getByRole("button", { name: /Répondre/i })).toBeDisabled()
+    expect(
+      screen.queryByRole("button", { name: /Répondre/i })
+    ).not.toBeInTheDocument()
   })
 
   it("état erreur propose Réessayer", () => {

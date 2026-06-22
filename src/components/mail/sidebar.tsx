@@ -1,31 +1,48 @@
-import { Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
-import { Avatar, Icon } from './mail-icons'
-import type { AppMailbox } from '../../server/mail-types'
+import { Link } from "@tanstack/react-router"
+import { useTranslation } from "react-i18next"
+import { Avatar, Icon } from "./mail-icons"
+import type { AppMailbox } from "../../server/mail-types"
 
 // Ordre figé sur la maquette : virtuels intercalés après inbox (spec §2.2).
 export const FOLDER_ORDER = [
-  'inbox', 'starred', 'snoozed', 'sent', 'drafts', 'archive', 'spam', 'trash',
+  "inbox",
+  "starred",
+  "snoozed",
+  "sent",
+  "drafts",
+  "archive",
+  "spam",
+  "trash",
 ] as const
 
 const ICON_BY_FOLDER: Record<string, string> = {
-  inbox: 'inbox', starred: 'star', snoozed: 'clock', sent: 'send',
-  drafts: 'draft', archive: 'archive', spam: 'spam', trash: 'trash',
+  inbox: "inbox",
+  starred: "star",
+  snoozed: "clock",
+  sent: "send",
+  drafts: "draft",
+  archive: "archive",
+  spam: "spam",
+  trash: "trash",
 }
-const UNREAD_BADGE_ON = new Set(['inbox', 'drafts'])
+const UNREAD_BADGE_ON = new Set(["inbox", "drafts"])
 
 export function AppSidebar({
   mailboxes,
   activeFolder,
   accountName,
+  onCompose,
 }: {
   mailboxes: AppMailbox[]
   activeFolder: string
   accountName: string
+  onCompose?: () => void
 }) {
   const { t } = useTranslation()
   const byRole = new Map<string, AppMailbox>(
-    mailboxes.filter((m): m is AppMailbox & { role: string } => m.role !== null).map((m) => [m.role, m]),
+    mailboxes
+      .filter((m): m is AppMailbox & { role: string } => m.role !== null)
+      .map((m) => [m.role, m])
   )
 
   return (
@@ -44,9 +61,14 @@ export function AppSidebar({
         </div>
       </div>
 
-      <button className="compose-btn" disabled aria-label={t('mail.compose')}>
+      <button
+        className="compose-btn"
+        onClick={onCompose}
+        disabled={!onCompose}
+        aria-label={t("mail.compose.newMessage")}
+      >
         <Icon name="compose" size={16} />
-        {t('mail.compose')}
+        {t("mail.compose.newMessage")}
       </button>
 
       <div className="nav-scroll">
@@ -58,11 +80,19 @@ export function AppSidebar({
               key={folder}
               to="/mail/$folder"
               params={{ folder }}
-              className={'nav-item' + (folder === activeFolder ? ' active' : '')}
+              className={
+                "nav-item" + (folder === activeFolder ? " active" : "")
+              }
             >
-              <Icon name={ICON_BY_FOLDER[folder] ?? folder} size={18} className="ico" />
+              <Icon
+                name={ICON_BY_FOLDER[folder] ?? folder}
+                size={18}
+                className="ico"
+              />
               <span className="txt">{t(`mail.${folder}`)}</span>
-              {UNREAD_BADGE_ON.has(folder) && unread > 0 && <span className="count">{unread}</span>}
+              {UNREAD_BADGE_ON.has(folder) && unread > 0 && (
+                <span className="count">{unread}</span>
+              )}
             </Link>
           )
         })}
