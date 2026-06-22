@@ -176,14 +176,14 @@ export const fr = {
         "Un certificat Let's Encrypt est obtenu automatiquement via ACME.",
       configuring: "Création du fournisseur ACME…",
       provider: "Fournisseur ACME",
-      providerValue: "Let's Encrypt · TLS-ALPN-01",
+      providerValue: "Let's Encrypt · DNS-01",
       contact: "Contact",
       san: "Nom couvert",
       task: "Tâche AcmeRenewal",
       nonBlocking:
         "Vous pouvez continuer : Stalwart réessaiera automatiquement et l'administration reste accessible sur :8080/admin.",
       failedHint:
-        "Le port 443 doit être joignable depuis Internet pour le défi TLS-ALPN.",
+        "Le défi DNS-01 requiert un fournisseur DNS configuré et accessible (token valide).",
       status: {
         pending: "En attente",
         failed: "Échec — nouvel essai planifié",
@@ -494,14 +494,14 @@ export const en: DeepRecord<typeof fr> = {
         "A Let's Encrypt certificate is obtained automatically via ACME.",
       configuring: "Creating the ACME provider…",
       provider: "ACME provider",
-      providerValue: "Let's Encrypt · TLS-ALPN-01",
+      providerValue: "Let's Encrypt · DNS-01",
       contact: "Contact",
       san: "Covered name",
       task: "AcmeRenewal task",
       nonBlocking:
         "You can continue: Stalwart will retry automatically and the admin stays reachable on :8080/admin.",
       failedHint:
-        "Port 443 must be reachable from the Internet for the TLS-ALPN challenge.",
+        "The DNS-01 challenge requires a configured, reachable DNS provider (valid token).",
       status: {
         pending: "Pending",
         failed: "Failed — retry scheduled",
