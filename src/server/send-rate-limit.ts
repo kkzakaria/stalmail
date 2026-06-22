@@ -14,11 +14,21 @@ function recent(key: string, now: number): number[] {
   return list
 }
 
+// Garde défensive (P2) : un account vide ferait `a:` → pool global partagé entre tous
+// les comptes (contournement de l'anti-abus). On rejette plutôt que de dégrader en silence.
+function assertAccount(account: string): void {
+  if (!account.trim()) {
+    throw new Error("send-rate-limit: account must be non-empty")
+  }
+}
+
 export function isSendRateLimited(account: string, now = Date.now()): boolean {
+  assertAccount(account)
   return recent(`a:${account.toLowerCase()}`, now).length >= MAX_PER_ACCOUNT
 }
 
 export function recordSend(account: string, now = Date.now()): void {
+  assertAccount(account)
   const key = `a:${account.toLowerCase()}`
   const list = recent(key, now)
   list.push(now)

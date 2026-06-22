@@ -75,4 +75,27 @@ describe("useComposer", () => {
     expect(ok).toBe(false)
     expect(notify).toHaveBeenCalledWith("mail.compose.error", "error")
   })
+
+  it("double-soumission : le second appel est ignoré (garde inFlight, R-F)", async () => {
+    // Réponse serveur lente : on déclenche deux send() avant la résolution.
+    let resolve!: (v: { ok: true; emailId: string }) => void
+    sendMail.mockImplementation(
+      () =>
+        new Promise<{ ok: true; emailId: string }>((r) => {
+          resolve = r
+        })
+    )
+    const { result } = renderHook(() => useComposer("inbox"), { wrapper })
+    let first!: Promise<boolean>
+    let second!: Promise<boolean>
+    await act(async () => {
+      first = result.current.send(draft)
+      second = result.current.send(draft) // synchrone, avant toute résolution
+      resolve({ ok: true, emailId: "e1" })
+      await Promise.all([first, second])
+    })
+    expect(await first).toBe(true)
+    expect(await second).toBe(false) // bloqué par inFlight
+    expect(sendMail).toHaveBeenCalledTimes(1) // un seul envoi réel
+  })
 })

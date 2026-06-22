@@ -32,4 +32,11 @@ describe("send-rate-limit", () => {
     for (let i = 0; i < 30; i++) recordSend("me@x.fr", now)
     expect(isSendRateLimited("me@x.fr", now + 61 * 60 * 1000)).toBe(false)
   })
+
+  it("rejette un account vide ou blanc (P2 : pas de pool global)", () => {
+    expect(() => isSendRateLimited("", 1_000_000)).toThrow()
+    expect(() => isSendRateLimited("   ", 1_000_000)).toThrow()
+    expect(() => recordSend("", 1_000_000)).toThrow()
+    expect(() => recordSend("   ", 1_000_000)).toThrow()
+  })
 })

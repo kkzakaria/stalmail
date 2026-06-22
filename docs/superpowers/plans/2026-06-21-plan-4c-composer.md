@@ -138,7 +138,7 @@ describe("htmlToPlainText", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `bun run test src/server/compose-html.test.ts`
+Run: `bun run test src/lib/compose-html.test.ts`
 Expected: FAIL (`Cannot find module './compose-html'`).
 
 - [ ] **Step 4: Write minimal implementation**
@@ -217,7 +217,7 @@ export function htmlToPlainText(html: string): string {
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `bun run test src/server/compose-html.test.ts`
+Run: `bun run test src/lib/compose-html.test.ts`
 Expected: PASS (6 + 2 assertions).
 
 - [ ] **Step 6: Commit**
