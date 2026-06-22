@@ -35,6 +35,20 @@ export function recordSend(account: string, now = Date.now()): void {
   sends.set(key, list)
 }
 
+// Atomique : élague + vérifie + consomme un créneau en UNE passe synchrone (pas d'await
+// intercalé). À appeler en tête de sendMailFn — sinon deux envois concurrents passent tous
+// deux le check avant que l'un n'enregistre, dépassant le cap (CodeRabbit #7). Retourne false
+// si le compte est déjà au plafond (créneau NON consommé). Compte les tentatives, pas les succès.
+export function consumeSendSlot(account: string, now = Date.now()): boolean {
+  assertAccount(account)
+  const key = `a:${account.toLowerCase()}`
+  const list = recent(key, now)
+  if (list.length >= MAX_PER_ACCOUNT) return false
+  list.push(now)
+  sends.set(key, list)
+  return true
+}
+
 export function __resetForTest(): void {
   sends.clear()
 }

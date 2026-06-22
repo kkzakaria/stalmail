@@ -29,7 +29,11 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
           type="button"
           className="icon-btn sm"
           style={{ marginLeft: "auto" }}
-          aria-label={t("mail.compose.minimize")}
+          aria-label={
+            mode === "min"
+              ? t("mail.compose.expand")
+              : t("mail.compose.minimize")
+          }
           onClick={() => setMode(mode === "min" ? "normal" : "min")}
         >
           <Icon name={mode === "min" ? "expand" : "minimize"} size={16} />
@@ -37,7 +41,11 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
         <button
           type="button"
           className="icon-btn sm"
-          aria-label={t("mail.compose.maximize")}
+          aria-label={
+            mode === "max"
+              ? t("mail.compose.restoreSize")
+              : t("mail.compose.maximize")
+          }
           onClick={() => setMode(mode === "max" ? "normal" : "max")}
         >
           <Icon name={mode === "max" ? "shrink" : "expand"} size={15} />

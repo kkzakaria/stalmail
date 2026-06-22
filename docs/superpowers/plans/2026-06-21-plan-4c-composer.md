@@ -195,11 +195,16 @@ export function sanitizeComposeHtml(html: string): string {
 // Alternative text/plain : bloc → saut de ligne, <br> → \n, entités décodées, balises retirées.
 // R-A : sert UNIQUEMENT de corps text/plain (bodyValues.plain), jamais de valeur d'en-tête —
 // aucun vecteur d'injection (Stalwart encode le corps). Décodage d'entités volontairement partiel.
+// IMPORTANT (ordre) : sanitiser D'ABORD, car DOMPurify normalise les balises (ex. ajoute le
+// </p> fermant manquant) ; remplacer les balises avant détruirait cette normalisation. Balises
+// ouvrantes ET fermantes de bloc → \n (chaque <p>…</p> donne \n\n, réduit par \n{3,}→\n\n).
 export function htmlToPlainText(html: string): string {
-  const withBreaks = html
-    .replace(/<\/(p|div|li|ul|ol)>/gi, "\n")
+  const sanitized = sanitizeComposeHtml(html)
+  const withBreaks = sanitized
+    .replace(/<(p|div|li|ul|ol)[^>]*>/gi, "\n") // ouverture bloc → \n
+    .replace(/<\/(p|div|li|ul|ol)>/gi, "\n") //    fermeture bloc → \n
     .replace(/<br\s*\/?>/gi, "\n")
-  const stripped = sanitizeComposeHtml(withBreaks).replace(/<[^>]+>/g, "")
+  const stripped = withBreaks.replace(/<[^>]+>/g, "")
   const decoded = stripped
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")

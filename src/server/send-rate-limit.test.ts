@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   isSendRateLimited,
   recordSend,
+  consumeSendSlot,
   __resetForTest,
 } from "./send-rate-limit"
 
@@ -38,5 +39,25 @@ describe("send-rate-limit", () => {
     expect(() => isSendRateLimited("   ", 1_000_000)).toThrow()
     expect(() => recordSend("", 1_000_000)).toThrow()
     expect(() => recordSend("   ", 1_000_000)).toThrow()
+  })
+
+  it("consumeSendSlot : consomme et autorise sous le seuil", () => {
+    const now = 1_000_000
+    for (let i = 0; i < 30; i++)
+      expect(consumeSendSlot("me@x.fr", now)).toBe(true)
+    // 31e tentative : plafond atteint → refusée (créneau non consommé).
+    expect(consumeSendSlot("me@x.fr", now)).toBe(false)
+  })
+
+  it("consumeSendSlot : atomique à la frontière — un seul des deux passe au plafond -1 (#6/#7)", () => {
+    const now = 1_000_000
+    for (let i = 0; i < 29; i++) recordSend("me@x.fr", now) // 29/30 utilisés
+    // Deux consommations « concurrentes » au seuil : la 1re prend le dernier créneau, la 2nde est refusée.
+    expect(consumeSendSlot("me@x.fr", now)).toBe(true) // 30e
+    expect(consumeSendSlot("me@x.fr", now)).toBe(false) // 31e bloquée — pas de dépassement
+  })
+
+  it("consumeSendSlot : rejette un account vide", () => {
+    expect(() => consumeSendSlot("", 1_000_000)).toThrow()
   })
 })

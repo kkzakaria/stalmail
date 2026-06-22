@@ -66,7 +66,7 @@ vi.mock("../../server/mail-actions", async (importActual) => ({
   readThreadFn: vi.fn().mockResolvedValue(DETAIL),
   setFlagsFn: vi.fn().mockResolvedValue({ ok: true }),
   moveThreadFn: vi.fn().mockResolvedValue({ ok: true }),
-  sendMailFn: vi.fn().mockResolvedValue({ ok: true }),
+  sendMailFn: vi.fn().mockResolvedValue({ ok: true, emailId: "e1" }),
 }))
 
 // eslint-disable-next-line import/first

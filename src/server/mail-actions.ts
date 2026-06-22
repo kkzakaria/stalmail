@@ -649,13 +649,14 @@ export const sendMailFn = createServerFn({ method: "POST" })
     try {
       const { jmapUserCall, SUBMISSION_CAPABILITIES } =
         await import("./jmap-user")
-      const { isSendRateLimited, recordSend } =
-        await import("./send-rate-limit")
+      const { consumeSendSlot } = await import("./send-rate-limit")
       const { sid, accountId } = await requireSession()
 
       // P2 : currentSession n'expose PAS d'email (uniquement { accountId, accountName }).
       // La clé de rate-limit anti-spam est donc l'accountId (stable, par compte).
-      if (isSendRateLimited(accountId)) {
+      // Consommation ATOMIQUE du créneau avant tout await (CodeRabbit #7) : empêche deux
+      // envois concurrents de dépasser le cap en passant tous deux le check avant enregistrement.
+      if (!consumeSendSlot(accountId)) {
         throw new Error("send rate limited")
       }
 
@@ -699,7 +700,7 @@ export const sendMailFn = createServerFn({ method: "POST" })
       )
       const result = parseSendResult(responses)
       if (!result.ok) throw new Error(`send failed: ${result.code}`)
-      recordSend(accountId)
+      // Pas de recordSend ici : le créneau a déjà été consommé atomiquement en tête (#7).
       return { ok: true, emailId: result.emailId }
     } catch (e) {
       if (isRedirect(e)) throw e

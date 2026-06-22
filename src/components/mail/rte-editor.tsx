@@ -27,15 +27,25 @@ export function RteEditor({
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    const sanitized = sanitizeComposeHtml(value)
+    // Le DOM reflète déjà cette value (frappe round-trippée via emit) → ne pas réinjecter
+    // (sinon réécriture d'innerHTML = saut de curseur à chaque caractère).
+    if (el.innerHTML === sanitized) {
+      lastInjected.current = value
+      return
+    }
     if (value === lastInjected.current) return
     lastInjected.current = value
-    el.innerHTML = sanitizeComposeHtml(value)
+    el.innerHTML = sanitized
   }, [value])
 
   // Frappe : on émet le HTML brut (le serveur sanitise à l'envoi, barrière autoritaire B2).
   function emit() {
     const el = ref.current
     if (!el) return
+    // Mémorise la value courante : quand le parent contrôlé la renvoie via `value`,
+    // l'useEffect la reconnaît et NE réinjecte PAS (préserve le curseur — bug CodeRabbit #4).
+    lastInjected.current = el.innerHTML
     onChange(el.innerHTML)
   }
 
