@@ -1,0 +1,86 @@
+# Stalmail — déploiement serveur par images publiées (GHCR), SANS build local.
+#
+# Usage (sur le serveur, avec compose.prod.yml + Caddyfile + .env dans le dossier courant) :
+#   docker compose -f compose.prod.yml pull
+#   docker compose -f compose.prod.yml up -d
+#
+# Différence avec compose.yml : on TIRE les images ghcr.io/kkzakaria/stalmail-* au lieu
+# de les construire (le repo n'a pas besoin d'être présent sur le serveur). Le repo est
+# public → aucun `docker login ghcr.io` requis.
+#
+# .env requis (cf. .env.example) :
+#   STALMAIL_SECRET=<64+ caractères aléatoires>
+#   STALMAIL_PUBLIC_URL=https://mail.getstalmail.com
+#
+# Caddyfile requis : version domaine réel (cf. Caddyfile.prod.example).
+services:
+  stalwart:
+    image: ghcr.io/kkzakaria/stalmail-stalwart:latest
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      STALWART_RECOVERY_ADMIN: "stalmail-admin:${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
+      STALMAIL_RUN_DIR: /shared
+    volumes:
+      - stalmail-config:/etc/stalwart
+      - stalmail-data:/var/lib/stalwart
+      - stalmail-shared:/shared
+    ports:
+      - "25:25"
+      - "587:587"
+      - "465:465"
+      - "993:993"
+      - "143:143"
+      - "995:995"
+      - "4190:4190"
+    networks:
+      - stalmail
+
+  app:
+    image: ghcr.io/kkzakaria/stalmail-app:latest
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      STALWART_URL: http://stalwart:8080
+      STALWART_RECOVERY_ADMIN: "stalmail-admin:${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
+      STALMAIL_SECRET: "${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
+      STALMAIL_DATA_DIR: /var/lib/stalmail
+      STALMAIL_PUBLIC_URL: "${STALMAIL_PUBLIC_URL:?set STALMAIL_PUBLIC_URL in .env (e.g. https://mail.getstalmail.com)}"
+      STALMAIL_RUN_DIR: /shared
+    volumes:
+      - stalmail-shared:/shared
+      - stalmail-app-data:/var/lib/stalmail
+    depends_on:
+      - stalwart
+    networks:
+      - stalmail
+
+  caddy:
+    image: caddy:2.9.1
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - stalmail-caddy-data:/data
+      - stalmail-caddy-config:/config
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on:
+      - app
+      - stalwart
+    networks:
+      - stalmail
+
+networks:
+  stalmail:
+
+volumes:
+  stalmail-config:
+  stalmail-data:
+  stalmail-shared:
+  stalmail-caddy-data:
+  stalmail-caddy-config:
+  stalmail-app-data:
