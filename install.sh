@@ -67,7 +67,17 @@ echo "✓ compose.prod.yml + Caddyfile récupérés dans ${DIR}"
 
 # 4. .env (généré une fois, conservé ensuite).
 if [ ! -f .env ]; then
-  SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 64)
+  # Secret 64 caractères alphanumériques. NE PAS écrire `tr </dev/urandom | head` :
+  # sous `set -o pipefail`, `head` ferme le tuyau dès 64 octets lus → `tr` reçoit
+  # SIGPIPE et sort en code ≠ 0 → le pipeline échoue → `set -e` tue le script.
+  # On lit donc une tranche FINIE puis on coupe en bash (aucun pipe en aval),
+  # avec `openssl` en chemin préféré quand il est disponible.
+  if command -v openssl &> /dev/null; then
+    SECRET=$(openssl rand -hex 32)
+  else
+    SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c 256 /dev/urandom))
+    SECRET=${SECRET:0:64}
+  fi
   {
     printf 'STALMAIL_SECRET=%s\n' "${SECRET}"
     printf 'STALMAIL_HOSTNAME=%s\n' "${HOSTNAME_ARG}"
