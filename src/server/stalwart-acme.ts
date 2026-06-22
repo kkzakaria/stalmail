@@ -1,6 +1,12 @@
-import { jmapCall, resolveAccountId, firstResponse, expectResult, JmapError } from './jmap'
+import {
+  jmapCall,
+  resolveAccountId,
+  firstResponse,
+  expectResult,
+  JmapError,
+} from "./jmap"
 
-const LETSENCRYPT_DIRECTORY = 'https://acme-v02.api.letsencrypt.org/directory'
+const LETSENCRYPT_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory"
 
 export interface ConfigureAcmeInput {
   domainId: string
@@ -10,61 +16,79 @@ export interface ConfigureAcmeInput {
   directory?: string
 }
 
-/** Creates an AcmeProvider (LE / TLS-ALPN-01) and flips the domain to Automatic cert management. */
-export async function configureAcme(input: ConfigureAcmeInput): Promise<string> {
+/**
+ * Creates an AcmeProvider (LE / DNS-01) and flips the domain to Automatic cert management.
+ *
+ * DNS-01 (et non TLS-ALPN-01) : la validation publie un TXT `_acme-challenge` via le
+ * provider DNS déjà configuré (DnsServer + domaine en `dnsManagement: Automatic`, posés
+ * aux étapes précédentes du wizard). Aucun port 443 requis — indispensable derrière un
+ * reverse proxy (Caddy) qui possède :443, sinon le défi TLS-ALPN-01 frapperait le proxy
+ * et l'émission échouerait. Stalwart obtient ainsi son cert (ports mail) indépendamment.
+ */
+export async function configureAcme(
+  input: ConfigureAcmeInput
+): Promise<string> {
   const accountId = await resolveAccountId()
   // 1) Create the ACME provider — VERIFIED v0.16 shapes (recon §9):
   //    challengeType: enum string; contact: map {"mailto:<email>": true}; renewBefore omitted.
+  //    DNS-01 s'appuie sur le dnsManagement: Automatic (dnsServerId) du domaine.
   const createResp = await jmapCall([
     [
-      'x:AcmeProvider/set',
+      "x:AcmeProvider/set",
       {
         accountId,
         create: {
           p1: {
             directory: input.directory ?? LETSENCRYPT_DIRECTORY,
-            challengeType: 'TlsAlpn01',
+            challengeType: "Dns01",
             contact: { [`mailto:${input.contactEmail}`]: true },
           },
         },
       },
-      '0',
+      "0",
     ],
   ])
-  const created = (firstResponse(createResp)[1] as {
+  const created = firstResponse(createResp)[1] as {
     created?: { p1?: { id: string } }
     notCreated?: { p1?: unknown }
-  })
+  }
   const providerId = created.created?.p1?.id
-  if (!providerId) throw new JmapError('ACME provider creation rejected', created.notCreated)
+  if (!providerId)
+    throw new JmapError("ACME provider creation rejected", created.notCreated)
 
   // 2) Flip the domain to Automatic — SAN is a map {"<host>": true}, optional.
   const updResp = await jmapCall([
     [
-      'x:Domain/set',
+      "x:Domain/set",
       {
         accountId,
         update: {
           [input.domainId]: {
             certificateManagement: {
-              '@type': 'Automatic',
+              "@type": "Automatic",
               acmeProviderId: providerId,
               subjectAlternativeNames: { [input.hostname]: true },
             },
           },
         },
       },
-      '0',
+      "0",
     ],
   ])
-  const upd = firstResponse(updResp)[1] as { updated?: Record<string, unknown>; notUpdated?: unknown }
+  const upd = firstResponse(updResp)[1] as {
+    updated?: Record<string, unknown>
+    notUpdated?: unknown
+  }
   if (!upd.updated || !(input.domainId in upd.updated)) {
-    throw new JmapError('domain certificateManagement update rejected', upd.notUpdated)
+    throw new JmapError(
+      "domain certificateManagement update rejected",
+      upd.notUpdated
+    )
   }
   return providerId
 }
 
-export type AcmeStatus = 'pending' | 'failed' | 'valid'
+export type AcmeStatus = "pending" | "failed" | "valid"
 
 /** Polls the AcmeRenewal task. NON-BLOCKING: Pending/Retry → pending, Failed → failed,
  *  no AcmeRenewal task found → valid (the renewal task is cleared once a cert is active).
@@ -73,15 +97,25 @@ export type AcmeStatus = 'pending' | 'failed' | 'valid'
 export async function getAcmeStatus(): Promise<AcmeStatus> {
   const accountId = await resolveAccountId()
   const responses = await jmapCall([
-    ['x:Task/query', { accountId }, '0'],
-    ['x:Task/get', { accountId, '#ids': { resultOf: '0', name: 'x:Task/query', path: '/ids' } }, '1'],
+    ["x:Task/query", { accountId }, "0"],
+    [
+      "x:Task/get",
+      {
+        accountId,
+        "#ids": { resultOf: "0", name: "x:Task/query", path: "/ids" },
+      },
+      "1",
+    ],
   ])
-  const list = (expectResult(responses, 1) as {
-    list?: { '@type'?: string; status?: { '@type'?: string } }[]
-  }).list ?? []
-  const task = list.find((t) => t['@type'] === 'AcmeRenewal')
-  if (!task) return 'valid'
-  const s = task.status?.['@type']
-  if (s === 'Failed') return 'failed'
-  return 'pending' // Pending | Retry (and any other in-flight state)
+  const list =
+    (
+      expectResult(responses, 1) as {
+        list?: { "@type"?: string; status?: { "@type"?: string } }[]
+      }
+    ).list ?? []
+  const task = list.find((t) => t["@type"] === "AcmeRenewal")
+  if (!task) return "valid"
+  const s = task.status?.["@type"]
+  if (s === "Failed") return "failed"
+  return "pending" // Pending | Retry (and any other in-flight state)
 }
