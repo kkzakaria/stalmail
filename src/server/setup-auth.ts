@@ -5,7 +5,7 @@ import {
   deleteCookie,
 } from "@tanstack/react-start/server"
 import { encryptToken, decryptToken } from "./session-crypto"
-import { assertSameOrigin, clientIp } from "./session-cookie"
+import { assertSameOriginStrict, clientIp } from "./session-cookie"
 import { isSetupComplete } from "./setup-flag"
 import { SetupError } from "./setup-errors"
 
@@ -61,8 +61,11 @@ export function clearSetupCookie(): void {
 }
 
 // --- Per-IP unlock rate-limit (sliding window, in-memory, mono-process) ------
-// Mirrors send-rate-limit.ts. Resets at restart. Counts ATTEMPTS, not failures,
-// so a flood of guesses (even interleaved with the correct token) is throttled.
+// Mirrors send-rate-limit.ts. Resets at restart (including intentional restart).
+// Counts ATTEMPTS, not failures, so a flood of guesses is throttled.
+// WARNING: acceptable for the single-container setup wizard; NOT safe for
+// multi-replica deployments without a shared store (Redis/KV) — the counter
+// is local to each process and resets independently on every restart.
 const RL_WINDOW_MS = 15 * 60 * 1000 // 15 min
 const RL_MAX_PER_IP = 10
 const attempts = new Map<string, number[]>()
@@ -105,14 +108,14 @@ function tokenMatches(token: string): boolean {
 
 // Unlock the setup wizard with the bootstrap token.
 // Order matters for security:
-//   1. CSRF guard (assertSameOrigin).
+//   1. CSRF guard (assertSameOriginStrict — rejects missing Origin/Referer).
 //   2. Consume a rate-limit slot (counts every attempt).
 //   3. Refuse if setup is already complete (generic — NO oracle).
 //   4. Constant-time token verification.
 // Every refusal surfaces the SAME generic SETUP-UNLOCK-FAILED so a caller cannot
 // distinguish "bad token" / "already complete" / "rate-limited".
 export function unlockSetup(token: string): void {
-  assertSameOrigin()
+  assertSameOriginStrict()
   const ip = clientIp() ?? "unknown"
 
   if (!consumeUnlockSlot(ip)) {
@@ -134,7 +137,11 @@ export function unlockSetup(token: string): void {
   }
 
   if (!tokenMatches(token)) {
-    console.warn("[setup-auth] unlock", { ip, ok: false, reason: "mismatch" })
+    console.warn("[setup-auth] unlock", {
+      ip,
+      ok: false,
+      reason: "token-check-failed",
+    })
     throw new SetupError("SETUP-UNLOCK-FAILED")
   }
 
