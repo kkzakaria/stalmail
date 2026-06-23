@@ -44,6 +44,7 @@ export function SslStep({
   )
   const [status, setStatus] = useState<AcmeStatus>("pending")
   const [errorCode, setErrorCode] = useState("")
+  const [ackBusy, setAckBusy] = useState(false)
 
   const mountedRef = useRef(true)
   const ranRef = useRef(false)
@@ -79,9 +80,14 @@ export function SslStep({
 
   // Manual DNS: write the SSL acknowledgment marker, then advance. Re-runnable on retry.
   const acknowledgeManual = () => {
+    setAckBusy(true)
     acknowledgeManualSsl()
-      .then(() => onNext())
+      .then(() => {
+        setAckBusy(false)
+        onNext()
+      })
       .catch((e: unknown) => {
+        setAckBusy(false)
         if (!mountedRef.current) return
         setErrorCode(codeFromError(e) || "SETUP-SSL-REJECTED")
         setPhase("error")
@@ -161,6 +167,7 @@ export function SslStep({
             onNext={acknowledgeManual}
             nextLabel={t("wizard.common.next")}
             backLabel={t("wizard.common.back")}
+            busy={ackBusy}
           />
         </>
       ) : null}

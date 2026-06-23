@@ -143,6 +143,47 @@ describe("SslStep", () => {
     expect(onNext).not.toHaveBeenCalled()
   })
 
+  it("manual: Continue button is disabled while acknowledgeManualSsl is in flight (no double-invoke)", async () => {
+    let resolve!: () => void
+    const acknowledgeManualSsl = vi.fn(
+      () =>
+        new Promise<{ ok: true }>((res) => {
+          resolve = () => res({ ok: true as const })
+        })
+    )
+    const onNext = vi.fn()
+
+    wrap(
+      <SslStep
+        hostname="mail.exemple.fr"
+        contactEmail="admin@exemple.fr"
+        dnsManual={true}
+        configureAcme={vi.fn(() => Promise.resolve({ ok: true as const }))}
+        acmeStatus={vi.fn(
+          (): Promise<{ status: AcmeStatus }> =>
+            Promise.resolve({ status: "pending" })
+        )}
+        onStatusChange={vi.fn()}
+        acknowledgeManualSsl={acknowledgeManualSsl}
+        onNext={onNext}
+      />
+    )
+
+    await screen.findByText("Certificat à gérer manuellement")
+    const continueBtn = screen.getByRole("button", { name: /Continuer/ })
+    fireEvent.click(continueBtn)
+
+    // Button must be disabled while the promise is in flight.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Continuer/ })).toBeDisabled()
+    )
+    expect(acknowledgeManualSsl).toHaveBeenCalledTimes(1)
+
+    // Resolve the promise — button should re-enable and onNext fires.
+    resolve()
+    await waitFor(() => expect(onNext).toHaveBeenCalled())
+  })
+
   it("auto: configureAcme rejection shows a SetupErrorBox with the SSL code", async () => {
     const configureAcme = vi.fn(() =>
       Promise.reject(new Error("SETUP-SSL-REJECTED"))

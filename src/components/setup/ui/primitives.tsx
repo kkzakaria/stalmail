@@ -2,8 +2,8 @@
 // Ports the design prototype (docs/design/wizard-handoff/project/wizard/ui.jsx)
 // to typed TSX backed by the scoped classes in wizard.css. All visible text is
 // passed in via props; i18n is resolved by callers.
-import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useRef, useState } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import {
   IconArrowL,
   IconArrowR,
@@ -14,7 +14,7 @@ import {
   IconInfo,
   IconAlert,
   IconMail,
-} from './icons'
+} from "./icons"
 
 /* ---------- Spinner ---------- */
 export interface SpinnerProps {
@@ -32,13 +32,13 @@ export function Spinner({ size = 16 }: SpinnerProps) {
 }
 
 /* ---------- Button ---------- */
-export type ButtonVariant = 'primary' | 'outline' | 'ghost'
-export type ButtonSize = 'md' | 'lg' | 'sm'
+export type ButtonVariant = "primary" | "outline" | "ghost"
+export type ButtonSize = "md" | "lg" | "sm"
 
 export interface ButtonProps {
   variant?: ButtonVariant
   size?: ButtonSize
-  type?: 'button' | 'submit' | 'reset'
+  type?: "button" | "submit" | "reset"
   disabled?: boolean
   onClick?: () => void
   children: ReactNode
@@ -46,9 +46,9 @@ export interface ButtonProps {
 }
 
 export function Button({
-  variant = 'primary',
-  size = 'md',
-  type = 'button',
+  variant = "primary",
+  size = "md",
+  type = "button",
   disabled,
   onClick,
   children,
@@ -93,7 +93,12 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p className="field-error" id={htmlFor ? `${htmlFor}-error` : undefined}>{error}</p>
+        <p
+          className="field-error"
+          id={htmlFor ? `${htmlFor}-error` : undefined}
+        >
+          {error}
+        </p>
       ) : help ? (
         <p className="help">{help}</p>
       ) : null}
@@ -107,7 +112,7 @@ export interface TextInputProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
-  type?: 'text' | 'password' | 'email'
+  type?: "text" | "password" | "email"
   invalid?: boolean
   mono?: boolean
   autoFocus?: boolean
@@ -121,18 +126,18 @@ export function TextInput({
   value,
   onChange,
   placeholder,
-  type = 'text',
+  type = "text",
   invalid,
   mono,
   autoFocus,
-  autoComplete = 'off',
+  autoComplete = "off",
   ariaDescribedBy,
   onEnter,
 }: TextInputProps) {
   return (
     <input
       id={id}
-      className={`input${invalid ? ' input-invalid' : ''}${mono ? ' mono' : ''}`}
+      className={`input${invalid ? "input-invalid" : ""}${mono ? "mono" : ""}`}
       type={type}
       value={value}
       placeholder={placeholder}
@@ -142,7 +147,10 @@ export function TextInput({
       spellCheck={false}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && onEnter) onEnter()
+        if (e.key === "Enter" && onEnter) {
+          e.preventDefault()
+          onEnter()
+        }
       }}
     />
   )
@@ -181,7 +189,7 @@ export function PasswordInput({
         value={value}
         onChange={onChange}
         invalid={invalid}
-        type={show ? 'text' : 'password'}
+        type={show ? "text" : "password"}
         mono
         autoComplete={autoComplete}
         ariaDescribedBy={ariaDescribedBy}
@@ -217,7 +225,7 @@ export function NativeSelect({
   children,
 }: NativeSelectProps) {
   return (
-    <div className={`select-wrap${invalid ? ' input-invalid' : ''}`}>
+    <div className={`select-wrap${invalid ? "input-invalid" : ""}`}>
       <select
         id={id}
         className="select"
@@ -245,7 +253,7 @@ export function NativeSelect({
 }
 
 /* ---------- Alert ---------- */
-export type AlertVariant = 'info' | 'warning' | 'destructive' | 'success'
+export type AlertVariant = "info" | "warning" | "destructive" | "success"
 
 export interface AlertProps {
   variant?: AlertVariant
@@ -264,7 +272,12 @@ const ALERT_ICONS: Record<
   success: IconCheck,
 }
 
-export function Alert({ variant = 'info', title, children, action }: AlertProps) {
+export function Alert({
+  variant = "info",
+  title,
+  children,
+  action,
+}: AlertProps) {
   const Ic = ALERT_ICONS[variant]
   return (
     <div className={`alert alert-${variant}`} role="alert">
@@ -279,11 +292,7 @@ export function Alert({ variant = 'info', title, children, action }: AlertProps)
 }
 
 /* ---------- Badge ---------- */
-export type BadgeVariant =
-  | 'neutral'
-  | 'success'
-  | 'destructive'
-  | 'pending'
+export type BadgeVariant = "neutral" | "success" | "destructive" | "pending"
 
 export interface BadgeProps {
   variant?: BadgeVariant
@@ -291,7 +300,7 @@ export interface BadgeProps {
   children: ReactNode
 }
 
-export function Badge({ variant = 'neutral', pulse, children }: BadgeProps) {
+export function Badge({ variant = "neutral", pulse, children }: BadgeProps) {
   return (
     <span className={`badge badge-${variant}`}>
       {pulse ? (
@@ -317,7 +326,7 @@ export interface ProgressProps {
 
 export function Progress({ value = 0, indeterminate }: ProgressProps) {
   return (
-    <div className={`progress${indeterminate ? ' progress-indeterminate' : ''}`}>
+    <div className={`progress${indeterminate ? "progress-indeterminate" : ""}`}>
       <div
         className="progress-bar"
         style={indeterminate ? undefined : { width: `${value}%` }}
@@ -334,7 +343,12 @@ export interface CopyButtonProps {
   small?: boolean
 }
 
-export function CopyButton({ text, label, copiedLabel, small }: CopyButtonProps) {
+export function CopyButton({
+  text,
+  label,
+  copiedLabel,
+  small,
+}: CopyButtonProps) {
   const [ok, setOk] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const doCopy = () => {
@@ -352,13 +366,13 @@ export function CopyButton({ text, label, copiedLabel, small }: CopyButtonProps)
     () => () => {
       if (timer.current) clearTimeout(timer.current)
     },
-    [],
+    []
   )
   const current = ok ? copiedLabel : label
   return (
     <button
       type="button"
-      className={`copy-btn${small ? ' copy-btn-sm' : ''}`}
+      className={`copy-btn${small ? "copy-btn-sm" : ""}`}
       onClick={doCopy}
       title={current}
     >
@@ -401,7 +415,7 @@ export function StepNav({
   nextLabel,
   nextDisabled,
   busy,
-  nextVariant = 'primary',
+  nextVariant = "primary",
 }: StepNavProps) {
   return (
     <div className="step-nav">

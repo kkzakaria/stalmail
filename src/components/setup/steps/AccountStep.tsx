@@ -44,17 +44,19 @@ export function AccountStep({ domain, createAccount, onNext }: Props) {
   const form = useForm({
     defaultValues: { name: "", password: "" },
     validators: { onSubmit: adminAccountSchema },
-    onSubmit: ({ value }: { value: AdminAccountValues }) => {
+    onSubmit: async ({ value }: { value: AdminAccountValues }) => {
       setName(value.name)
-      run(value.name, value.password)
+      await run(value.name, value.password)
     },
   })
 
   // Execute createAccount. weak → weak retry loop ; server rejection → SetupErrorBox.
-  const run = (n: string, password: string) => {
+  // Returns a Promise so onSubmit can be async and form.state.isSubmitting stays true
+  // while the call is in flight (prevents double-submit via the busy StepNav prop).
+  const run = (n: string, password: string): Promise<void> => {
     setPhase("creating")
     setErrorCode("")
-    createAccount({ name: n, password })
+    return createAccount({ name: n, password })
       .then((result) => {
         setPhase(result.status === "ok" ? "done" : "weak")
       })
@@ -157,6 +159,7 @@ export function AccountStep({ domain, createAccount, onNext }: Props) {
           onNext={() => void form.handleSubmit()}
           nextLabel={t("wizard.common.next")}
           backLabel={t("wizard.common.back")}
+          busy={form.state.isSubmitting}
         />
       </form>
     )
