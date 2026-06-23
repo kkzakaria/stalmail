@@ -66,6 +66,11 @@ curl -fsSL "${REPO_RAW}/Caddyfile" -o Caddyfile
 echo "✓ compose.prod.yml + Caddyfile récupérés dans ${DIR}"
 
 # 4. .env (généré une fois, conservé ensuite).
+# SETUP_TOKEN : en clair uniquement en shell (pour l'URL finale), jamais écrit dans .env.
+# Seul le hash SHA-256 est persisté. Même précaution pipefail que pour SECRET :
+# on utilise `openssl rand` en priorité ; fallback tranche finie lue par bash (pas de pipe
+# sur un producteur infini).
+SETUP_TOKEN=""
 if [ ! -f .env ]; then
   # Secret 64 caractères alphanumériques. NE PAS écrire `tr </dev/urandom | head` :
   # sous `set -o pipefail`, `head` ferme le tuyau dès 64 octets lus → `tr` reçoit
@@ -74,14 +79,22 @@ if [ ! -f .env ]; then
   # avec `openssl` en chemin préféré quand il est disponible.
   if command -v openssl &> /dev/null; then
     SECRET=$(openssl rand -hex 32)
+    SETUP_TOKEN=$(openssl rand -hex 24)
   else
     SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c 256 /dev/urandom))
     SECRET=${SECRET:0:64}
+    # Fallback setup token : lire une tranche LARGE (4096 octets) pour garantir assez de
+    # caractères hex après filtrage (~22 % de rendement sur a-f0-9), puis couper en bash.
+    SETUP_TOKEN=$(LC_ALL=C tr -dc 'a-f0-9' < <(head -c 4096 /dev/urandom))
+    SETUP_TOKEN=${SETUP_TOKEN:0:48}
   fi
+  # Hash SHA-256 du jeton : sha256sum sort toujours 0 ; awk sort toujours 0 — pipefail-safe.
+  SETUP_TOKEN_HASH=$(printf '%s' "${SETUP_TOKEN}" | sha256sum | awk '{print $1}')
   {
     printf 'STALMAIL_SECRET=%s\n' "${SECRET}"
     printf 'STALMAIL_HOSTNAME=%s\n' "${HOSTNAME_ARG}"
     printf 'STALMAIL_PUBLIC_URL=https://%s\n' "${HOSTNAME_ARG}"
+    printf 'STALMAIL_SETUP_TOKEN_HASH=%s\n' "${SETUP_TOKEN_HASH}"
   } > .env
   chmod 600 .env
   echo "✓ .env créé (secret généré, hostname=${HOSTNAME_ARG})"
@@ -96,6 +109,8 @@ else
   fi
   HOSTNAME_ARG="${EXISTING_HOSTNAME:-${HOSTNAME_ARG}}"
   echo "✓ .env existant conservé (hostname=${HOSTNAME_ARG})"
+  # Le jeton en clair n'est pas récupérable depuis un .env existant (seul le hash y est).
+  # SETUP_TOKEN reste vide → géré dans l'encadré final ci-dessous.
 fi
 
 # 5. Démarrage.
@@ -128,12 +143,30 @@ IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 [ -z "${IP}" ] && IP="<ip-du-serveur>"
 echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║  Stalmail démarré.                                               ║"
-echo "║                                                                  ║"
-echo "║  1. Ouvre le wizard via l'IP (certificat auto-signé, accepte     ║"
-echo "║     l'avertissement) :   https://${IP}/setup"
-echo "║  2. Renseigne le domaine + le token Cloudflare : le wizard       ║"
-echo "║     publie TOUT le DNS (A, MX, SPF, DKIM, DMARC).                 ║"
-echo "║  3. Une fois le DNS propagé, utilise :                           ║"
+echo "║  Stalmail démarré.                                             ║"
+echo "║                                                                ║"
+if [ -n "${SETUP_TOKEN}" ]; then
+echo "║  1. Ouvre le wizard (certificat auto-signé → accepte           ║"
+echo "║     l'avertissement) avec CE lien contenant ton jeton :        ║"
+echo "║                                                                ║"
+echo "║    https://${IP}/setup#token=${SETUP_TOKEN}"
+echo "║                                                                ║"
+echo "║     Le jeton autorise le wizard ; il n'est pas stocké côté     ║"
+echo "║     serveur (seul son hash SHA-256 est dans .env).             ║"
+echo "║     ⚠ Ne partage pas cette URL — elle ouvre le setup.          ║"
+else
+echo "║  1. Jeton de setup non disponible (.env existant).             ║"
+echo "║     Pour regénérer un lien de setup :                          ║"
+echo "║       TOKEN=\$(openssl rand -hex 24)                            ║"
+echo "║       HASH=\$(printf '%s' \"\$TOKEN\" | sha256sum | awk '{print \$1}')"
+echo "║       # Mettre à jour STALMAIL_SETUP_TOKEN_HASH dans .env,     ║"
+echo "║       # puis redémarrer : docker compose -f compose.prod.yml   ║"
+echo "║       #   up -d app                                            ║"
+echo "║       # URL : https://${IP}/setup#token=\$TOKEN               ║"
+fi
+echo "║                                                                ║"
+echo "║  2. Renseigne le domaine + le token Cloudflare : le wizard     ║"
+echo "║     publie TOUT le DNS (A, MX, SPF, DKIM, DMARC).             ║"
+echo "║  3. Une fois le DNS propagé, utilise :                         ║"
 echo "║         https://${HOSTNAME_ARG}"
 echo "╚════════════════════════════════════════════════════════════════╝"

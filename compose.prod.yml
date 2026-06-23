@@ -51,6 +51,7 @@ services:
       STALMAIL_SECRET: "${STALMAIL_SECRET:?set STALMAIL_SECRET in .env}"
       STALMAIL_DATA_DIR: /var/lib/stalmail
       STALMAIL_PUBLIC_URL: "${STALMAIL_PUBLIC_URL:?set STALMAIL_PUBLIC_URL in .env (e.g. https://mail.getstalmail.com)}"
+      STALMAIL_SETUP_TOKEN_HASH: "${STALMAIL_SETUP_TOKEN_HASH:?set STALMAIL_SETUP_TOKEN_HASH in .env}"
       STALMAIL_RUN_DIR: /shared
     volumes:
       - stalmail-shared:/shared
