@@ -1,4 +1,10 @@
-import { jmapCall, resolveAccountId, firstResponse, JmapError } from "./jmap"
+import {
+  jmapCall,
+  resolveAccountId,
+  firstResponse,
+  expectResult,
+  JmapError,
+} from "./jmap"
 
 // Captured from the v0.16 schema enum DnsServerBootstrapType. The enum lists 71
 // entries; the deprecated placeholder ("Deprecated1") is omitted here, leaving 70.
@@ -97,7 +103,34 @@ function secretKey(value: string): { "@type": "Value"; secret: string } {
   return { "@type": "Value", secret: value }
 }
 
+export async function findDnsServerId(
+  provider: DnsProvider
+): Promise<string | null> {
+  const accountId = await resolveAccountId()
+  const responses = await jmapCall([
+    ["x:DnsServer/query", { accountId }, "0"],
+    [
+      "x:DnsServer/get",
+      {
+        accountId,
+        "#ids": { resultOf: "0", name: "x:DnsServer/query", path: "/ids" },
+      },
+      "1",
+    ],
+  ])
+  const list =
+    (
+      expectResult(responses, 1) as {
+        list?: Array<{ id: string; "@type"?: string }>
+      }
+    ).list ?? []
+  return list.find((s) => s["@type"] === provider)?.id ?? null
+}
+
 export async function createDnsServer(input: DnsServerInput): Promise<string> {
+  const existing = await findDnsServerId(input.provider)
+  if (existing) return existing
+
   const accountId = await resolveAccountId()
   const responses = await jmapCall([
     [
