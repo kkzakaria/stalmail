@@ -40,9 +40,13 @@
 }
 
 # Fallback bootstrap : accès via IP / hôte non nommé (pré-DNS), certificat auto-signé.
-# Nommé (et non `:443` nu) pour que `tls internal` ait un nom à certifier ; combiné au
-# `default_sni` ci-dessus, ce cert est servi à toute connexion sans SNI (accès par IP).
-bootstrap.stalmail.local:443 {
+# DEUX adresses dans le même bloc, car l'accès par IP exige les deux à la fois :
+#   - `:443` (catch-all) route TOUT Host, y compris `Host: <ip>` — Caddy route en HTTP
+#     par l'en-tête Host, pas par le SNI ; un site uniquement nommé renverrait un 200
+#     vide aux requêtes dont le Host est l'IP (aucune route ne matche).
+#   - `bootstrap.stalmail.local` donne un nom à `tls internal` pour qu'il émette un cert ;
+#     combiné au `default_sni` ci-dessus, ce cert est servi aux connexions sans SNI (IP).
+:443, bootstrap.stalmail.local {
 	tls internal
 	import stalmail_routes
 }
