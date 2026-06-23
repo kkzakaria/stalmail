@@ -131,15 +131,12 @@ describe("AccountStep", () => {
     formEl.removeEventListener("submit", submitSpy)
   })
 
-  it("TextInput.onKeyDown calls preventDefault so the native form submit does not re-fire", async () => {
-    // This is the critical guard against double-submit: when Enter is pressed in an
-    // input with onEnter, e.preventDefault() suppresses the browser's native form
-    // submit event (which would call form.handleSubmit() a second time).
+  it("pressing a non-Enter key does NOT trigger submission", async () => {
     const createAccount = vi.fn(
       (_i: { name: string; password: string }): Promise<CreateAccountResult> =>
         Promise.resolve({ status: "ok" })
     )
-    const { container } = wrap(
+    wrap(
       <AccountStep
         domain="exemple.fr"
         createAccount={createAccount}
@@ -148,16 +145,11 @@ describe("AccountStep", () => {
     )
     fill("koffi", "correct horse battery 9")
     const nameInput = screen.getByLabelText(NAME_LABEL)
-    const formEl = container.querySelector("form")!
-    // Spy on the form's submit listener to detect if the native submit propagates.
-    const submitSpy = vi.fn((e: Event) => e.preventDefault())
-    formEl.addEventListener("submit", submitSpy)
-    // Simulate Enter keydown — without preventDefault this would also fire a submit event.
-    fireEvent.keyDown(nameInput, { key: "Enter" })
-    await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1))
-    // Native form submit must NOT have fired because TextInput called e.preventDefault().
-    expect(submitSpy).not.toHaveBeenCalled()
-    formEl.removeEventListener("submit", submitSpy)
+    fireEvent.keyDown(nameInput, { key: "Tab" })
+    fireEvent.keyDown(nameInput, { key: "a" })
+    // Wait a tick to ensure no async submission fires.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(createAccount).not.toHaveBeenCalled()
   })
 
   it("server rejection shows a SetupErrorBox (distinct from the weak loop)", async () => {

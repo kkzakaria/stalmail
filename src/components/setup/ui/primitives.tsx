@@ -137,7 +137,9 @@ export function TextInput({
   return (
     <input
       id={id}
-      className={`input${invalid ? "input-invalid" : ""}${mono ? "mono" : ""}`}
+      className={["input", invalid && "input-invalid", mono && "mono"]
+        .filter(Boolean)
+        .join(" ")}
       type={type}
       value={value}
       placeholder={placeholder}
@@ -225,7 +227,11 @@ export function NativeSelect({
   children,
 }: NativeSelectProps) {
   return (
-    <div className={`select-wrap${invalid ? "input-invalid" : ""}`}>
+    <div
+      className={["select-wrap", invalid && "input-invalid"]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <select
         id={id}
         className="select"
@@ -326,7 +332,11 @@ export interface ProgressProps {
 
 export function Progress({ value = 0, indeterminate }: ProgressProps) {
   return (
-    <div className={`progress${indeterminate ? "progress-indeterminate" : ""}`}>
+    <div
+      className={["progress", indeterminate && "progress-indeterminate"]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div
         className="progress-bar"
         style={indeterminate ? undefined : { width: `${value}%` }}
@@ -372,7 +382,7 @@ export function CopyButton({
   return (
     <button
       type="button"
-      className={`copy-btn${small ? "copy-btn-sm" : ""}`}
+      className={["copy-btn", small && "copy-btn-sm"].filter(Boolean).join(" ")}
       onClick={doCopy}
       title={current}
     >
