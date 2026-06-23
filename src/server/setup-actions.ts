@@ -177,7 +177,7 @@ export const createDnsServerFn = createServerFn({ method: "POST" })
   .handler(createDnsServerHandler)
 export const setDnsManagementFn = createServerFn({ method: "POST" })
   .validator((d: { dnsServerId: string }) =>
-    z.object({ dnsServerId: z.string().min(1) }).parse(d)
+    z.object({ dnsServerId: z.string().min(1).max(256) }).parse(d)
   )
   .handler(setDnsManagementHandler)
 export const dnsGridStatusFn = createServerFn({ method: "GET" }).handler(
