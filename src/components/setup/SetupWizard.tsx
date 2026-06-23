@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useTranslation } from "react-i18next"
 import { Brand } from "./ui/primitives"
 import { LangSelect } from "./ui/LangSelect"
@@ -24,10 +24,21 @@ type ServerStep = "collect" | "dns" | "ssl" | "account" | "done"
 // Client sub-phase while step==='collect' (pre-bootstrap) or just after submit.
 type Phase = "welcome" | "domain" | "restarting" | "server"
 
+// Auth gate state (client-side only, initialised on mount)
+type AuthState =
+  | "loading"
+  | "authed"
+  | "unlocking"
+  | "unauthed-no-token"
+  | "expired"
+  | { kind: "unlock-failed"; code: string }
+
 interface Props {
   initialStep: string
   initialDnsManual?: boolean
   initialTheme: Theme
+  unlock: (token: string) => Promise<{ ok: true }>
+  authStatus: () => Promise<{ authed: boolean }>
   submitBootstrap: (input: DomainValues) => Promise<void>
   pollStep: () => Promise<{ step: string; dnsManual: boolean }>
   createAccount: (input: {
@@ -63,6 +74,8 @@ export function SetupWizard({
   initialStep,
   initialDnsManual = false,
   initialTheme,
+  unlock,
+  authStatus,
   submitBootstrap,
   pollStep,
   createAccount,
@@ -77,6 +90,60 @@ export function SetupWizard({
 }: Props) {
   const { t } = useTranslation()
   const [theme, setTheme] = useState<Theme>(initialTheme)
+
+  // Auth gate: starts at "loading", resolved on mount (client only).
+  const [authState, setAuthState] = useState<AuthState>("loading")
+  // Token kept in memory only — never stored in state to avoid leaking to the DOM.
+  const tokenRef = useRef<string | null>(null)
+
+  // Keep latest prop references stable for use inside callbacks without stale closure issues.
+  const unlockRef = useRef(unlock)
+  const authStatusRef = useRef(authStatus)
+  unlockRef.current = unlock
+  authStatusRef.current = authStatus
+
+  // Stable re-unlock helper (used both on mount and in recovery).
+  const doUnlock = useCallback((token: string) => unlockRef.current(token), [])
+  const doAuthStatus = useCallback(() => authStatusRef.current(), [])
+
+  // Mount effect: read URL fragment, attempt unlock if token present, then check auth.
+  useEffect(() => {
+    // Guard SSR
+    if (typeof window === "undefined") return
+
+    const hash = window.location.hash
+    const match = /[#&]token=([^&]+)/.exec(hash)
+    const token = match ? decodeURIComponent(match[1]) : null
+
+    if (token) {
+      tokenRef.current = token
+      // Scrub the fragment from the URL immediately (do not expose the token in history)
+      history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search
+      )
+      setAuthState("unlocking")
+      doUnlock(token)
+        .then(() => doAuthStatus())
+        .then(({ authed }) => {
+          setAuthState(authed ? "authed" : "unauthed-no-token")
+        })
+        .catch((e: unknown) => {
+          const code = codeFromError(e)
+          setAuthState({ kind: "unlock-failed", code })
+        })
+    } else {
+      // No token in URL — just check auth status (e.g. valid cookie still present)
+      doAuthStatus()
+        .then(({ authed }) => {
+          setAuthState(authed ? "authed" : "unauthed-no-token")
+        })
+        .catch(() => {
+          setAuthState("unauthed-no-token")
+        })
+    }
+  }, [doUnlock, doAuthStatus])
 
   const startsCollect = initialStep === "collect"
   // Server-derived step (only meaningful once phase==='server').
@@ -100,10 +167,49 @@ export function SetupWizard({
   // error instead of silently going stale / emitting an unhandled rejection.
   const [pollError, setPollError] = useState<string | null>(null)
 
+  // Keep latest prop references for stable callbacks.
+  const pollStepRef = useRef(pollStep)
+  const submitBootstrapRef = useRef(submitBootstrap)
+  const createAccountRef = useRef(createAccount)
+  pollStepRef.current = pollStep
+  submitBootstrapRef.current = submitBootstrap
+  createAccountRef.current = createAccount
+
+  // Stable re-auth recovery helper.
+  // Wraps any async call: on SETUP-UNAUTHENTICATED, re-unlocks if token available, then retries.
+  const withReauth = useCallback(
+    <TArgs extends any[], TResult>(
+      cb: (...args: TArgs) => Promise<TResult>
+    ): ((...args: TArgs) => Promise<TResult>) =>
+      async (...args: TArgs) => {
+        try {
+          return await cb(...args)
+        } catch (e: unknown) {
+          if (codeFromError(e) === "SETUP-UNAUTHENTICATED") {
+            const token = tokenRef.current
+            if (token) {
+              try {
+                await doUnlock(token)
+              } catch {
+                setAuthState("expired")
+                throw e
+              }
+              return await cb(...args)
+            } else {
+              setAuthState("expired")
+            }
+          }
+          throw e
+        }
+      },
+    [doUnlock]
+  )
+
   // Re-derive the server step after each step completes, then advance.
-  const refetchStep = () => {
+  const refetchStep = useCallback(() => {
     setPollError(null)
-    pollStep()
+    pollStepRef
+      .current()
       .then(({ step, dnsManual: manual }) => {
         setServerStep(step as ServerStep)
         setDnsManual(manual)
@@ -112,7 +218,41 @@ export function SetupWizard({
       .catch((e: unknown) => {
         setPollError(codeFromError(e))
       })
-  }
+  }, [])
+
+  // Stable wrapped callbacks passed to steps — created once, not on every render.
+  const stableSubmitBootstrap = useCallback(
+    (v: DomainValues) =>
+      withReauth(async (values: DomainValues) => {
+        setCollected((c) => ({
+          ...c,
+          serverHostname: values.serverHostname,
+          defaultDomain: values.defaultDomain,
+        }))
+        await submitBootstrapRef.current(values)
+      })(v),
+    [withReauth]
+  )
+
+  const stableCreateAccount = useCallback(
+    (input: { name: string; password: string }) =>
+      withReauth(async (i: { name: string; password: string }) => {
+        const res = await createAccountRef.current(i)
+        if (res.status === "ok") {
+          setCollected((c) => ({
+            ...c,
+            adminEmail: `${i.name}@${c.defaultDomain}`,
+          }))
+        }
+        return res
+      })(input),
+    [withReauth]
+  )
+
+  const stableRefetchStep = useCallback(
+    () => withReauth(async () => refetchStep())(),
+    [withReauth, refetchStep]
+  )
 
   const steps = [
     { n: 1, label: t("wizard.steps.welcome") },
@@ -132,6 +272,119 @@ export function SetupWizard({
           ? 3
           : STEP_DOT[serverStep]
 
+  // --- Auth gate rendering ---
+  if (authState === "loading") {
+    return (
+      <main className="stalmail-wizard" data-theme={theme}>
+        <div className="shell shell-card">
+          <div className="shell-card-col">
+            <div className="shell-card-top">
+              <Brand size={24} />
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (authState === "unlocking") {
+    return (
+      <main className="stalmail-wizard" data-theme={theme}>
+        <div className="shell shell-card">
+          <div className="shell-card-col">
+            <div className="shell-card-top">
+              <Brand size={24} />
+            </div>
+            <div className="card shell-card-main">
+              <div className="step-anim">
+                <p role="status" className="text-center text-muted-foreground">
+                  {t("wizard.unlock.unlocking")}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (authState === "unauthed-no-token" || authState === "expired") {
+    const isExpired = authState === "expired"
+    return (
+      <main className="stalmail-wizard" data-theme={theme}>
+        <div className="shell shell-card">
+          <div className="shell-card-col">
+            <div className="shell-card-top">
+              <Brand size={24} />
+              <div className="shell-top-actions">
+                <LangSelect />
+                <ThemeToggle theme={theme} onChange={setTheme} />
+              </div>
+            </div>
+            <div className="card shell-card-main">
+              <div className="step-anim">
+                <h1 className="text-lg font-semibold">
+                  {isExpired
+                    ? t("wizard.unlock.expiredTitle")
+                    : t("wizard.unlock.requiredTitle")}
+                </h1>
+                <p className="mt-2 text-muted-foreground">
+                  {isExpired
+                    ? t("wizard.unlock.expiredDesc")
+                    : t("wizard.unlock.requiredDesc")}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (typeof authState === "object" && authState.kind === "unlock-failed") {
+    const code = authState.code
+    return (
+      <main className="stalmail-wizard" data-theme={theme}>
+        <div className="shell shell-card">
+          <div className="shell-card-col">
+            <div className="shell-card-top">
+              <Brand size={24} />
+              <div className="shell-top-actions">
+                <LangSelect />
+                <ThemeToggle theme={theme} onChange={setTheme} />
+              </div>
+            </div>
+            <div className="card shell-card-main">
+              <div className="step-anim">
+                <SetupErrorBox
+                  code={code}
+                  messageKey={messageKeyForCode(code)}
+                  onRetry={() => {
+                    const token = tokenRef.current
+                    if (token) {
+                      setAuthState("unlocking")
+                      doUnlock(token)
+                        .then(() => doAuthStatus())
+                        .then(({ authed }) => {
+                          setAuthState(authed ? "authed" : "unauthed-no-token")
+                        })
+                        .catch((e: unknown) => {
+                          const newCode = codeFromError(e)
+                          setAuthState({ kind: "unlock-failed", code: newCode })
+                        })
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  // authState === "authed" → render the full wizard
   let content: React.ReactNode
   if (pollError) {
     content = (
@@ -147,14 +400,7 @@ export function SetupWizard({
     content = (
       <DomainStep
         defaults={collected}
-        submitBootstrap={async (v) => {
-          setCollected((c) => ({
-            ...c,
-            serverHostname: v.serverHostname,
-            defaultDomain: v.defaultDomain,
-          }))
-          await submitBootstrap(v)
-        }}
+        submitBootstrap={stableSubmitBootstrap}
         onRestart={() => setPhase("restarting")}
       />
     )
@@ -171,7 +417,7 @@ export function SetupWizard({
         gridStatus={gridStatus}
         onNext={(manual) => {
           setDnsManual(manual)
-          refetchStep()
+          stableRefetchStep()
         }}
       />
     )
@@ -187,24 +433,15 @@ export function SetupWizard({
         acmeStatus={acmeStatus}
         onStatusChange={setSslStatus}
         acknowledgeManualSsl={acknowledgeManualSsl}
-        onNext={refetchStep}
+        onNext={stableRefetchStep}
       />
     )
   } else if (serverStep === "account") {
     content = (
       <AccountStep
         domain={collected.defaultDomain}
-        createAccount={async (input) => {
-          const res = await createAccount(input)
-          if (res.status === "ok") {
-            setCollected((c) => ({
-              ...c,
-              adminEmail: `${input.name}@${c.defaultDomain}`,
-            }))
-          }
-          return res
-        }}
-        onNext={refetchStep}
+        createAccount={stableCreateAccount}
+        onNext={stableRefetchStep}
       />
     )
   } else {

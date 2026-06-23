@@ -41,6 +41,15 @@ export const fr = {
         "SETUP-UNLOCK-FAILED": "Lien de setup invalide ou expiré.",
       },
     },
+    unlock: {
+      unlocking: "Déverrouillage…",
+      requiredTitle: "Lien de setup requis",
+      requiredDesc:
+        "Pour accéder à l'assistant de configuration, rouvrez le lien affiché par install.sh dans le terminal.",
+      expiredTitle: "Session expirée",
+      expiredDesc:
+        "La session de configuration a expiré. Rouvrez le lien de setup affiché par install.sh pour continuer.",
+    },
     welcome: {
       title: "Bienvenue sur Stalmail",
       subtitle:
@@ -361,6 +370,15 @@ export const en: DeepRecord<typeof fr> = {
         "SETUP-UNAUTHENTICATED": "Setup authentication required.",
         "SETUP-UNLOCK-FAILED": "Invalid or expired setup link.",
       },
+    },
+    unlock: {
+      unlocking: "Unlocking…",
+      requiredTitle: "Setup link required",
+      requiredDesc:
+        "To access the setup wizard, reopen the link printed by install.sh in the terminal.",
+      expiredTitle: "Session expired",
+      expiredDesc:
+        "The setup session has expired. Reopen the setup link printed by install.sh to continue.",
     },
     welcome: {
       title: "Welcome to Stalmail",
