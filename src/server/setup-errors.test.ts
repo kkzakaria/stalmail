@@ -45,3 +45,15 @@ describe("toSetupErrorCode", () => {
     expect(err.code).toBe("SETUP-SSL-REJECTED")
   })
 })
+
+describe("SETUP_CODES bootstrap-auth codes", () => {
+  it("SETUP-UNAUTHENTICATED is a valid SetupError code", () => {
+    const err = new SetupError("SETUP-UNAUTHENTICATED")
+    expect(err.code).toBe("SETUP-UNAUTHENTICATED")
+  })
+
+  it("SETUP-UNLOCK-FAILED is a valid SetupError code", () => {
+    const err = new SetupError("SETUP-UNLOCK-FAILED")
+    expect(err.code).toBe("SETUP-UNLOCK-FAILED")
+  })
+})
