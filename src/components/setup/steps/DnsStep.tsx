@@ -6,9 +6,10 @@
 import { Fragment, useEffect, useRef, useState } from "react"
 import { useForm } from "@tanstack/react-form"
 import { useTranslation } from "react-i18next"
-import { DNS_PROVIDERS } from "@/server/stalwart-dns"
-import type { DnsProvider } from "@/server/stalwart-dns"
+import { DNS_PROVIDERS } from "@/lib/dns-providers"
+import type { DnsProvider } from "@/lib/dns-providers"
 import type { DnsGridRecord } from "@/server/setup-actions"
+import { isExternalHost, hostZone } from "../host-utils"
 import type { DnsProviderValues } from "../schemas"
 import { dnsProviderSchema } from "../schemas"
 import {
@@ -31,17 +32,6 @@ import { IconCheck, IconInfo } from "../ui/icons"
 import { SetupErrorBox } from "../ui/SetupErrorBox"
 import { codeFromError, messageKeyForCode } from "../error-code"
 
-/* ---------- local helpers (duplicated from DomainStep on purpose) ---------- */
-function isExternalHost(h: string, d: string) {
-  if (!h || !d) return false
-  const a = h.toLowerCase(),
-    b = d.toLowerCase()
-  return a !== b && !a.endsWith("." + b)
-}
-function hostZone(h: string) {
-  const p = (h || "").split(".")
-  return p.length > 2 ? p.slice(1).join(".") : h
-}
 function zoneFileText(records: DnsGridRecord[]) {
   const pad = (s: string, n: number) => (s.length >= n ? s + " " : s.padEnd(n))
   return records
@@ -94,9 +84,6 @@ export function DnsStep({
 
   const mountedRef = useRef(true)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // The chosen secret is kept in a ref only for the duration of the auto run so a
-  // failed run can be retried; it is never lifted out of the component.
-  const secretRef = useRef("")
 
   useEffect(() => {
     mountedRef.current = true
@@ -113,7 +100,6 @@ export function DnsStep({
       if (value.provider === "Manual") {
         runManual()
       } else {
-        secretRef.current = value.secret
         runAuto(value.provider, value.secret)
       }
     },
@@ -156,9 +142,17 @@ export function DnsStep({
       })
   }
 
+  // Manual failures can be safely re-run (no credential involved). Auto failures
+  // often mean a bad token, so return to the form to let the user RE-ENTER it
+  // instead of blindly replaying a known-bad secret.
   const retry = () => {
-    if (isManual) runManual()
-    else runAuto(provider, secretRef.current)
+    if (isManual) {
+      runManual()
+    } else {
+      form.setFieldValue("secret", "")
+      setErrorCode("")
+      setPhase("form")
+    }
   }
 
   // Poll gridStatus() once immediately on entering grid, then every 5s.

@@ -6,25 +6,12 @@ import { domainSchema } from "../schemas"
 import { Alert, Field, StepHeader, StepNav, TextInput } from "../ui/primitives"
 import { SetupErrorBox } from "../ui/SetupErrorBox"
 import { codeFromError, messageKeyForCode } from "../error-code"
+import { isExternalHost, hostZone } from "../host-utils"
 
 interface Props {
   defaults?: Partial<DomainValues>
   submitBootstrap: (v: DomainValues) => Promise<void>
   onRestart: () => void
-}
-
-// Le nom d'hôte est-il hors de la zone du domaine par défaut ? (ex. mail.autre.fr vs dupont.fr)
-function isExternalHost(hostname: string, domain: string): boolean {
-  if (!hostname || !domain) return false
-  // Hostnames are case-insensitive — compare in lower case.
-  const host = hostname.toLowerCase()
-  const base = domain.toLowerCase()
-  return host !== base && !host.endsWith("." + base)
-}
-
-function hostZone(hostname: string): string {
-  const parts = (hostname || "").split(".")
-  return parts.length > 2 ? parts.slice(1).join(".") : hostname
 }
 
 export function DomainStep({ defaults, submitBootstrap, onRestart }: Props) {
