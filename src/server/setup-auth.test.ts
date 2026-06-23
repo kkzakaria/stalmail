@@ -29,7 +29,7 @@ vi.mock("./session-crypto", () => ({
 }))
 
 vi.mock("./session-cookie", () => ({
-  assertSameOrigin: vi.fn(),
+  assertSameOriginStrict: vi.fn(),
   clientIp: vi.fn(() => "203.0.113.7"),
 }))
 
@@ -40,7 +40,7 @@ vi.mock("./setup-flag", () => ({
 // eslint-disable-next-line import/first
 import { setCookie } from "@tanstack/react-start/server"
 // eslint-disable-next-line import/first
-import { assertSameOrigin, clientIp } from "./session-cookie"
+import { assertSameOriginStrict, clientIp } from "./session-cookie"
 // eslint-disable-next-line import/first
 import { isSetupComplete } from "./setup-flag"
 // eslint-disable-next-line import/first
@@ -153,7 +153,7 @@ describe("unlockSetup", () => {
   it("issues a cookie on the correct token", () => {
     unlockSetup(SECRET_TOKEN)
     expect(isSetupAuthed()).toBe(true)
-    expect(assertSameOrigin).toHaveBeenCalled()
+    expect(assertSameOriginStrict).toHaveBeenCalled()
   })
 
   it("rejects a wrong token with the generic SETUP-UNLOCK-FAILED", () => {
