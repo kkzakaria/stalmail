@@ -6,10 +6,23 @@
 #   - non définie (dev / smoke) -> hostname = `localhost` (cert local auto par Caddy)
 #   - définie (prod)            -> hostname réel, HTTPS automatique via ACME
 #
-# Le site fallback `:443` (tls internal, auto-signé) sert le wizard via l'IP du serveur
-# AVANT l'existence du DNS : le wizard publie ensuite l'A record + le reste de la zone,
-# puis le site nommé obtient son certificat ACME. Caddy gère :80 automatiquement
+# Le site fallback de bootstrap (tls internal, auto-signé) sert le wizard via l'IP du
+# serveur AVANT l'existence du DNS : le wizard publie ensuite l'A record + le reste de
+# la zone, puis le site nommé obtient son certificat ACME. Caddy gère :80 automatiquement
 # (challenges ACME HTTP-01 + redirection vers HTTPS).
+#
+# IMPORTANT — accès par IP sans SNI : un navigateur (ou curl) qui vise une IP n'envoie
+# PAS de SNI. Un site `:443` nu n'a alors aucun nom pour lequel `tls internal` émettrait
+# un certificat → Caddy avorte le handshake (`tlsv1 alert internal error`) et le wizard
+# est injoignable. On force donc un `default_sni` vers un hôte de bootstrap dédié, servi
+# en cert interne : toute connexion sans SNI reçoit ce certificat auto-signé (avertissement
+# de nom attendu, accepté pendant le setup). Validé par handshake réel, pas seulement
+# `caddy validate` (qui ne teste que la syntaxe).
+
+{
+	# SNI par défaut pour les connexions sans SNI (accès par IP, pré-DNS).
+	default_sni bootstrap.stalmail.local
+}
 
 # Routes communes aux deux sites (DRY).
 (stalmail_routes) {
@@ -26,8 +39,14 @@
 	}
 }
 
-# Fallback : accès via IP / hôte non nommé (bootstrap pré-DNS), certificat auto-signé.
-:443 {
+# Fallback bootstrap : accès via IP / hôte non nommé (pré-DNS), certificat auto-signé.
+# DEUX adresses dans le même bloc, car l'accès par IP exige les deux à la fois :
+#   - `:443` (catch-all) route TOUT Host, y compris `Host: <ip>` — Caddy route en HTTP
+#     par l'en-tête Host, pas par le SNI ; un site uniquement nommé renverrait un 200
+#     vide aux requêtes dont le Host est l'IP (aucune route ne matche).
+#   - `bootstrap.stalmail.local` donne un nom à `tls internal` pour qu'il émette un cert ;
+#     combiné au `default_sni` ci-dessus, ce cert est servi aux connexions sans SNI (IP).
+:443, bootstrap.stalmail.local {
 	tls internal
 	import stalmail_routes
 }
