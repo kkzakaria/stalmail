@@ -21,7 +21,7 @@ Aucune copie de fichier ni enregistrement DNS manuel.
 - Hostname webmail : **`mail.getstalmail.com`** ; URL publique : **`https://mail.getstalmail.com`**.
 - Domaine mail : **`getstalmail.com`** ; DNS provider wizard : **Cloudflare** (token API scope *DNS edit* sur la zone).
 - Images : **`ghcr.io/kkzakaria/stalmail-app:latest`** + **`ghcr.io/kkzakaria/stalmail-stalwart:latest`** (repo public → pas de `docker login`).
-- `.env` (généré par `install.sh`) : `STALMAIL_SECRET`, `STALMAIL_HOSTNAME=mail.getstalmail.com`, `STALMAIL_PUBLIC_URL=https://mail.getstalmail.com`.
+- `.env` (généré par `install.sh`) : `STALMAIL_SECRET`, `STALMAIL_HOSTNAME=mail.getstalmail.com`, `STALMAIL_PUBLIC_URL=https://mail.getstalmail.com`, `STALMAIL_SETUP_TOKEN_HASH` (SHA-256 du jeton de setup — le clair n'est imprimé qu'une fois dans l'URL finale).
 - Boîte externe de contrôle : une adresse **que tu possèdes** (ex. Gmail) — notée `<gmail>` ci-dessous.
 - Placeholders à substituer : `<ip-hetzner>` (IP publique du serveur), `<gmail>`.
 - Secrets dans `.env` (chmod 600), **jamais commités**.
@@ -63,7 +63,7 @@ Aucune copie de fichier, aucun DNS manuel.
     | bash -s -- mail.getstalmail.com
   ```
   Le script : vérifie Docker, récupère `compose.prod.yml` + `Caddyfile` dans `~/stalmail`, génère `.env` (secret + hostname), tire les images GHCR, démarre la stack.
-  Attendu : `✓ Services démarrés (stalwart, app, caddy)` puis l'encadré avec l'URL `https://<ip>/setup`.
+  Attendu : `✓ Services démarrés (stalwart, app, caddy)` puis l'encadré avec l'URL `https://<ip>/setup#token=<jeton>` (lien à usage unique — conserver pour la Phase 2.1).
 - [ ] **1.2 — Stalwart en mode bootstrap :**
   ```bash
   cd ~/stalmail && docker compose -f compose.prod.yml logs stalwart | grep -i 'bootstrap mode'
@@ -76,7 +76,15 @@ Le DNS n'existe pas encore → on atteint le wizard via l'**IP** (certificat **a
 servi par le fallback `:443` de Caddy). Le wizard publie ensuite **toute** la zone via
 Cloudflare, **A record inclus**.
 
-- [ ] **2.1 — Ouvrir** `https://<ip-hetzner>/setup` ; **accepter l'avertissement de certificat auto-signé** (normal, c'est ton serveur). Attendu : écran du wizard (mode bootstrap).
+- [ ] **2.1 — Ouvrir le lien de setup imprimé par `install.sh`** (format `https://<ip-hetzner>/setup#token=<jeton>`) ; **accepter l'avertissement de certificat auto-signé** (normal, c'est ton serveur). Le fragment `#token=…` autorise le wizard — sans lui la page est verrouillée. Attendu : écran du wizard (mode bootstrap).
+  > Si le lien est perdu (`.env` existant, relance) : générer un nouveau jeton et mettre à jour `STALMAIL_SETUP_TOKEN_HASH` dans `.env`, redémarrer `app`, ouvrir la nouvelle URL.
+  > ```bash
+  > TOKEN=$(openssl rand -hex 24)
+  > HASH=$(printf '%s' "$TOKEN" | sha256sum | awk '{print $1}')
+  > # Éditer ~/stalmail/.env : remplacer STALMAIL_SETUP_TOKEN_HASH=$HASH
+  > docker compose -f ~/stalmail/compose.prod.yml up -d app
+  > echo "https://<ip-hetzner>/setup#token=$TOKEN"
+  > ```
 - [ ] **2.2 — Domaine :** saisir `getstalmail.com` (hostname serveur `mail.getstalmail.com`).
 - [ ] **2.3 — DNS = Cloudflare :** sélectionner **Cloudflare**, coller le **token API** (scope *DNS edit* sur la zone). Le wizard publie **A (mail→IP) + MX + SPF + DKIM + DMARC**.
 - [ ] **2.4 — SSL / DKIM :** laisser le wizard demander le certificat mail + générer les clés DKIM.
