@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from "node:fs"
 
 // The setup-complete flag is a CROSS-CONTAINER coordination artifact (like the restart
 // sentinel): the Stalwart supervisor reads it to drop the recovery admin after setup,
@@ -6,7 +6,7 @@ import { existsSync, writeFileSync } from 'node:fs'
 // STALMAIL_RUN_DIR with the sentinel (compose points both at /shared) — NOT the app's
 // data dir, which is not mounted into the Stalwart container.
 function flagPath(): string {
-  return `${process.env.STALMAIL_RUN_DIR ?? '/run/stalmail'}/.stalmail-configured`
+  return `${process.env.STALMAIL_RUN_DIR ?? "/run/stalmail"}/.stalmail-configured`
 }
 
 export function isSetupComplete(): boolean {
@@ -14,5 +14,19 @@ export function isSetupComplete(): boolean {
 }
 
 export function markSetupComplete(): void {
-  writeFileSync(flagPath(), new Date().toISOString(), 'utf-8')
+  writeFileSync(flagPath(), new Date().toISOString(), "utf-8")
+}
+
+// DNS configuration marker: tracks whether the DNS setup step has been completed.
+// Uses the same STALMAIL_RUN_DIR volume for cross-container coordination.
+function dnsFlagPath(): string {
+  return `${process.env.STALMAIL_RUN_DIR ?? "/run/stalmail"}/.stalmail-dns-configured`
+}
+
+export function isDnsConfigured(): boolean {
+  return existsSync(dnsFlagPath())
+}
+
+export function markDnsConfigured(): void {
+  writeFileSync(dnsFlagPath(), new Date().toISOString(), "utf-8")
 }
