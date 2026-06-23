@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.16](https://github.com/kkzakaria/stalmail/compare/v0.1.15...v0.1.16) (2026-06-23)
+
+
+### Bug Fixes
+
+* **app:** servir les assets client statiques depuis dist/client ([#49](https://github.com/kkzakaria/stalmail/issues/49)) ([e23742d](https://github.com/kkzakaria/stalmail/commit/e23742d91ad2d27247ff6447878931846fed588b))
+* **ops:** accès wizard par IP cassé en pré-DNS (cert de bootstrap) ([#48](https://github.com/kkzakaria/stalmail/issues/48)) ([4cd918c](https://github.com/kkzakaria/stalmail/commit/4cd918c0009b33eea68c5f852120c777d0774e01))
+* **ops:** générer le secret install.sh sans casser sous pipefail ([#46](https://github.com/kkzakaria/stalmail/issues/46)) ([f277b59](https://github.com/kkzakaria/stalmail/commit/f277b5933feec8244bf22be588481811bda65104))
+
 ## [0.1.15](https://github.com/kkzakaria/stalmail/compare/v0.1.14...v0.1.15) (2026-06-22)
 
 
