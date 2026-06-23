@@ -44,6 +44,7 @@ interface Props {
     contactEmail: string
   }) => Promise<{ ok: true }>
   acmeStatus: () => Promise<{ status: AcmeStatus }>
+  acknowledgeManualSsl: () => Promise<{ ok: true }>
   finishSetup: () => Promise<{ ok: true }>
 }
 
@@ -69,6 +70,7 @@ export function SetupWizard({
   gridStatus,
   configureAcme,
   acmeStatus,
+  acknowledgeManualSsl,
   finishSetup,
 }: Props) {
   const { t } = useTranslation()
@@ -166,6 +168,7 @@ export function SetupWizard({
         configureAcme={configureAcme}
         acmeStatus={acmeStatus}
         onStatusChange={setSslStatus}
+        acknowledgeManualSsl={acknowledgeManualSsl}
         onNext={refetchStep}
       />
     )

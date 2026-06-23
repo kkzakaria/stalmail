@@ -4,6 +4,7 @@ import type * as JmapModule from "./jmap"
 vi.mock("./setup-flag", () => ({
   isSetupComplete: vi.fn(),
   isDnsConfigured: vi.fn(),
+  isSslAcknowledged: vi.fn(),
 }))
 vi.mock("./stalwart-bootstrap", () => ({ isBootstrapMode: vi.fn() }))
 vi.mock("./stalwart-domain", () => ({ getPrimaryDomain: vi.fn() }))
@@ -14,7 +15,11 @@ vi.mock("./jmap", async (importActual) => ({
 }))
 
 // eslint-disable-next-line import/first
-import { isSetupComplete, isDnsConfigured } from "./setup-flag"
+import {
+  isSetupComplete,
+  isDnsConfigured,
+  isSslAcknowledged,
+} from "./setup-flag"
 // eslint-disable-next-line import/first
 import { isBootstrapMode } from "./stalwart-bootstrap"
 // eslint-disable-next-line import/first
@@ -26,6 +31,7 @@ import { deriveSetupStep, isDnsManual } from "./setup-state"
 
 const flag = vi.mocked(isSetupComplete)
 const dnsFlag = vi.mocked(isDnsConfigured)
+const sslFlag = vi.mocked(isSslAcknowledged)
 const boot = vi.mocked(isBootstrapMode)
 const dom = vi.mocked(getPrimaryDomain)
 const mj = vi.mocked(jmapCall)
@@ -52,6 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   flag.mockReturnValue(false)
   dnsFlag.mockReturnValue(false)
+  sslFlag.mockReturnValue(false)
   boot.mockResolvedValue(false)
   dom.mockResolvedValue(null)
   mj.mockResolvedValue(accounts([SYSTEM_ADMIN])) // only the system admin by default
@@ -107,6 +114,30 @@ describe("deriveSetupStep — nouvel ordre collect → dns → ssl → account �
     })
     // certificateManagement absent → attendu 'ssl'
     expect(await deriveSetupStep()).toBe("ssl")
+  })
+
+  // --- Marqueur SSL Manuel (régression #1) ---
+
+  it("Manuel : dnsConfigured=true, certificateManagement absent, sslAcknowledged=false → 'ssl'", async () => {
+    dnsFlag.mockReturnValue(true)
+    sslFlag.mockReturnValue(false)
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Manual" },
+    })
+    expect(await deriveSetupStep()).toBe("ssl")
+  })
+
+  it("Manuel : dnsConfigured=true, certificateManagement absent, sslAcknowledged=true → 'account'", async () => {
+    dnsFlag.mockReturnValue(true)
+    sslFlag.mockReturnValue(true)
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Manual" },
+    })
+    expect(await deriveSetupStep()).toBe("account")
   })
 
   // --- Étape SSL ---
@@ -203,5 +234,58 @@ describe("isDnsManual", () => {
     dnsFlag.mockReturnValue(false)
     dom.mockResolvedValue(null)
     expect(await isDnsManual()).toBe(false)
+  })
+})
+
+// Integration tests: drive the REAL deriveSetupStep across step transitions,
+// mocking only JMAP/flags/bootstrap (same strategy as the unit tests above).
+// These guard the marker→derivation coupling that unit tests of the wizard skip.
+describe("deriveSetupStep — séquences d'intégration", () => {
+  // --- Chemin Auto ---
+  it("Auto : dns(Automatic) → ssl(Automatic) → account présent → done", async () => {
+    // Étape 1 : DNS Automatic, pas de certificateManagement → 'ssl'
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Automatic" },
+    })
+    expect(await deriveSetupStep()).toBe("ssl")
+
+    // Étape 2 : DNS Automatic + certificateManagement Automatic, system admin seulement → 'account'
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Automatic" },
+      certificateManagement: { "@type": "Automatic" },
+    })
+    expect(await deriveSetupStep()).toBe("account")
+
+    // Étape 3 : DNS + SSL + compte user → 'done'
+    mj.mockResolvedValue(accounts([SYSTEM_ADMIN, { name: "koffi" }]))
+    expect(await deriveSetupStep()).toBe("done")
+  })
+
+  // --- Chemin Manuel (garde-fou régression #1) ---
+  it("Manuel : dnsConfigured marker → 'ssl' ; sslAcknowledged marker → 'account'", async () => {
+    // Avant marqueur DNS : retourne 'dns'
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Manual" },
+    })
+    expect(await deriveSetupStep()).toBe("dns")
+
+    // Marqueur DNS posé, pas de certificateManagement, sslAcknowledged=false → 'ssl'
+    dnsFlag.mockReturnValue(true)
+    sslFlag.mockReturnValue(false)
+    expect(await deriveSetupStep()).toBe("ssl")
+
+    // Marqueur SSL posé (sslAcknowledged=true), system admin seulement → 'account'
+    sslFlag.mockReturnValue(true)
+    expect(await deriveSetupStep()).toBe("account")
+
+    // Compte user créé → 'done'
+    mj.mockResolvedValue(accounts([SYSTEM_ADMIN, { name: "koffi" }]))
+    expect(await deriveSetupStep()).toBe("done")
   })
 })

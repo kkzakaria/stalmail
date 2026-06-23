@@ -30,3 +30,18 @@ export function isDnsConfigured(): boolean {
 export function markDnsConfigured(): void {
   writeFileSync(dnsFlagPath(), new Date().toISOString(), "utf-8")
 }
+
+// SSL acknowledgment marker: tracks whether the SSL setup step has been acknowledged
+// in Manual DNS mode (where ACME DNS-01 cannot run automatically).
+// Uses the same STALMAIL_RUN_DIR volume for cross-container coordination.
+function sslFlagPath(): string {
+  return `${process.env.STALMAIL_RUN_DIR ?? "/run/stalmail"}/.stalmail-ssl-configured`
+}
+
+export function isSslAcknowledged(): boolean {
+  return existsSync(sslFlagPath())
+}
+
+export function markSslAcknowledged(): void {
+  writeFileSync(sslFlagPath(), new Date().toISOString(), "utf-8")
+}

@@ -11,6 +11,7 @@ export interface StalwartDomain {
   name: string
   dnsZoneFile?: string
   dnsManagement?: { "@type": string; [k: string]: unknown }
+  certificateManagement?: { "@type": string; [k: string]: unknown }
   [k: string]: unknown
 }
 

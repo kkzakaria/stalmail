@@ -15,6 +15,7 @@ const serverProps = () => ({
   gridStatus: vi.fn().mockResolvedValue({ origin: "x", records: [] }),
   configureAcme: vi.fn().mockResolvedValue({ ok: true as const }),
   acmeStatus: vi.fn().mockResolvedValue({ status: "pending" as const }),
+  acknowledgeManualSsl: vi.fn().mockResolvedValue({ ok: true as const }),
   finishSetup: vi.fn().mockResolvedValue({ ok: true as const }),
 })
 
@@ -112,10 +113,13 @@ describe("SetupWizard", () => {
     expect(await screen.findByText("Certificat SSL")).toBeInTheDocument()
   })
 
-  it("resume on ssl with dnsManual: shows the manual note, advances to account", async () => {
+  it("resume on ssl with dnsManual: shows the manual note, calls acknowledgeManualSsl then advances to account", async () => {
     const poll = vi
       .fn()
       .mockResolvedValue({ step: "account", dnsManual: false })
+    const acknowledgeManualSsl = vi
+      .fn()
+      .mockResolvedValue({ ok: true as const })
     wrap(
       <SetupWizard
         initialStep="ssl"
@@ -124,12 +128,14 @@ describe("SetupWizard", () => {
         submitBootstrap={vi.fn()}
         pollStep={poll}
         {...serverProps()}
+        acknowledgeManualSsl={acknowledgeManualSsl}
       />
     )
     expect(
       await screen.findByText("Certificat à gérer manuellement")
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: /Continuer/ }))
+    await waitFor(() => expect(acknowledgeManualSsl).toHaveBeenCalledOnce())
     await waitFor(() => expect(poll).toHaveBeenCalled())
     expect(await screen.findByText("Compte administrateur")).toBeInTheDocument()
   })

@@ -244,3 +244,13 @@ export async function setupStatusHandler(): Promise<{ configured: boolean }> {
 export const setupStatusFn = createServerFn({ method: "GET" }).handler(
   setupStatusHandler
 )
+
+export async function markSslConfiguredHandler(): Promise<{ ok: true }> {
+  const { markSslAcknowledged } = await import("./setup-flag")
+  markSslAcknowledged()
+  return { ok: true }
+}
+
+export const markSslConfiguredFn = createServerFn({ method: "POST" }).handler(
+  markSslConfiguredHandler
+)

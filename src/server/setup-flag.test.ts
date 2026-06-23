@@ -13,6 +13,8 @@ import {
   markSetupComplete,
   isDnsConfigured,
   markDnsConfigured,
+  isSslAcknowledged,
+  markSslAcknowledged,
 } from "./setup-flag"
 
 describe("isSetupComplete", () => {
@@ -84,6 +86,44 @@ describe("markDnsConfigured", () => {
     markDnsConfigured()
     expect(writeFileSync).toHaveBeenCalledWith(
       "/custom/run/.stalmail-dns-configured",
+      expect.any(String),
+      "utf-8"
+    )
+    delete process.env.STALMAIL_RUN_DIR
+  })
+})
+
+describe("isSslAcknowledged", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("returns true when SSL flag file exists", () => {
+    vi.mocked(existsSync).mockReturnValueOnce(true)
+    expect(isSslAcknowledged()).toBe(true)
+  })
+
+  it("returns false when SSL flag file does not exist", () => {
+    vi.mocked(existsSync).mockReturnValueOnce(false)
+    expect(isSslAcknowledged()).toBe(false)
+  })
+})
+
+describe("markSslAcknowledged", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("writes an ISO timestamp to the SSL flag file path", () => {
+    markSslAcknowledged()
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining(".stalmail-ssl-configured"),
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      "utf-8"
+    )
+  })
+
+  it("respects STALMAIL_RUN_DIR env variable for the SSL path", () => {
+    process.env.STALMAIL_RUN_DIR = "/custom/run"
+    markSslAcknowledged()
+    expect(writeFileSync).toHaveBeenCalledWith(
+      "/custom/run/.stalmail-ssl-configured",
       expect.any(String),
       "utf-8"
     )

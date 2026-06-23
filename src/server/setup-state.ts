@@ -1,4 +1,8 @@
-import { isSetupComplete, isDnsConfigured } from "./setup-flag"
+import {
+  isSetupComplete,
+  isDnsConfigured,
+  isSslAcknowledged,
+} from "./setup-flag"
 import { isBootstrapMode } from "./stalwart-bootstrap"
 import { getPrimaryDomain } from "./stalwart-domain"
 import type { StalwartDomain } from "./stalwart-domain"
@@ -50,10 +54,7 @@ function isDnsManaged(domain: StalwartDomain | null): boolean {
 
 // SSL is configured when Stalwart manages certificates automatically.
 function isSslConfigured(domain: StalwartDomain | null): boolean {
-  return (
-    (domain as { certificateManagement?: { "@type"?: string } } | null)
-      ?.certificateManagement?.["@type"] === "Automatic"
-  )
+  return domain?.certificateManagement?.["@type"] === "Automatic"
 }
 
 // DNS was configured via the Manual path when the marker is set AND dnsManagement
@@ -70,7 +71,7 @@ export async function deriveSetupStep(): Promise<SetupStep> {
   if (await isBootstrapMode()) return "collect"
   const domain = await getPrimaryDomain()
   if (!isDnsManaged(domain)) return "dns"
-  if (!isSslConfigured(domain)) return "ssl"
+  if (!isSslConfigured(domain) && !isSslAcknowledged()) return "ssl"
   if (!(await hasUserAdminAccount())) return "account"
   return "done"
 }

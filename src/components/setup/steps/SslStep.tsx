@@ -23,6 +23,8 @@ interface Props {
   }) => Promise<{ ok: true }>
   acmeStatus: () => Promise<{ status: AcmeStatus }>
   onStatusChange: (s: AcmeStatus) => void
+  /** Called before onNext in manual DNS mode to write the SSL acknowledgment marker. */
+  acknowledgeManualSsl: () => Promise<{ ok: true }>
   onNext: () => void
 }
 
@@ -33,6 +35,7 @@ export function SslStep({
   configureAcme,
   acmeStatus,
   onStatusChange,
+  acknowledgeManualSsl,
   onNext,
 }: Props) {
   const { t } = useTranslation()
@@ -132,7 +135,14 @@ export function SslStep({
             {t("wizard.ssl.manualNote")}
           </Alert>
           <StepNav
-            onNext={onNext}
+            onNext={() => {
+              acknowledgeManualSsl()
+                .then(() => onNext())
+                .catch((e: unknown) => {
+                  setErrorCode(codeFromError(e) || "SETUP-SSL-REJECTED")
+                  setPhase("error")
+                })
+            }}
             nextLabel={t("wizard.common.next")}
             backLabel={t("wizard.common.back")}
           />

@@ -26,6 +26,9 @@ describe("SslStep", () => {
         configureAcme={configureAcme}
         acmeStatus={acmeStatus}
         onStatusChange={onStatusChange}
+        acknowledgeManualSsl={vi.fn(() =>
+          Promise.resolve({ ok: true as const })
+        )}
         onNext={onNext}
       />
     )
@@ -44,8 +47,11 @@ describe("SslStep", () => {
     expect(onNext).toHaveBeenCalled()
   })
 
-  it("manual: skips configureAcme, shows informative note, Continue advances", async () => {
+  it("manual: skips configureAcme, shows informative note, Continue calls acknowledgeManualSsl then advances", async () => {
     const configureAcme = vi.fn(() => Promise.resolve({ ok: true as const }))
+    const acknowledgeManualSsl = vi.fn(() =>
+      Promise.resolve({ ok: true as const })
+    )
     const onNext = vi.fn()
 
     wrap(
@@ -59,6 +65,7 @@ describe("SslStep", () => {
             Promise.resolve({ status: "pending" })
         )}
         onStatusChange={vi.fn()}
+        acknowledgeManualSsl={acknowledgeManualSsl}
         onNext={onNext}
       />
     )
@@ -69,7 +76,36 @@ describe("SslStep", () => {
     expect(configureAcme).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole("button", { name: /Continuer/ }))
+    await waitFor(() => expect(acknowledgeManualSsl).toHaveBeenCalledOnce())
     expect(onNext).toHaveBeenCalled()
+  })
+
+  it("manual: acknowledgeManualSsl failure shows SetupErrorBox, does not advance", async () => {
+    const acknowledgeManualSsl = vi.fn(() =>
+      Promise.reject(new Error("SETUP-SSL-REJECTED"))
+    )
+    const onNext = vi.fn()
+
+    wrap(
+      <SslStep
+        hostname="mail.exemple.fr"
+        contactEmail="admin@exemple.fr"
+        dnsManual={true}
+        configureAcme={vi.fn(() => Promise.resolve({ ok: true as const }))}
+        acmeStatus={vi.fn(
+          (): Promise<{ status: AcmeStatus }> =>
+            Promise.resolve({ status: "pending" })
+        )}
+        onStatusChange={vi.fn()}
+        acknowledgeManualSsl={acknowledgeManualSsl}
+        onNext={onNext}
+      />
+    )
+
+    await screen.findByText("Certificat à gérer manuellement")
+    fireEvent.click(screen.getByRole("button", { name: /Continuer/ }))
+    expect(await screen.findByText("SETUP-SSL-REJECTED")).toBeInTheDocument()
+    expect(onNext).not.toHaveBeenCalled()
   })
 
   it("auto: configureAcme rejection shows a SetupErrorBox with the SSL code", async () => {
@@ -88,6 +124,9 @@ describe("SslStep", () => {
             Promise.resolve({ status: "pending" })
         )}
         onStatusChange={vi.fn()}
+        acknowledgeManualSsl={vi.fn(() =>
+          Promise.resolve({ ok: true as const })
+        )}
         onNext={vi.fn()}
       />
     )

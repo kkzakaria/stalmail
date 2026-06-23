@@ -13,6 +13,7 @@ import {
   acmeStatusHandler,
   finishSetupHandler,
   setupStatusHandler,
+  markSslConfiguredHandler,
 } from "./setup-actions"
 import type * as StalwartAccountModule from "./stalwart-account"
 import type * as StalwartDomainModule from "./stalwart-domain"
@@ -73,6 +74,8 @@ vi.mock("./setup-flag", async (importActual) => ({
   markSetupComplete: vi.fn(),
   isSetupComplete: vi.fn(() => false),
   markDnsConfigured: vi.fn(),
+  markSslAcknowledged: vi.fn(),
+  isSslAcknowledged: vi.fn(() => false),
 }))
 vi.mock("./stalwart-hardening", async (importActual) => ({
   ...(await importActual<typeof StalwartHardeningModule>()),
@@ -103,6 +106,7 @@ import {
   markSetupComplete,
   isSetupComplete,
   markDnsConfigured,
+  markSslAcknowledged,
 } from "./setup-flag"
 // eslint-disable-next-line import/first
 import { enableXForwarded } from "./stalwart-hardening"
@@ -405,5 +409,14 @@ describe("setDnsManagementManualHandler", () => {
     expect(err).toBeInstanceOf(SetupError)
     expect((err as SetupError).code).toBe("SETUP-DNS-MANAGEMENT-REJECTED")
     expect(markDnsConfigured).not.toHaveBeenCalled()
+  })
+})
+
+describe("markSslConfiguredHandler", () => {
+  it("calls markSslAcknowledged and returns {ok:true}", async () => {
+    vi.mocked(markSslAcknowledged).mockImplementationOnce(() => {})
+    const result = await markSslConfiguredHandler()
+    expect(result).toEqual({ ok: true })
+    expect(markSslAcknowledged).toHaveBeenCalledOnce()
   })
 })

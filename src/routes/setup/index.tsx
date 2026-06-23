@@ -12,6 +12,7 @@ import {
   acmeStatusFn,
   finishSetupFn,
   setupStatusFn,
+  markSslConfiguredFn,
 } from "@/server/setup-actions"
 import { getServerTheme } from "@/server/setup-theme"
 import { SetupWizard } from "@/components/setup/SetupWizard"
@@ -50,6 +51,7 @@ function SetupPage() {
       gridStatus={() => dnsGridStatusFn()}
       configureAcme={(input) => configureAcmeFn({ data: input })}
       acmeStatus={() => acmeStatusFn()}
+      acknowledgeManualSsl={() => markSslConfiguredFn()}
       finishSetup={() => finishSetupFn()}
     />
   )
