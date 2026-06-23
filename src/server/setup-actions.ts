@@ -3,7 +3,7 @@ import { z } from "zod"
 import type { BootstrapInput } from "./stalwart-bootstrap"
 import type { DnsProvider } from "./stalwart-dns"
 import type { AcmeStatus } from "./stalwart-acme"
-import { DNS_PROVIDERS } from "./stalwart-dns"
+import { DNS_AUTO_PROVIDERS } from "@/lib/dns-providers"
 import { domainSchema } from "@/components/setup/schemas"
 import type { SetupStep } from "./setup-state"
 
@@ -80,7 +80,7 @@ export async function createAdminAccountHandler({
   }
 }
 
-const createAccountSchema = z.object({
+export const createAccountSchema = z.object({
   name: z.string().min(1).max(64),
   password: z.string().min(1).max(256),
 })
@@ -168,11 +168,14 @@ export async function dnsGridStatusHandler(): Promise<{
   return { origin: domain.name, records }
 }
 
+export const createDnsServerSchema = z.object({
+  provider: z.enum(DNS_AUTO_PROVIDERS),
+  secret: z.string().min(1).max(4096),
+})
+
 export const createDnsServerFn = createServerFn({ method: "POST" })
   .validator((d: { provider: string; secret: string }) =>
-    z
-      .object({ provider: z.enum(DNS_PROVIDERS), secret: z.string().max(4096) })
-      .parse(d)
+    createDnsServerSchema.parse(d)
   )
   .handler(createDnsServerHandler)
 export const setDnsManagementFn = createServerFn({ method: "POST" })
@@ -237,6 +240,11 @@ export async function configureAcmeHandler({
   data: { hostname: string; contactEmail: string }
 }): Promise<{ ok: true }> {
   await requireStep("ssl")
+  const { isDnsManual } = await import("./setup-state")
+  if (await isDnsManual()) {
+    const { SetupError } = await import("./setup-errors")
+    throw new SetupError("SETUP-FORBIDDEN")
+  }
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const { configureAcme } = await import("./stalwart-acme")
   const domain = await getPrimaryDomain()
@@ -276,16 +284,16 @@ export async function finishSetupHandler(): Promise<{ ok: true }> {
   return { ok: true }
 }
 
+// Inputs may be empty on a pure resume (client state not yet collected); the
+// handler resolves hostname/contactEmail server-side. Bound the lengths only.
+export const configureAcmeSchema = z.object({
+  hostname: z.string().max(253),
+  contactEmail: z.string().max(254),
+})
+
 export const configureAcmeFn = createServerFn({ method: "POST" })
   .validator((d: { hostname: string; contactEmail: string }) =>
-    // Inputs may be empty on a pure resume (client state not yet collected); the
-    // handler resolves hostname/contactEmail server-side. Bound the lengths only.
-    z
-      .object({
-        hostname: z.string().max(253),
-        contactEmail: z.string().max(254),
-      })
-      .parse(d)
+    configureAcmeSchema.parse(d)
   )
   .handler(configureAcmeHandler)
 export const acmeStatusFn = createServerFn({ method: "GET" }).handler(
