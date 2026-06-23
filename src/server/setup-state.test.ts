@@ -91,6 +91,13 @@ describe("deriveSetupStep — nouvel ordre collect → dns → ssl → account �
     expect(await deriveSetupStep()).toBe("dns")
   })
 
+  it('returns "dns" when domain is null even if the dnsConfigured marker is set (invalid state)', async () => {
+    dnsFlag.mockReturnValue(true)
+    dom.mockResolvedValue(null)
+    // A missing domain must not be treated as managed just because the marker is set.
+    expect(await deriveSetupStep()).toBe("dns")
+  })
+
   it("ordre : DNS est vérifié avant account (compte présent mais DNS non configuré → dns)", async () => {
     // Un compte user existe déjà, mais DNS pas configuré → doit retourner 'dns' pas 'account'
     mj.mockResolvedValue(accounts([SYSTEM_ADMIN, { name: "koffi" }]))
@@ -232,6 +239,12 @@ describe("isDnsManual", () => {
 
   it("returns false when marker is not set and domain is null", async () => {
     dnsFlag.mockReturnValue(false)
+    dom.mockResolvedValue(null)
+    expect(await isDnsManual()).toBe(false)
+  })
+
+  it("returns false when marker IS set but domain is null (invalid state)", async () => {
+    dnsFlag.mockReturnValue(true)
     dom.mockResolvedValue(null)
     expect(await isDnsManual()).toBe(false)
   })

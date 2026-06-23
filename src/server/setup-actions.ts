@@ -213,6 +213,24 @@ export const submitBootstrapFn = createServerFn({ method: "POST" })
   .validator((d: BootstrapInput) => domainSchema.parse(d))
   .handler(submitBootstrapHandler)
 
+// Derive the SSL SAN hostname from the fixed public base URL (server-authoritative,
+// like auth-actions), falling back to a client-collected value then the domain name.
+// On a pure resume the client state is empty, so the server value is the source of truth.
+function resolveAcmeHostname(
+  clientHostname: string,
+  domainName: string
+): string {
+  const publicUrl = process.env.STALMAIL_PUBLIC_URL
+  if (publicUrl) {
+    try {
+      return new URL(publicUrl).hostname
+    } catch {
+      // malformed env → fall through to client/domain
+    }
+  }
+  return clientHostname || domainName
+}
+
 export async function configureAcmeHandler({
   data,
 }: {
@@ -226,11 +244,16 @@ export async function configureAcmeHandler({
     const { SetupError } = await import("./setup-errors")
     throw new SetupError("SETUP-UNKNOWN")
   }
+  // hostname + contactEmail are resolved server-side (not authoritative from the
+  // client) so an automatic-SSL resume — where the client carries empty inputs —
+  // still produces a valid ACME payload instead of failing validation immediately.
+  const hostname = resolveAcmeHostname(data.hostname, domain.name)
+  const contactEmail = data.contactEmail || `admin@${domain.name}`
   try {
     await configureAcme({
       domainId: domain.id,
-      hostname: data.hostname,
-      contactEmail: data.contactEmail,
+      hostname,
+      contactEmail,
     })
   } catch (e) {
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
@@ -255,10 +278,12 @@ export async function finishSetupHandler(): Promise<{ ok: true }> {
 
 export const configureAcmeFn = createServerFn({ method: "POST" })
   .validator((d: { hostname: string; contactEmail: string }) =>
+    // Inputs may be empty on a pure resume (client state not yet collected); the
+    // handler resolves hostname/contactEmail server-side. Bound the lengths only.
     z
       .object({
-        hostname: z.string().min(1).max(253),
-        contactEmail: z.string().email().max(254),
+        hostname: z.string().max(253),
+        contactEmail: z.string().max(254),
       })
       .parse(d)
   )

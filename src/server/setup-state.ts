@@ -45,11 +45,13 @@ async function hasUserAdminAccount(): Promise<boolean> {
   return list.some((a) => !isSystemAdmin(a))
 }
 
-// DNS is considered managed when either:
+// DNS is considered managed only when a primary domain exists AND either:
 // - Stalwart manages it automatically (dnsManagement['@type'] === 'Automatic'), OR
 // - the operator has manually confirmed DNS is configured (isDnsConfigured marker).
+// A missing domain is never "managed" — it must still route to the 'dns' step.
 function isDnsManaged(domain: StalwartDomain | null): boolean {
-  return domain?.dnsManagement?.["@type"] === "Automatic" || isDnsConfigured()
+  if (!domain) return false
+  return domain.dnsManagement?.["@type"] === "Automatic" || isDnsConfigured()
 }
 
 // SSL is configured when Stalwart manages certificates automatically.
@@ -63,7 +65,9 @@ function isSslConfigured(domain: StalwartDomain | null): boolean {
 export async function isDnsManual(): Promise<boolean> {
   if (!isDnsConfigured()) return false
   const domain = await getPrimaryDomain()
-  return domain?.dnsManagement?.["@type"] !== "Automatic"
+  // No domain → not configured at all; never report manual on an invalid state.
+  if (!domain) return false
+  return domain.dnsManagement?.["@type"] !== "Automatic"
 }
 
 export async function deriveSetupStep(): Promise<SetupStep> {

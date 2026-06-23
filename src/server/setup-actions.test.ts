@@ -404,6 +404,31 @@ describe("configureAcmeHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
   })
 
+  it("resume (empty client input): sources hostname from STALMAIL_PUBLIC_URL and contactEmail from the domain", async () => {
+    const prev = process.env.STALMAIL_PUBLIC_URL
+    process.env.STALMAIL_PUBLIC_URL = "https://mail.example.com/"
+    try {
+      vi.mocked(getPrimaryDomain).mockResolvedValueOnce({
+        id: "dom-1",
+        name: "example.com",
+      })
+      vi.mocked(configureAcme).mockResolvedValueOnce("prov-1")
+      // Empty client values, as on a pure resume into the SSL step.
+      const result = await configureAcmeHandler({
+        data: { hostname: "", contactEmail: "" },
+      })
+      expect(result).toEqual({ ok: true })
+      expect(configureAcme).toHaveBeenCalledWith({
+        domainId: "dom-1",
+        hostname: "mail.example.com",
+        contactEmail: "admin@example.com",
+      })
+    } finally {
+      if (prev === undefined) delete process.env.STALMAIL_PUBLIC_URL
+      else process.env.STALMAIL_PUBLIC_URL = prev
+    }
+  })
+
   it("throws SetupError with SETUP-SSL-REJECTED on configureAcme failure", async () => {
     vi.mocked(configureAcme).mockRejectedValueOnce(new Error("acme error"))
     const err = await configureAcmeHandler({

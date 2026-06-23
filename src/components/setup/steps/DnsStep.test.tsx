@@ -99,6 +99,36 @@ describe("DnsStep", () => {
     expect(props.onNext).toHaveBeenCalledWith(true)
   })
 
+  it("auto failure: retry returns to the provider form so the token can be re-entered", async () => {
+    const props = {
+      ...baseProps(),
+      createDnsServer: vi.fn(() =>
+        Promise.reject(new Error("SETUP-DNS-REJECTED"))
+      ),
+    }
+    wrap(<DnsStep {...props} />)
+
+    // Pick a provider and enter a (bad) token, then submit.
+    fireEvent.click(screen.getByRole("button", { expanded: false }))
+    fireEvent.click(screen.getByText("Cloudflare"))
+    fireEvent.change(await screen.findByLabelText("Clé API"), {
+      target: { value: "bad-token" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+
+    // Error box appears.
+    expect(await screen.findByText("SETUP-DNS-REJECTED")).toBeInTheDocument()
+
+    // Retry → back to the form (re-enter token), NOT a blind replay.
+    fireEvent.click(screen.getByText("Réessayer"))
+    expect(await screen.findByText("Fournisseur DNS")).toBeInTheDocument()
+    const token: HTMLInputElement = await screen.findByLabelText("Clé API")
+    // The known-bad token is cleared so the user must re-enter it.
+    expect(token.value).toBe("")
+    // createDnsServer was called once (the failed attempt), not replayed on retry.
+    expect(props.createDnsServer).toHaveBeenCalledTimes(1)
+  })
+
   it("execution failure shows a SetupErrorBox and does not advance", async () => {
     const props = {
       ...baseProps(),

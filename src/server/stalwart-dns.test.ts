@@ -62,7 +62,8 @@ describe("findDnsServerId", () => {
 })
 
 describe("createDnsServer", () => {
-  it("réutilise un DnsServer existant (idempotence) sans recréer", async () => {
+  it("réutilise un DnsServer existant (idempotence) en mettant à jour le secret", async () => {
+    // find → existing server
     mj.mockResolvedValueOnce([
       ["x:DnsServer/query", { ids: ["srvX"] }, "0"],
       [
@@ -71,10 +72,41 @@ describe("createDnsServer", () => {
         "1",
       ],
     ])
-    const id = await createDnsServer({ provider: "Cloudflare", secret: "tok" })
+    // update → applies the corrected secret to the found id (no create)
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/set", { updated: { srvX: null } }, "0"],
+    ])
+    const id = await createDnsServer({
+      provider: "Cloudflare",
+      secret: "corrected-tok",
+    })
     expect(id).toBe("srvX")
-    // pas de second appel create
-    expect(mj.mock.calls.length).toBe(1)
+    // second call is an UPDATE of the existing id, not a create
+    const [[method, args]] = mj.mock.calls[1][0] as [
+      [string, Record<string, unknown>, string],
+    ]
+    expect(method).toBe("x:DnsServer/set")
+    expect(args.create).toBeUndefined()
+    expect(args.update).toEqual({
+      srvX: { secret: { "@type": "Value", secret: "corrected-tok" } },
+    })
+  })
+
+  it("throws when the idempotent secret update is rejected", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/query", { ids: ["srvX"] }, "0"],
+      [
+        "x:DnsServer/get",
+        { list: [{ id: "srvX", "@type": "Cloudflare" }] },
+        "1",
+      ],
+    ])
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/set", { notUpdated: { srvX: { type: "forbidden" } } }, "0"],
+    ])
+    await expect(
+      createDnsServer({ provider: "Cloudflare", secret: "x" })
+    ).rejects.toThrow()
   })
 
   it('creates a provider variant, wrapping the secret as a SecretKey "Value"', async () => {
