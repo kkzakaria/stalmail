@@ -13,6 +13,7 @@ export const fr = {
       welcome: "Bienvenue",
       domain: "Domaine",
       dnsProvider: "Fournisseur DNS",
+      dns: "DNS",
       admin: "Administrateur",
       account: "Compte",
       recap: "Récapitulatif",
@@ -25,7 +26,23 @@ export const fr = {
       toDark: "Passer au thème sombre",
     },
     langs: { fr: "Français", en: "English" },
-    error: { title: "Une erreur est survenue", retry: "Réessayer" },
+    error: {
+      title: "Une erreur est survenue",
+      retry: "Réessayer",
+      generic: "La configuration n'a pas pu aboutir.",
+      codes: {
+        "SETUP-RESTART-TIMEOUT": "Le serveur met trop de temps à répondre.",
+        "SETUP-DNS-REJECTED": "Le fournisseur DNS a refusé ces informations.",
+        "SETUP-DNS-MANAGEMENT-REJECTED":
+          "La gestion DNS automatique a été refusée.",
+        "SETUP-ACCOUNT-WEAK":
+          "Le mot de passe choisi n'est pas suffisamment robuste.",
+        "SETUP-ACCOUNT-REJECTED":
+          "La création du compte administrateur a échoué.",
+        "SETUP-SSL-REJECTED": "L'obtention du certificat SSL a échoué.",
+        "SETUP-UNKNOWN": "Une erreur inattendue s'est produite.",
+      },
+    },
     welcome: {
       title: "Bienvenue sur Stalmail",
       subtitle:
@@ -154,6 +171,7 @@ export const fr = {
       title: "Configuration en cours",
       subtitle:
         "Le serveur écrit sa configuration et redémarre. Cela prend généralement moins d'une minute.",
+      configuring: "Configuration en cours…",
       timeout: "Cela prend plus de temps que prévu. Vous pouvez réessayer.",
       poll: "getStep() · tentative {{n}}",
       restarting: "redémarrage…",
@@ -333,6 +351,7 @@ export const en: DeepRecord<typeof fr> = {
       welcome: "Welcome",
       domain: "Domain",
       dnsProvider: "DNS provider",
+      dns: "DNS",
       admin: "Administrator",
       account: "Account",
       recap: "Summary",
@@ -342,7 +361,21 @@ export const en: DeepRecord<typeof fr> = {
     },
     theme: { toLight: "Switch to light theme", toDark: "Switch to dark theme" },
     langs: { fr: "Français", en: "English" },
-    error: { title: "Something went wrong", retry: "Retry" },
+    error: {
+      title: "Something went wrong",
+      retry: "Retry",
+      generic: "Configuration could not complete.",
+      codes: {
+        "SETUP-RESTART-TIMEOUT": "The server is taking too long to respond.",
+        "SETUP-DNS-REJECTED": "The DNS provider rejected these details.",
+        "SETUP-DNS-MANAGEMENT-REJECTED":
+          "Automatic DNS management was rejected.",
+        "SETUP-ACCOUNT-WEAK": "The chosen password is not strong enough.",
+        "SETUP-ACCOUNT-REJECTED": "Administrator account creation failed.",
+        "SETUP-SSL-REJECTED": "Obtaining the SSL certificate failed.",
+        "SETUP-UNKNOWN": "An unexpected error occurred.",
+      },
+    },
     welcome: {
       title: "Welcome to Stalmail",
       subtitle:
@@ -472,6 +505,7 @@ export const en: DeepRecord<typeof fr> = {
       title: "Configuring",
       subtitle:
         "The server is writing its configuration and restarting. This usually takes less than a minute.",
+      configuring: "Setting things up…",
       timeout: "This is taking longer than expected. You can retry.",
       poll: "getStep() · attempt {{n}}",
       restarting: "restarting…",
