@@ -15,7 +15,7 @@ Plus largement, collecter en masse avant d'exécuter empêche un retour d'erreur
 
 ## 2. Objectif
 
-Refondre le wizard en **machine linéaire pilotée par l'état serveur**, où **chaque étape collecte SA saisie puis l'exécute** avant de passer à la suivante, en **marche avant** (pas de retour-édition sur une étape exécutée), avec **ré-exécution idempotente** à la reprise. Réordonner **DNS avant Compte**.
+Refondre le wizard en **machine linéaire pilotée par l'état serveur**, où **chaque étape collecte SA saisie puis l'exécute** avant de passer à la suivante, en **marche avant** (pas de retour-édition sur une étape exécutée), avec **ré-exécution idempotente** à la reprise. **Configurer l'infrastructure (DNS puis SSL) d'abord, et créer le compte admin en dernière étape de saisie** (juste avant l'écran final).
 
 ### Non-objectifs
 
@@ -38,22 +38,22 @@ Approches écartées : **B** (orchestration client, exécution au « Suivant » 
 ## 4. Séquence cible & contrat par étape
 
 ```
-Welcome → Domaine [submit → REDÉMARRAGE] → DNS → Compte → SSL → Done
+Welcome → Domaine [submit → REDÉMARRAGE] → DNS → SSL → Compte → Done
 ```
 
 | Étape | Collecte | Exécute (au « Suivant ») | Précondition de reprise (`deriveSetupStep`) |
 |---|---|---|---|
 | **Welcome** | — (intro) | — (avance client) | `bootstrap` |
 | **Domaine** | domaine + hostname | `submitBootstrap` → redémarrage Stalwart | `bootstrap` |
-| **DNS** | provider + token (ou *Manuel*) | `createDnsServer` + `setDnsManagement` (auto) ; *Manuel* : marque le choix + grille | domaine pas en gestion DNS configurée |
+| **DNS** | provider + token (ou *Manuel*) | `createDnsServer` + `setDnsManagement` (auto) ; *Manuel* : marque le choix + grille | DNS pas configuré |
+| **SSL** | — | `configureAcme` + suivi `acmeStatus` (non bloquant) | DNS ok, `certificateManagement` pas `Automatic` |
 | **Compte** | identifiants admin | `createAdminAccount` | pas de compte utilisateur admin |
-| **SSL** | — | `configureAcme` + suivi `acmeStatus` | DNS configuré, cert pas demandé |
-| **Done** | — | `finishSetup` | — |
+| **Done** | — | `finishSetup` | tout configuré, setup pas finalisé |
 
 Changements vs aujourd'hui :
 - **Récap supprimé** : plus de saisies accumulées non exécutées à récapituler ; le contrôle se fait à chaque étape.
 - **Welcome conservé** : écran d'introduction avant le bootstrap (pré-normal).
-- **DNS avant Compte** : inversion de l'ordre dans `deriveSetupStep`.
+- **Infra d'abord, Compte en dernier** : ordre `DNS → SSL → Compte` dans `deriveSetupStep`. DNS **doit** précéder SSL (dépendance dure : l'ACME DNS-01 s'appuie sur le `dnsManagement: Automatic`/`dnsServerId`) ; le compte ne dépend de rien et passe en dernier.
 - Plus de groupes « config » / « activation » dans le `StepperH` : **une seule séquence linéaire**.
 
 ## 5. Reprise, idempotence & marche avant
@@ -63,12 +63,18 @@ Changements vs aujourd'hui :
 ```
 done      si isSetupComplete()
 collect   si isBootstrapMode()          // Welcome + Domaine (sous-état client pré-bootstrap)
-dns       si dnsManagement != Automatic ET pas de marqueur `dnsConfigured`   // AVANT compte
+dns       si dnsManagement != Automatic ET pas de marqueur `dnsConfigured`
+ssl       si certificateManagement != Automatic
 account   si pas de compte utilisateur admin
-ssl       sinon
+finalize  sinon                          // étape Done : finishSetup → isSetupComplete
 ```
 
-Signal « étape DNS franchie » = `dnsManagement['@type'] === 'Automatic'` (chemin auto) **ou** marqueur `dnsConfigured` présent (chemin Manuel, cf. §6).
+Signaux serveur « étape franchie » :
+- **DNS** = `dnsManagement['@type'] === 'Automatic'` (chemin auto) **ou** marqueur `dnsConfigured` (chemin Manuel, cf. §6).
+- **SSL** = `certificateManagement['@type'] === 'Automatic'` (posé par `configureAcme`). Non bloquant sur la validité du cert : dès l'ACME configuré on avance, même si le cert est encore `pending`.
+- **Compte** = présence d'un compte utilisateur (non-système).
+
+`finalize` correspond à l'écran **Done** qui appelle `finishSetup` (pose le drapeau `isSetupComplete`) — le compte étant la dernière saisie, c'est lui qui débloque l'étape finale.
 
 - **Marche avant** : une étape exécutée fait avancer la précondition serveur ; on ne revient pas dessus. Le `StepperH` n'expose pas de navigation arrière vers une étape franchie.
 - **Ré-exécution idempotente** : si une étape est ré-affichée (rechargement, retry après erreur), elle ré-exécute proprement sans dupliquer :
@@ -93,6 +99,8 @@ Signal « étape DNS franchie » = `dnsManagement['@type'] === 'Automatic'` (che
 L'étape DNS Manuel affiche la **grille d'enregistrements** (depuis `domain.dnsZoneFile` via `dnsGridStatus`) à recopier chez le registrar, puis un bouton de confirmation qui exécute (1)+(2) et avance.
 
 Le chemin **Automatique** n'a, lui, pas besoin du marqueur : `dnsManagement['@type'] === 'Automatic'` suffit comme signal serveur.
+
+**Incompatibilité connue (préexistante) Manuel + SSL ACME DNS-01** : l'étape SSL (`configureAcme`) requiert un `dnsManagement: Automatic` (un `dnsServerId` pour résoudre le challenge DNS-01). En mode DNS **Manuel**, il n'y a pas de DnsServer → l'ACME DNS-01 du serveur mail n'est pas applicable. L'étape SSL devra donc, en mode Manuel, **être informative/optionnelle** (pas de `configureAcme` automatique ; cert mail à gérer autrement). Ce n'est pas introduit par ce refactor — c'est une limite du couple Manuel+DNS-01 — mais le plan doit définir le comportement de l'étape SSL quand DNS est Manuel (probable : sauter `configureAcme` et marquer SSL comme franchi via le même `dnsConfigured`/un marqueur dédié). Le parcours principal validé (Cloudflare, automatique) n'est pas concerné.
 
 ## 7. Redémarrage bootstrap→normal
 
