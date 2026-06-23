@@ -6,7 +6,7 @@ export const fr = {
       retry: "Réessayer",
       copy: "Copier",
       copied: "Copié",
-      stepOf: "Étape {{n}} sur 9",
+      stepOf: "Étape {{n}} sur 6",
     },
     groups: { config: "Configuration", activation: "Activation" },
     steps: {
@@ -202,6 +202,9 @@ export const fr = {
         "Vous pouvez continuer : Stalwart réessaiera automatiquement et l'administration reste accessible sur :8080/admin.",
       failedHint:
         "Le défi DNS-01 requiert un fournisseur DNS configuré et accessible (token valide).",
+      manualTitle: "Certificat à gérer manuellement",
+      manualNote:
+        "En DNS manuel, le défi ACME DNS-01 ne peut pas être automatisé ici. Obtenez et installez le certificat du serveur mail vous-même (hors de ce wizard), puis continuez.",
       status: {
         pending: "En attente",
         failed: "Échec — nouvel essai planifié",
@@ -344,7 +347,7 @@ export const en: DeepRecord<typeof fr> = {
       retry: "Retry",
       copy: "Copy",
       copied: "Copied",
-      stepOf: "Step {{n}} of 9",
+      stepOf: "Step {{n}} of 6",
     },
     groups: { config: "Configuration", activation: "Activation" },
     steps: {
@@ -536,6 +539,9 @@ export const en: DeepRecord<typeof fr> = {
         "You can continue: Stalwart will retry automatically and the admin stays reachable on :8080/admin.",
       failedHint:
         "The DNS-01 challenge requires a configured, reachable DNS provider (valid token).",
+      manualTitle: "Certificate to manage manually",
+      manualNote:
+        "With manual DNS, the ACME DNS-01 challenge can't be automated here. Obtain and install the mail server certificate yourself (outside this wizard), then continue.",
       status: {
         pending: "Pending",
         failed: "Failed — retry scheduled",

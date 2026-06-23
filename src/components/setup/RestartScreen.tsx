@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { Spinner, Progress, StepHeader, Button } from './ui/primitives'
+import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
+import { Spinner, Progress, StepHeader } from "./ui/primitives"
+import { SetupErrorBox } from "./ui/SetupErrorBox"
 
 interface Props {
   poll: () => Promise<{ step: string }>
@@ -14,7 +15,12 @@ interface PollLine {
   ready: boolean
 }
 
-export function RestartScreen({ poll, onReady, intervalMs = 2000, timeoutMs = 90_000 }: Props) {
+export function RestartScreen({
+  poll,
+  onReady,
+  intervalMs = 2000,
+  timeoutMs = 90_000,
+}: Props) {
   const { t } = useTranslation()
   const [timedOut, setTimedOut] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -32,7 +38,7 @@ export function RestartScreen({ poll, onReady, intervalMs = 2000, timeoutMs = 90
         const { step } = await poll()
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!state.active) return
-        const ready = step !== 'collect'
+        const ready = step !== "collect"
         count += 1
         const n = count
         setLines((prev) => [...prev, { n, ready }])
@@ -61,29 +67,42 @@ export function RestartScreen({ poll, onReady, intervalMs = 2000, timeoutMs = 90
     setAttempt((a) => a + 1)
   }
 
+  if (timedOut) {
+    return (
+      <div className="step-body step-restart">
+        <StepHeader title={t("wizard.restart.title")} />
+        <SetupErrorBox
+          code="SETUP-RESTART-TIMEOUT"
+          messageKey="wizard.error.codes.SETUP-RESTART-TIMEOUT"
+          onRetry={retry}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div className="step-body step-restart" aria-busy={!timedOut}>
+    <div className="step-body step-restart" aria-busy>
       <div className="restart-spinner">
         <Spinner size={28} />
       </div>
       <StepHeader
-        title={t('wizard.restart.title')}
-        sub={timedOut ? t('wizard.restart.timeout') : t('wizard.restart.subtitle')}
+        title={t("wizard.restart.title")}
+        sub={t("wizard.restart.subtitle")}
       />
       <Progress indeterminate />
       <div className="poll-log mono" aria-live="polite">
         {lines.slice(-4).map((l) => (
-          <p key={l.n} className={'poll-line' + (l.ready ? ' poll-line-ok' : '')}>
-            {t('wizard.restart.poll', { n: l.n })} →{' '}
-            {l.ready ? t('wizard.restart.ready') : t('wizard.restart.restarting')}
+          <p
+            key={l.n}
+            className={"poll-line" + (l.ready ? " poll-line-ok" : "")}
+          >
+            {t("wizard.restart.poll", { n: l.n })} →{" "}
+            {l.ready
+              ? t("wizard.restart.ready")
+              : t("wizard.restart.restarting")}
           </p>
         ))}
       </div>
-      {timedOut ? (
-        <Button variant="primary" onClick={retry}>
-          {t('wizard.common.retry')}
-        </Button>
-      ) : null}
     </div>
   )
 }

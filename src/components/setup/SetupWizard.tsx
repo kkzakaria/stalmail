@@ -1,195 +1,202 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { Brand } from './ui/primitives'
-import { LangSelect } from './ui/LangSelect'
-import { ThemeToggle } from './ui/ThemeToggle'
-import { StepperH } from './ui/StepperH'
-import { WizardProvider, useWizard } from './wizard-context'
-import { WelcomeStep } from './steps/WelcomeStep'
-import { DomainStep } from './steps/DomainStep'
-import { DnsProviderStep } from './steps/DnsProviderStep'
-import { AdminAccountStep } from './steps/AdminAccountStep'
-import { RecapStep } from './steps/RecapStep'
-import { AccountStep } from './steps/AccountStep'
-import { DnsStep } from './steps/DnsStep'
-import { SslStep } from './steps/SslStep'
-import { DoneStep } from './steps/DoneStep'
-import { RestartScreen } from './RestartScreen'
-import type { DomainValues, DnsProviderValues, AdminAccountValues } from './schemas'
-import type { Theme } from '@/server/setup-theme'
-import type { CreateAccountResult, DnsGridRecord } from '@/server/setup-actions'
-import type { AcmeStatus } from '@/server/stalwart-acme'
-import './wizard.css'
+import { useState } from "react"
+import { useTranslation } from "react-i18next"
+import { Brand } from "./ui/primitives"
+import { LangSelect } from "./ui/LangSelect"
+import { ThemeToggle } from "./ui/ThemeToggle"
+import { StepperH } from "./ui/StepperH"
+import { WelcomeStep } from "./steps/WelcomeStep"
+import { DomainStep } from "./steps/DomainStep"
+import { AccountStep } from "./steps/AccountStep"
+import { DnsStep } from "./steps/DnsStep"
+import { SslStep } from "./steps/SslStep"
+import { DoneStep } from "./steps/DoneStep"
+import { RestartScreen } from "./RestartScreen"
+import type { DomainValues } from "./schemas"
+import type { Theme } from "@/server/setup-theme"
+import type { CreateAccountResult, DnsGridRecord } from "@/server/setup-actions"
+import type { AcmeStatus } from "@/server/stalwart-acme"
+import "./wizard.css"
 
-type CollectScreen = 'welcome' | 'domain' | 'dns' | 'account' | 'recap' | 'restarting'
+// Server-derived step (from getStep). 'collect' means bootstrap is still pending.
+type ServerStep = "collect" | "dns" | "ssl" | "account" | "done"
+// Client sub-phase while step==='collect' (pre-bootstrap) or just after submit.
+type Phase = "welcome" | "domain" | "restarting" | "server"
 
 interface Props {
   initialStep: string
+  initialDnsManual?: boolean
   initialTheme: Theme
   submitBootstrap: (input: DomainValues) => Promise<void>
-  pollStep: () => Promise<{ step: string }>
-  createAccount: (input: { name: string; password: string }) => Promise<CreateAccountResult>
-  createDnsServer: (input: { provider: string; secret: string }) => Promise<{ dnsServerId: string }>
+  pollStep: () => Promise<{ step: string; dnsManual: boolean }>
+  createAccount: (input: {
+    name: string
+    password: string
+  }) => Promise<CreateAccountResult>
+  createDnsServer: (input: {
+    provider: string
+    secret: string
+  }) => Promise<{ dnsServerId: string }>
   setDnsManagement: (input: { dnsServerId: string }) => Promise<{ ok: true }>
+  setDnsManagementManual: () => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
-  configureAcme: (input: { hostname: string; contactEmail: string }) => Promise<{ ok: true }>
+  configureAcme: (input: {
+    hostname: string
+    contactEmail: string
+  }) => Promise<{ ok: true }>
   acmeStatus: () => Promise<{ status: AcmeStatus }>
   finishSetup: () => Promise<{ ok: true }>
 }
 
-export function SetupWizard(props: Props) {
-  return (
-    <WizardProvider>
-      <WizardInner {...props} />
-    </WizardProvider>
-  )
+// 1=welcome, 2=domain, then dns/ssl/account/done at 3..6.
+const STEP_DOT: Record<ServerStep, number> = {
+  collect: 2,
+  dns: 3,
+  ssl: 4,
+  account: 5,
+  done: 6,
 }
 
-function WizardInner({
+export function SetupWizard({
   initialStep,
+  initialDnsManual = false,
   initialTheme,
   submitBootstrap,
   pollStep,
   createAccount,
   createDnsServer,
   setDnsManagement,
+  setDnsManagementManual,
   gridStatus,
   configureAcme,
   acmeStatus,
   finishSetup,
 }: Props) {
   const { t } = useTranslation()
-  const { data, setData } = useWizard()
   const [theme, setTheme] = useState<Theme>(initialTheme)
-  // In bootstrap mode we drive the collect phase locally; otherwise jump to monitoring.
-  const [screen, setScreen] = useState<CollectScreen>(
-    initialStep === 'collect' ? 'welcome' : 'restarting',
+
+  const startsCollect = initialStep === "collect"
+  // Server-derived step (only meaningful once phase==='server').
+  const [serverStep, setServerStep] = useState<ServerStep>(
+    startsCollect ? "dns" : (initialStep as ServerStep)
   )
-  const [monitorStep, setMonitorStep] = useState<string>(
-    initialStep === 'collect' ? '' : initialStep,
+  const [dnsManual, setDnsManual] = useState(initialDnsManual)
+  const [phase, setPhase] = useState<Phase>(
+    startsCollect ? "welcome" : "server"
   )
+
+  // Session-collected values (not persisted server-side). Empty on a pure resume,
+  // which matches the previous behavior — the steps still function.
+  const [collected, setCollected] = useState<{
+    serverHostname: string
+    defaultDomain: string
+    adminEmail: string
+  }>({ serverHostname: "", defaultDomain: "", adminEmail: "" })
+  const [sslStatus, setSslStatus] = useState<AcmeStatus>("pending")
+
+  // Re-derive the server step after each step completes, then advance.
+  const refetchStep = () => {
+    void pollStep().then(({ step, dnsManual: manual }) => {
+      setServerStep(step as ServerStep)
+      setDnsManual(manual)
+      setPhase("server")
+    })
+  }
 
   const steps = [
-    { n: 1, label: t('wizard.steps.welcome'), group: 'config' as const },
-    { n: 2, label: t('wizard.steps.domain'), group: 'config' as const },
-    { n: 3, label: t('wizard.steps.dnsProvider'), group: 'config' as const },
-    { n: 4, label: t('wizard.steps.admin'), group: 'config' as const },
-    { n: 5, label: t('wizard.steps.recap'), group: 'config' as const },
-    { n: 6, label: t('wizard.steps.account'), group: 'activation' as const },
-    { n: 7, label: t('wizard.steps.dnsRecords'), group: 'activation' as const },
-    { n: 8, label: t('wizard.steps.ssl'), group: 'activation' as const },
-    { n: 9, label: t('wizard.steps.done'), group: 'activation' as const },
+    { n: 1, label: t("wizard.steps.welcome") },
+    { n: 2, label: t("wizard.steps.domain") },
+    { n: 3, label: t("wizard.steps.dns") },
+    { n: 4, label: t("wizard.steps.ssl") },
+    { n: 5, label: t("wizard.steps.account") },
+    { n: 6, label: t("wizard.steps.done") },
   ]
 
-  const screenToCurrent: Record<CollectScreen, number> = {
-    welcome: 1,
-    domain: 2,
-    dns: 3,
-    account: 4,
-    recap: 5,
-    restarting: 6,
-  }
-  const monitorToCurrent: Record<string, number> = {
-    account: 6,
-    dns: 7,
-    ssl: 8,
-    done: 9,
-  }
-  const current = monitorStep
-    ? (monitorToCurrent[monitorStep] ?? 6)
-    : screenToCurrent[screen]
-  const caption = monitorStep
-    ? t('wizard.common.stepOf', { n: current })
-    : t('wizard.common.stepOf', { n: current <= 5 ? current : 6 })
+  const current =
+    phase === "welcome"
+      ? 1
+      : phase === "domain"
+        ? 2
+        : phase === "restarting"
+          ? 3
+          : STEP_DOT[serverStep]
 
-  // Monitoring phase (Plan 2b-ii): account → dns → ssl → done, all live.
-  const content = monitorStep === 'account' ? (
-    <AccountStep
-      name={data.name ?? ''}
-      password={data.password ?? ''}
-      domain={data.defaultDomain ?? ''}
-      createAccount={createAccount}
-      onPasswordChange={(pw) => setData({ password: pw })}
-      onNext={() => setMonitorStep('dns')}
-    />
-  ) : monitorStep === 'dns' ? (
-    <DnsStep
-      provider={data.provider ?? 'Manual'}
-      secret={data.secret ?? ''}
-      hostname={data.serverHostname ?? ''}
-      domain={data.defaultDomain ?? ''}
-      createDnsServer={createDnsServer}
-      setDnsManagement={setDnsManagement}
-      gridStatus={gridStatus}
-      onNext={() => setMonitorStep('ssl')}
-    />
-  ) : monitorStep === 'ssl' ? (
-    <SslStep
-      hostname={data.serverHostname ?? ''}
-      contactEmail={`${data.name ?? ''}@${data.defaultDomain ?? ''}`}
-      configureAcme={configureAcme}
-      acmeStatus={acmeStatus}
-      onStatusChange={(s) => setData({ sslStatus: s })}
-      onNext={() => setMonitorStep('done')}
-    />
-  ) : monitorStep === 'done' ? (
-    <DoneStep
-      domain={data.defaultDomain ?? ''}
-      hostname={data.serverHostname ?? ''}
-      adminEmail={`${data.name ?? ''}@${data.defaultDomain ?? ''}`}
-      sslStatus={data.sslStatus ?? 'pending'}
-      finishSetup={finishSetup}
-    />
-  ) : monitorStep ? (
-    <p data-testid="monitor-step" className="step-body" style={{ textAlign: 'center' }}>
-      {monitorStep}
-    </p>
-  ) : screen === 'welcome' ? (
-    <WelcomeStep onNext={() => setScreen('domain')} />
-  ) : screen === 'domain' ? (
-    <DomainStep
-      defaults={data}
-      onBack={() => setScreen('welcome')}
-      onNext={(v: DomainValues) => {
-        setData(v)
-        setScreen('dns')
-      }}
-    />
-  ) : screen === 'dns' ? (
-    <DnsProviderStep
-      defaults={data as Partial<DnsProviderValues> & { defaultDomain?: string }}
-      onBack={() => setScreen('domain')}
-      onNext={(v: DnsProviderValues) => {
-        setData(v)
-        setScreen('account')
-      }}
-    />
-  ) : screen === 'account' ? (
-    <AdminAccountStep
-      defaults={data}
-      domain={data.defaultDomain ?? ''}
-      onBack={() => setScreen('dns')}
-      onNext={(v: AdminAccountValues) => {
-        setData(v)
-        setScreen('recap')
-      }}
-    />
-  ) : screen === 'recap' ? (
-    <RecapStep
-      data={data}
-      goTo={(target) => setScreen(target)}
-      onBack={() => setScreen('account')}
-      onSubmit={async () => {
-        await submitBootstrap({
-          serverHostname: data.serverHostname ?? '',
-          defaultDomain: data.defaultDomain ?? '',
-        })
-        setScreen('restarting')
-      }}
-    />
-  ) : (
-    <RestartScreen poll={pollStep} onReady={(step) => setMonitorStep(step)} />
-  )
+  let content: React.ReactNode
+  if (phase === "welcome") {
+    content = <WelcomeStep onNext={() => setPhase("domain")} />
+  } else if (phase === "domain") {
+    content = (
+      <DomainStep
+        defaults={collected}
+        submitBootstrap={async (v) => {
+          setCollected((c) => ({
+            ...c,
+            serverHostname: v.serverHostname,
+            defaultDomain: v.defaultDomain,
+          }))
+          await submitBootstrap(v)
+        }}
+        onRestart={() => setPhase("restarting")}
+      />
+    )
+  } else if (phase === "restarting") {
+    content = <RestartScreen poll={pollStep} onReady={() => refetchStep()} />
+  } else if (serverStep === "dns") {
+    content = (
+      <DnsStep
+        hostname={collected.serverHostname}
+        domain={collected.defaultDomain}
+        createDnsServer={createDnsServer}
+        setDnsManagement={setDnsManagement}
+        setDnsManagementManual={setDnsManagementManual}
+        gridStatus={gridStatus}
+        onNext={(manual) => {
+          setDnsManual(manual)
+          refetchStep()
+        }}
+      />
+    )
+  } else if (serverStep === "ssl") {
+    content = (
+      <SslStep
+        hostname={collected.serverHostname}
+        contactEmail={
+          collected.adminEmail || `admin@${collected.defaultDomain}`
+        }
+        dnsManual={dnsManual}
+        configureAcme={configureAcme}
+        acmeStatus={acmeStatus}
+        onStatusChange={setSslStatus}
+        onNext={refetchStep}
+      />
+    )
+  } else if (serverStep === "account") {
+    content = (
+      <AccountStep
+        domain={collected.defaultDomain}
+        createAccount={async (input) => {
+          const res = await createAccount(input)
+          if (res.status === "ok") {
+            setCollected((c) => ({
+              ...c,
+              adminEmail: `${input.name}@${c.defaultDomain}`,
+            }))
+          }
+          return res
+        }}
+        onNext={refetchStep}
+      />
+    )
+  } else {
+    content = (
+      <DoneStep
+        domain={collected.defaultDomain}
+        hostname={collected.serverHostname}
+        adminEmail={collected.adminEmail || `admin@${collected.defaultDomain}`}
+        sslStatus={sslStatus}
+        finishSetup={finishSetup}
+      />
+    )
+  }
 
   return (
     <main className="stalmail-wizard" data-theme={theme}>
@@ -202,20 +209,15 @@ function WizardInner({
               <ThemeToggle theme={theme} onChange={setTheme} />
             </div>
           </div>
-          <StepperH
-            steps={steps}
-            current={current}
-            groupLabels={{
-              config: t('wizard.groups.config'),
-              activation: t('wizard.groups.activation'),
-            }}
-          />
+          <StepperH steps={steps} current={current} />
           <div className="card shell-card-main">
-            <div key={screen} className="step-anim">
+            <div key={`${phase}-${serverStep}`} className="step-anim">
               {content}
             </div>
           </div>
-          <p className="shell-caption">{caption}</p>
+          <p className="shell-caption">
+            {t("wizard.common.stepOf", { n: current })}
+          </p>
         </div>
       </div>
     </main>

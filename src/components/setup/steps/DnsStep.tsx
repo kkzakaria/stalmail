@@ -1,74 +1,102 @@
-// Stalmail wizard — step 7: DNS records (monitoring phase).
-// Ports the design prototype StepDns
-// (docs/design/wizard-handoff/project/wizard/steps-monitor.jsx), replacing the
-// timer simulation with the real createDnsServer / setDnsManagement mutations and
-// a live gridStatus() poll.
-import { Fragment, useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { DnsGridRecord } from '@/server/setup-actions'
-import { Alert, Badge, CopyButton, Spinner, StepHeader, StepNav } from '../ui/primitives'
-import { StatusBadge, CopyIconBtn, DownloadButton } from '../ui/monitor-primitives'
-import { IconCheck, IconInfo } from '../ui/icons'
+// Stalmail wizard — DNS step: collect provider+secret (merged from the former
+// DnsProviderStep), then execute. Auto path: createDnsServer → setDnsManagement →
+// live gridStatus() poll. Manual path: setDnsManagementManual → grid (copy/download).
+// The secret never leaves this component (collected and passed straight to
+// createDnsServer). Ports the design prototype StepDns.
+import { Fragment, useEffect, useRef, useState } from "react"
+import { useForm } from "@tanstack/react-form"
+import { useTranslation } from "react-i18next"
+import { DNS_PROVIDERS } from "@/server/stalwart-dns"
+import type { DnsProvider } from "@/server/stalwart-dns"
+import type { DnsGridRecord } from "@/server/setup-actions"
+import type { DnsProviderValues } from "../schemas"
+import { dnsProviderSchema } from "../schemas"
+import {
+  Alert,
+  Badge,
+  CopyButton,
+  Field,
+  Spinner,
+  StepHeader,
+  StepNav,
+  TextInput,
+} from "../ui/primitives"
+import { Combobox } from "../ui/Combobox"
+import {
+  StatusBadge,
+  CopyIconBtn,
+  DownloadButton,
+} from "../ui/monitor-primitives"
+import { IconCheck, IconInfo } from "../ui/icons"
+import { SetupErrorBox } from "../ui/SetupErrorBox"
+import { codeFromError, messageKeyForCode } from "../error-code"
 
 /* ---------- local helpers (duplicated from DomainStep on purpose) ---------- */
 function isExternalHost(h: string, d: string) {
   if (!h || !d) return false
   const a = h.toLowerCase(),
     b = d.toLowerCase()
-  return a !== b && !a.endsWith('.' + b)
+  return a !== b && !a.endsWith("." + b)
 }
 function hostZone(h: string) {
-  const p = (h || '').split('.')
-  return p.length > 2 ? p.slice(1).join('.') : h
+  const p = (h || "").split(".")
+  return p.length > 2 ? p.slice(1).join(".") : h
 }
 function zoneFileText(records: DnsGridRecord[]) {
-  const pad = (s: string, n: number) => (s.length >= n ? s + ' ' : s.padEnd(n))
+  const pad = (s: string, n: number) => (s.length >= n ? s + " " : s.padEnd(n))
   return records
-    .map((r) => pad(r.name, 34) + '3600 IN ' + pad(r.type, 6) + r.value)
-    .join('\n')
+    .map((r) => pad(r.name, 34) + "3600 IN " + pad(r.type, 6) + r.value)
+    .join("\n")
 }
 
 // Groups by type for the manual sectioned view (title/desc keys: groups.<key>.t/.d).
 const DNS_GROUP_DEFS = [
-  { type: 'A', key: 'a' },
-  { type: 'MX', key: 'mx' },
-  { type: 'TXT', key: 'txt' },
-  { type: 'SRV', key: 'srv' },
-  { type: 'CNAME', key: 'cname' },
+  { type: "A", key: "a" },
+  { type: "MX", key: "mx" },
+  { type: "TXT", key: "txt" },
+  { type: "SRV", key: "srv" },
+  { type: "CNAME", key: "cname" },
 ] as const
 
-type Phase = 'connecting' | 'publishing' | 'grid' | 'error'
+const PROVIDER_OPTIONS = DNS_PROVIDERS.filter((p) => p !== "Manual")
+
+type Phase = "form" | "connecting" | "publishing" | "grid" | "error"
 
 interface Props {
-  provider: string
-  secret: string
   hostname: string
   domain: string
-  createDnsServer: (i: { provider: string; secret: string }) => Promise<{ dnsServerId: string }>
+  createDnsServer: (i: {
+    provider: string
+    secret: string
+  }) => Promise<{ dnsServerId: string }>
   setDnsManagement: (i: { dnsServerId: string }) => Promise<{ ok: true }>
+  setDnsManagementManual: () => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
-  onNext: () => void
+  onNext: (manual: boolean) => void
 }
 
 export function DnsStep({
-  provider,
-  secret,
   hostname,
   domain,
   createDnsServer,
   setDnsManagement,
+  setDnsManagementManual,
   gridStatus,
   onNext,
 }: Props) {
   const { t } = useTranslation()
-  const isManual = provider === 'Manual'
-  const [phase, setPhase] = useState<Phase>(isManual ? 'grid' : 'connecting')
+  const [phase, setPhase] = useState<Phase>("form")
+  const [provider, setProvider] = useState("Manual")
   const [records, setRecords] = useState<DnsGridRecord[]>([])
-  const [errorMsg, setErrorMsg] = useState('')
+  const [errorCode, setErrorCode] = useState("")
+
+  const isManual = provider === "Manual"
 
   const mountedRef = useRef(true)
-  const ranRef = useRef(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // The chosen secret is kept in a ref only for the duration of the auto run so a
+  // failed run can be retried; it is never lifted out of the component.
+  const secretRef = useRef("")
 
   useEffect(() => {
     mountedRef.current = true
@@ -77,37 +105,65 @@ export function DnsStep({
     }
   }, [])
 
+  const form = useForm({
+    defaultValues: { provider: "Manual", secret: "" },
+    validators: { onSubmit: dnsProviderSchema },
+    onSubmit: ({ value }: { value: DnsProviderValues }) => {
+      setProvider(value.provider)
+      if (value.provider === "Manual") {
+        runManual()
+      } else {
+        secretRef.current = value.secret
+        runAuto(value.provider, value.secret)
+      }
+    },
+  })
+
   // Auto path: createDnsServer -> setDnsManagement -> grid. Re-runnable on retry.
-  const runAuto = () => {
-    setErrorMsg('')
-    setPhase('connecting')
-    createDnsServer({ provider, secret })
+  const runAuto = (prov: string, secret: string) => {
+    setErrorCode("")
+    setPhase("connecting")
+    createDnsServer({ provider: prov, secret })
       .then(({ dnsServerId }) => {
         if (!mountedRef.current) return null
-        setPhase('publishing')
+        setPhase("publishing")
         return setDnsManagement({ dnsServerId })
       })
       .then((res) => {
         if (!mountedRef.current || res === null) return
-        setPhase('grid')
+        setPhase("grid")
       })
       .catch((e: unknown) => {
         if (!mountedRef.current) return
-        setErrorMsg(e instanceof Error ? e.message : String(e))
-        setPhase('error')
+        setErrorCode(codeFromError(e))
+        setPhase("error")
       })
   }
 
-  useEffect(() => {
-    if (ranRef.current) return
-    ranRef.current = true
-    if (!isManual) runAuto()
-    // Run-once mount effect; runAuto uses stable props/setters only.
-  }, [])
+  // Manual path: confirm manual management server-side, then show the grid.
+  const runManual = () => {
+    setErrorCode("")
+    setPhase("connecting")
+    setDnsManagementManual()
+      .then(() => {
+        if (!mountedRef.current) return
+        setPhase("grid")
+      })
+      .catch((e: unknown) => {
+        if (!mountedRef.current) return
+        setErrorCode(codeFromError(e))
+        setPhase("error")
+      })
+  }
+
+  const retry = () => {
+    if (isManual) runManual()
+    else runAuto(provider, secretRef.current)
+  }
 
   // Poll gridStatus() once immediately on entering grid, then every 5s.
   useEffect(() => {
-    if (phase !== 'grid') return
+    if (phase !== "grid") return
     const fetchGrid = () => {
       gridStatus()
         .then((res) => {
@@ -126,78 +182,164 @@ export function DnsStep({
   }, [phase])
 
   const recordStatusLabels = {
-    verified: t('wizard.recordStatus.verified'),
-    pending: t('wizard.recordStatus.pending'),
-    error: t('wizard.recordStatus.error'),
+    verified: t("wizard.recordStatus.verified"),
+    pending: t("wizard.recordStatus.pending"),
+    error: t("wizard.recordStatus.error"),
   }
-  const copyLabel = t('wizard.common.copy')
-  const copiedLabel = t('wizard.common.copied')
+  const copyLabel = t("wizard.common.copy")
+  const copiedLabel = t("wizard.common.copied")
 
   // Task badge derivation.
   const statuses = records.map((r) => r.status)
-  const allVerified = statuses.length > 0 && statuses.every((s) => s === 'verified')
-  const anyError = statuses.some((s) => s === 'error')
-  const anyPending = statuses.some((s) => s === 'pending')
+  const allVerified =
+    statuses.length > 0 && statuses.every((s) => s === "verified")
+  const anyError = statuses.some((s) => s === "error")
+  const anyPending = statuses.some((s) => s === "pending")
   const taskKey = allVerified
-    ? 'completed'
+    ? "completed"
     : anyError
-      ? 'partial'
+      ? "partial"
       : anyPending
-        ? 'inProgress'
-        : 'pending'
-  const taskInProgress = taskKey === 'inProgress'
+        ? "inProgress"
+        : "pending"
+  const taskInProgress = taskKey === "inProgress"
   const taskVariant =
-    taskKey === 'completed'
-      ? 'success'
-      : taskKey === 'partial'
-        ? 'destructive'
-        : 'pending'
+    taskKey === "completed"
+      ? "success"
+      : taskKey === "partial"
+        ? "destructive"
+        : "pending"
 
   const hasExternalA = records.some(
-    (r) => r.type === 'A' && isExternalHost(r.name.replace(/\.$/, ''), domain),
+    (r) => r.type === "A" && isExternalHost(r.name.replace(/\.$/, ""), domain)
   )
 
   const zoneText = zoneFileText(records)
 
+  // -------- form phase (provider + secret collection) --------
+  if (phase === "form") {
+    return (
+      <form
+        className="step-body"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void form.handleSubmit()
+        }}
+      >
+        <StepHeader
+          title={t("wizard.dns.title")}
+          sub={t("wizard.dns.subtitle")}
+        />
+
+        <form.Field
+          name="provider"
+          children={(field) => (
+            <Field
+              label={t("wizard.dns.provider")}
+              htmlFor={field.name}
+              error={
+                !field.state.meta.isValid ? t("wizard.dns.required") : undefined
+              }
+            >
+              <Combobox
+                id={field.name}
+                value={field.state.value}
+                invalid={!field.state.meta.isValid}
+                options={PROVIDER_OPTIONS}
+                stickyOption={{
+                  value: "Manual",
+                  label: t("wizard.dns.manual"),
+                  hint: t("wizard.dns.manualHint"),
+                }}
+                placeholder={t("wizard.dns.placeholder")}
+                searchPlaceholder={t("wizard.dns.search")}
+                emptyText={t("wizard.dns.empty")}
+                onChange={(v) => {
+                  field.handleChange(v as DnsProvider)
+                  form.setFieldValue("secret", "")
+                }}
+              />
+            </Field>
+          )}
+        />
+
+        <form.Subscribe
+          selector={(s) => s.values.provider}
+          children={(prov) =>
+            prov !== "Manual" ? (
+              <form.Field
+                name="secret"
+                children={(field) => (
+                  <Field
+                    label={t("wizard.dns.secret")}
+                    htmlFor={field.name}
+                    help={t("wizard.dns.secretHelp", { domain })}
+                    error={
+                      !field.state.meta.isValid
+                        ? t("wizard.dns.secretRequired")
+                        : undefined
+                    }
+                  >
+                    <TextInput
+                      id={field.name}
+                      type="password"
+                      mono
+                      value={field.state.value}
+                      invalid={!field.state.meta.isValid}
+                      onChange={(v) => field.handleChange(v)}
+                    />
+                  </Field>
+                )}
+              />
+            ) : (
+              <Alert variant="info">{t("wizard.dns.manualNote")}</Alert>
+            )
+          }
+        />
+
+        <StepNav
+          onNext={() => void form.handleSubmit()}
+          nextLabel={t("wizard.common.next")}
+          backLabel={t("wizard.common.back")}
+        />
+      </form>
+    )
+  }
+
   return (
     <div className="step-body step-body-wide">
       <StepHeader
-        title={t('wizard.dns.records.title')}
+        title={t("wizard.dns.records.title")}
         sub={
           isManual
-            ? t('wizard.dns.records.subManual')
-            : t('wizard.dns.records.subAuto', { provider })
+            ? t("wizard.dns.records.subManual")
+            : t("wizard.dns.records.subAuto", { provider })
         }
       />
 
-      {phase === 'connecting' ? (
+      {phase === "connecting" ? (
         <p className="inline-status">
           <Spinner size={14} />
-          {t('wizard.dns.records.connecting', { provider })}
+          {t("wizard.dns.records.connecting", { provider })}
         </p>
       ) : null}
 
-      {phase === 'publishing' ? (
+      {phase === "publishing" ? (
         <p className="inline-status">
           <Spinner size={14} />
-          {t('wizard.dns.records.publishing')}
+          {t("wizard.dns.records.publishing")}
         </p>
       ) : null}
 
-      {phase === 'error' ? (
-        <>
-          <Alert variant="destructive" title={t('wizard.error.title')}>
-            {errorMsg}
-          </Alert>
-          <StepNav
-            onNext={runAuto}
-            nextLabel={t('wizard.error.retry')}
-            backLabel={t('wizard.common.back')}
-          />
-        </>
+      {phase === "error" ? (
+        <SetupErrorBox
+          code={errorCode}
+          messageKey={messageKeyForCode(errorCode)}
+          onRetry={retry}
+        />
       ) : null}
 
-      {phase === 'grid' ? (
+      {phase === "grid" ? (
         <>
           {isManual ? (
             <div className="dns-manual">
@@ -212,26 +354,36 @@ export function DnsStep({
                           <tr className="dns-sect">
                             <td colSpan={3}>
                               <span className="dns-sect-line">
-                                <span className="rec-type-chip mono">{g.type}</span>
+                                <span className="rec-type-chip mono">
+                                  {g.type}
+                                </span>
                                 <span className="dns-sect-title">
-                                  {t('wizard.dns.records.groups.' + g.key + '.t')}
+                                  {t(
+                                    "wizard.dns.records.groups." + g.key + ".t"
+                                  )}
                                 </span>
                                 <span className="dns-sect-desc">
-                                  {t('wizard.dns.records.groups.' + g.key + '.d', {
-                                    host: hostname,
-                                    domain,
-                                  })}
+                                  {t(
+                                    "wizard.dns.records.groups." + g.key + ".d",
+                                    {
+                                      host: hostname,
+                                      domain,
+                                    }
+                                  )}
                                 </span>
                               </span>
                             </td>
                           </tr>
                           {recs.map((r, i) => {
                             const ext =
-                              r.type === 'A' && isExternalHost(r.name.replace(/\.$/, ''), domain)
+                              r.type === "A" &&
+                              isExternalHost(r.name.replace(/\.$/, ""), domain)
                             return (
                               <tr
-                                key={g.type + '-' + i}
-                                className={r.status === 'error' ? 'row-error' : ''}
+                                key={g.type + "-" + i}
+                                className={
+                                  r.status === "error" ? "row-error" : ""
+                                }
                               >
                                 <td className="rec-name-cell">
                                   <span className="cell-copy">
@@ -240,12 +392,15 @@ export function DnsStep({
                                       copyLabel={copyLabel}
                                       copiedLabel={copiedLabel}
                                     />
-                                    <span className="mono cell-text" title={r.name}>
+                                    <span
+                                      className="mono cell-text"
+                                      title={r.name}
+                                    >
                                       {r.name}
                                     </span>
                                     {ext ? (
                                       <span className="rec-tag">
-                                        {t('wizard.dns.records.extTag')}
+                                        {t("wizard.dns.records.extTag")}
                                       </span>
                                     ) : null}
                                   </span>
@@ -257,14 +412,17 @@ export function DnsStep({
                                       copyLabel={copyLabel}
                                       copiedLabel={copiedLabel}
                                     />
-                                    <span className="mono cell-text" title={r.value}>
+                                    <span
+                                      className="mono cell-text"
+                                      title={r.value}
+                                    >
                                       {r.value}
                                     </span>
                                   </span>
                                 </td>
                                 <td
                                   className="rec-status-cell"
-                                  style={{ textAlign: 'right' }}
+                                  style={{ textAlign: "right" }}
                                 >
                                   <StatusBadge
                                     status={r.status}
@@ -282,7 +440,7 @@ export function DnsStep({
               </div>
               <div className="zonefile-head">
                 <span className="help" style={{ margin: 0 }}>
-                  {t('wizard.dns.records.zoneFull')}
+                  {t("wizard.dns.records.zoneFull")}
                 </span>
                 <div className="zonefile-actions">
                   <CopyButton
@@ -292,9 +450,9 @@ export function DnsStep({
                     small
                   />
                   <DownloadButton
-                    content={zoneText + '\n'}
+                    content={zoneText + "\n"}
                     filename={`${domain}.zone.txt`}
-                    label={t('wizard.dns.records.downloadTxt')}
+                    label={t("wizard.dns.records.downloadTxt")}
                   />
                 </div>
               </div>
@@ -304,22 +462,23 @@ export function DnsStep({
               <table className="dns-table">
                 <thead>
                   <tr>
-                    <th>{t('wizard.dns.records.type')}</th>
-                    <th>{t('wizard.dns.records.name')}</th>
-                    <th>{t('wizard.dns.records.value')}</th>
-                    <th style={{ textAlign: 'right' }}>
-                      {t('wizard.dns.records.status')}
+                    <th>{t("wizard.dns.records.type")}</th>
+                    <th>{t("wizard.dns.records.name")}</th>
+                    <th>{t("wizard.dns.records.value")}</th>
+                    <th style={{ textAlign: "right" }}>
+                      {t("wizard.dns.records.status")}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {records.map((r, i) => {
                     const ext =
-                      r.type === 'A' && isExternalHost(r.name.replace(/\.$/, ''), domain)
+                      r.type === "A" &&
+                      isExternalHost(r.name.replace(/\.$/, ""), domain)
                     return (
                       <tr
-                        key={r.type + '-' + i}
-                        className={r.status === 'error' ? 'row-error' : ''}
+                        key={r.type + "-" + i}
+                        className={r.status === "error" ? "row-error" : ""}
                       >
                         <td>
                           <span className="rec-type mono">{r.type}</span>
@@ -328,14 +487,14 @@ export function DnsStep({
                           {r.name}
                           {ext ? (
                             <span className="rec-tag">
-                              {t('wizard.dns.records.extTag')}
+                              {t("wizard.dns.records.extTag")}
                             </span>
                           ) : null}
                         </td>
                         <td className="mono rec-value" title={r.value}>
                           {r.value}
                         </td>
-                        <td style={{ textAlign: 'right' }}>
+                        <td style={{ textAlign: "right" }}>
                           <StatusBadge
                             status={r.status}
                             labels={recordStatusLabels}
@@ -350,8 +509,8 @@ export function DnsStep({
           )}
 
           {!isManual && hasExternalA ? (
-            <Alert variant="warning" title={'A · ' + hostname}>
-              {t('wizard.dns.records.extNote', {
+            <Alert variant="warning" title={"A · " + hostname}>
+              {t("wizard.dns.records.extNote", {
                 zone: hostZone(hostname),
                 domain,
                 provider,
@@ -360,26 +519,26 @@ export function DnsStep({
           ) : null}
 
           <div className="task-line">
-            <span className="task-label">{t('wizard.dns.records.task')}</span>
+            <span className="task-label">{t("wizard.dns.records.task")}</span>
             <Badge variant={taskVariant} pulse={taskInProgress}>
-              {t('wizard.taskStatus.' + taskKey)}
+              {t("wizard.taskStatus." + taskKey)}
             </Badge>
           </div>
 
           <p
             className="help"
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
             {allVerified ? <IconCheck size={14} /> : <IconInfo size={14} />}
             {allVerified
-              ? t('wizard.dns.records.allOk')
-              : t('wizard.dns.records.background')}
+              ? t("wizard.dns.records.allOk")
+              : t("wizard.dns.records.background")}
           </p>
 
           <StepNav
-            onNext={onNext}
-            nextLabel={t('wizard.common.next')}
-            backLabel={t('wizard.common.back')}
+            onNext={() => onNext(isManual)}
+            nextLabel={t("wizard.common.next")}
+            backLabel={t("wizard.common.back")}
           />
         </>
       ) : null}

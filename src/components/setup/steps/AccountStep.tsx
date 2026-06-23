@@ -1,105 +1,192 @@
-// Stalmail wizard — step 6: admin account creation (monitoring phase).
-// Ports the design prototype StepAccount
-// (docs/design/wizard-handoff/project/wizard/steps-monitor.jsx), replacing the
-// timer simulation with the real createAccount server-function call.
-import { useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { CreateAccountResult } from '@/server/setup-actions'
-import { scorePassword } from '../password-strength'
-import { Alert, Field, PasswordInput, Spinner, StepHeader, StepNav } from '../ui/primitives'
-import { StrengthMeter } from '../ui/StrengthMeter'
-import { IconCheck } from '../ui/icons'
+// Stalmail wizard — admin account step: collect name+password (merged from the
+// former AdminAccountStep) then execute createAccount. The weak-password retry
+// loop ({status:'weak'}) is kept distinct from SetupErrorBox (server rejections).
+import { useState } from "react"
+import { useForm } from "@tanstack/react-form"
+import { useTranslation } from "react-i18next"
+import type { CreateAccountResult } from "@/server/setup-actions"
+import type { AdminAccountValues } from "../schemas"
+import { adminAccountSchema } from "../schemas"
+import { scorePassword } from "../password-strength"
+import {
+  Alert,
+  Field,
+  PasswordInput,
+  Spinner,
+  StepHeader,
+  StepNav,
+  TextInput,
+} from "../ui/primitives"
+import { StrengthMeter } from "../ui/StrengthMeter"
+import { SetupErrorBox } from "../ui/SetupErrorBox"
+import { IconCheck } from "../ui/icons"
+import { codeFromError, messageKeyForCode } from "../error-code"
 
-type Phase = 'creating' | 'weak' | 'retrying' | 'done' | 'error'
+type Phase = "form" | "creating" | "weak" | "done" | "error"
 
 interface Props {
-  name: string
-  password: string
   domain: string
-  createAccount: (input: { name: string; password: string }) => Promise<CreateAccountResult>
-  onPasswordChange: (pw: string) => void
+  createAccount: (input: {
+    name: string
+    password: string
+  }) => Promise<CreateAccountResult>
   onNext: () => void
 }
 
-export function AccountStep({
-  name,
-  password,
-  domain,
-  createAccount,
-  onPasswordChange,
-  onNext,
-}: Props) {
+export function AccountStep({ domain, createAccount, onNext }: Props) {
   const { t } = useTranslation()
-  const [phase, setPhase] = useState<Phase>('creating')
-  const [newPass, setNewPass] = useState('')
-  const [touched, setTouched] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
-  const ranRef = useRef(false)
-  const email = `${name}@${domain}`
+  const [phase, setPhase] = useState<Phase>("form")
+  const [name, setName] = useState("")
+  const [errorCode, setErrorCode] = useState("")
 
-  // Initial create — runs once on mount and is reused by the error-retry button.
-  const runCreate = () => {
-    setPhase('creating')
-    setErrorMsg('')
-    createAccount({ name, password })
+  const email = `${name || "marie"}@${domain}`
+
+  const form = useForm({
+    defaultValues: { name: "", password: "" },
+    validators: { onSubmit: adminAccountSchema },
+    onSubmit: ({ value }: { value: AdminAccountValues }) => {
+      setName(value.name)
+      run(value.name, value.password)
+    },
+  })
+
+  // Execute createAccount. weak → weak retry loop ; server rejection → SetupErrorBox.
+  const run = (n: string, password: string) => {
+    setPhase("creating")
+    setErrorCode("")
+    createAccount({ name: n, password })
       .then((result) => {
-        setPhase(result.status === 'ok' ? 'done' : 'weak')
+        setPhase(result.status === "ok" ? "done" : "weak")
       })
       .catch((e: unknown) => {
-        setErrorMsg(e instanceof Error ? e.message : String(e))
-        setPhase('error')
+        setErrorCode(codeFromError(e))
+        setPhase("error")
       })
   }
 
-  useEffect(() => {
-    if (ranRef.current) return
-    ranRef.current = true
-    runCreate()
-    // Run-once mount effect; runCreate uses stable props/setters only.
-  }, [])
-
+  // -------- weak-password retry (distinct from SetupErrorBox) --------
+  const [newPass, setNewPass] = useState("")
+  const [touched, setTouched] = useState(false)
   const doRetry = () => {
     setTouched(true)
-    if (newPass.length < 8 || newPass === password) return
-    setPhase('retrying')
-    setErrorMsg('')
-    createAccount({ name, password: newPass })
-      .then((result) => {
-        if (result.status === 'ok') {
-          onPasswordChange(newPass)
-          setPhase('done')
-        } else {
-          setPhase('weak')
-        }
-      })
-      .catch((e: unknown) => {
-        setErrorMsg(e instanceof Error ? e.message : String(e))
-        setPhase('error')
-      })
+    if (newPass.length < 8) return
+    run(name, newPass)
+  }
+
+  if (phase === "form") {
+    return (
+      <form
+        className="step-body"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void form.handleSubmit()
+        }}
+      >
+        <StepHeader
+          title={t("wizard.account.title")}
+          sub={t("wizard.account.subtitle")}
+        />
+        <form.Field
+          name="name"
+          children={(field) => {
+            const firstError = (
+              field.state.meta.errors[0] as { message?: string } | undefined
+            )?.message
+            const nameError = field.state.meta.isValid
+              ? undefined
+              : firstError === "reserved-admin"
+                ? t("wizard.account.reservedName")
+                : t("wizard.account.invalidName")
+            return (
+              <Field
+                label={t("wizard.account.name")}
+                htmlFor={field.name}
+                help={t("wizard.account.email", {
+                  email: `${field.state.value.trim() || "marie"}@${domain}`,
+                })}
+                error={nameError}
+              >
+                <TextInput
+                  id={field.name}
+                  value={field.state.value}
+                  mono
+                  autoFocus
+                  placeholder={t("wizard.account.namePlaceholder")}
+                  invalid={!field.state.meta.isValid}
+                  onChange={(v) => field.handleChange(v)}
+                  onEnter={() => void form.handleSubmit()}
+                />
+              </Field>
+            )
+          }}
+        />
+        <form.Field
+          name="password"
+          children={(field) => (
+            <>
+              <Field
+                label={t("wizard.account.password")}
+                htmlFor={field.name}
+                help={t("wizard.account.passwordHelp")}
+                error={
+                  !field.state.meta.isValid
+                    ? t("wizard.account.invalidPassword")
+                    : undefined
+                }
+              >
+                <PasswordInput
+                  id={field.name}
+                  value={field.state.value}
+                  invalid={!field.state.meta.isValid}
+                  showLabel={t("wizard.account.show")}
+                  hideLabel={t("wizard.account.hide")}
+                  onChange={(v) => field.handleChange(v)}
+                  onEnter={() => void form.handleSubmit()}
+                />
+              </Field>
+              <StrengthMeter
+                password={field.state.value}
+                label={t(
+                  `wizard.account.strength.${scorePassword(field.state.value)}`
+                )}
+              />
+            </>
+          )}
+        />
+        <StepNav
+          onNext={() => void form.handleSubmit()}
+          nextLabel={t("wizard.common.next")}
+          backLabel={t("wizard.common.back")}
+        />
+      </form>
+    )
   }
 
   return (
     <div className="step-body">
-      <StepHeader title={t('wizard.account.title')} />
+      <StepHeader title={t("wizard.account.title")} />
 
-      {phase === 'creating' || phase === 'retrying' ? (
+      {phase === "creating" ? (
         <p className="inline-status">
           <Spinner size={14} />
-          {t('wizard.account.monitor.creating', { email })}
+          {t("wizard.account.monitor.creating", { email })}
         </p>
       ) : null}
 
-      {phase === 'weak' ? (
+      {phase === "weak" ? (
         <>
-          <Alert variant="destructive" title={t('wizard.account.monitor.weakTitle')}>
-            {t('wizard.account.monitor.weak')}
+          <Alert
+            variant="destructive"
+            title={t("wizard.account.monitor.weakTitle")}
+          >
+            {t("wizard.account.monitor.weak")}
           </Alert>
           <Field
-            label={t('wizard.account.monitor.newPassword')}
+            label={t("wizard.account.monitor.newPassword")}
             htmlFor="f-newpass"
             error={
               touched && newPass.length < 8
-                ? t('wizard.account.invalidPassword')
+                ? t("wizard.account.invalidPassword")
                 : undefined
             }
           >
@@ -107,8 +194,8 @@ export function AccountStep({
               id="f-newpass"
               value={newPass}
               invalid={touched && newPass.length < 8}
-              showLabel={t('wizard.account.show')}
-              hideLabel={t('wizard.account.hide')}
+              showLabel={t("wizard.account.show")}
+              hideLabel={t("wizard.account.hide")}
               onChange={setNewPass}
               onEnter={doRetry}
             />
@@ -119,35 +206,30 @@ export function AccountStep({
           />
           <StepNav
             onNext={doRetry}
-            nextLabel={t('wizard.account.monitor.retry')}
-            backLabel={t('wizard.common.back')}
+            nextLabel={t("wizard.account.monitor.retry")}
+            backLabel={t("wizard.common.back")}
           />
         </>
       ) : null}
 
-      {phase === 'error' ? (
-        <>
-          <Alert variant="destructive" title={t('wizard.error.title')}>
-            {errorMsg}
-          </Alert>
-          <StepNav
-            onNext={runCreate}
-            nextLabel={t('wizard.error.retry')}
-            backLabel={t('wizard.common.back')}
-          />
-        </>
+      {phase === "error" ? (
+        <SetupErrorBox
+          code={errorCode}
+          messageKey={messageKeyForCode(errorCode)}
+          onRetry={() => setPhase("form")}
+        />
       ) : null}
 
-      {phase === 'done' ? (
+      {phase === "done" ? (
         <>
           <p className="inline-status inline-status-ok">
             <IconCheck size={15} />
-            {t('wizard.account.monitor.done', { email })}
+            {t("wizard.account.monitor.done", { email })}
           </p>
           <StepNav
             onNext={onNext}
-            nextLabel={t('wizard.common.next')}
-            backLabel={t('wizard.common.back')}
+            nextLabel={t("wizard.common.next")}
+            backLabel={t("wizard.common.back")}
           />
         </>
       ) : null}

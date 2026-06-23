@@ -1,44 +1,52 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
+import { createFileRoute, redirect } from "@tanstack/react-router"
+import { useTranslation } from "react-i18next"
 import {
   getStep,
   submitBootstrapFn,
   createAdminAccountFn,
   createDnsServerFn,
   setDnsManagementFn,
+  setDnsManagementManualFn,
   dnsGridStatusFn,
   configureAcmeFn,
   acmeStatusFn,
   finishSetupFn,
   setupStatusFn,
-} from '@/server/setup-actions'
-import { getServerTheme } from '@/server/setup-theme'
-import { SetupWizard } from '@/components/setup/SetupWizard'
+} from "@/server/setup-actions"
+import { getServerTheme } from "@/server/setup-theme"
+import { SetupWizard } from "@/components/setup/SetupWizard"
 
-export const Route = createFileRoute('/setup/')({
+export const Route = createFileRoute("/setup/")({
   beforeLoad: async () => {
     const { configured } = await setupStatusFn()
-    if (configured) throw redirect({ to: '/login' })
+    if (configured) throw redirect({ to: "/login" })
   },
   loader: async () => {
-    const [{ step }, { theme }] = await Promise.all([getStep(), getServerTheme()])
-    return { step, theme }
+    const [{ step, dnsManual }, { theme }] = await Promise.all([
+      getStep(),
+      getServerTheme(),
+    ])
+    return { step, dnsManual, theme }
   },
   component: SetupPage,
   errorComponent: SetupError,
 })
 
 function SetupPage() {
-  const { step, theme } = Route.useLoaderData()
+  const { step, dnsManual, theme } = Route.useLoaderData()
   return (
     <SetupWizard
       initialStep={step}
+      initialDnsManual={dnsManual}
       initialTheme={theme}
-      submitBootstrap={(data) => submitBootstrapFn({ data }).then(() => undefined)}
+      submitBootstrap={(data) =>
+        submitBootstrapFn({ data }).then(() => undefined)
+      }
       pollStep={() => getStep()}
       createAccount={(input) => createAdminAccountFn({ data: input })}
       createDnsServer={(input) => createDnsServerFn({ data: input })}
       setDnsManagement={(input) => setDnsManagementFn({ data: input })}
+      setDnsManagementManual={() => setDnsManagementManualFn()}
       gridStatus={() => dnsGridStatusFn()}
       configureAcme={(input) => configureAcmeFn({ data: input })}
       acmeStatus={() => acmeStatusFn()}
@@ -52,9 +60,14 @@ function SetupError() {
   return (
     <main className="flex min-h-svh items-center justify-center px-4">
       <div role="alert" className="text-center">
-        <p className="text-destructive font-medium">{t('wizard.error.title')}</p>
-        <button className="mt-4 underline" onClick={() => window.location.reload()}>
-          {t('wizard.error.retry')}
+        <p className="font-medium text-destructive">
+          {t("wizard.error.title")}
+        </p>
+        <button
+          className="mt-4 underline"
+          onClick={() => window.location.reload()}
+        >
+          {t("wizard.error.retry")}
         </button>
       </div>
     </main>

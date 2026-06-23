@@ -9,7 +9,7 @@ const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n("fr")}>{ui}</I18nextProvider>)
 
 describe("SslStep", () => {
-  it("configuring → monitor: renders the recap, reports pending status, and Continue advances", async () => {
+  it("auto: configuring → monitor recap, reports pending, Continue advances", async () => {
     const configureAcme = vi.fn(() => Promise.resolve({ ok: true as const }))
     const acmeStatus = vi.fn(
       (): Promise<{ status: AcmeStatus }> =>
@@ -22,6 +22,7 @@ describe("SslStep", () => {
       <SslStep
         hostname="mail.exemple.fr"
         contactEmail="admin@exemple.fr"
+        dnsManual={false}
         configureAcme={configureAcme}
         acmeStatus={acmeStatus}
         onStatusChange={onStatusChange}
@@ -29,69 +30,72 @@ describe("SslStep", () => {
       />
     )
 
-    // The monitor recap renders once configureAcme resolves.
     expect(
       await screen.findByText("Let's Encrypt · DNS-01")
     ).toBeInTheDocument()
-    expect(screen.getByText("admin@exemple.fr")).toBeInTheDocument()
-    expect(screen.getByText("mail.exemple.fr")).toBeInTheDocument()
-
-    // Non-blocking note shows while not valid.
     expect(screen.getByText(/Vous pouvez continuer/)).toBeInTheDocument()
-
     await waitFor(() => expect(onStatusChange).toHaveBeenCalledWith("pending"))
     expect(configureAcme).toHaveBeenCalledWith({
       hostname: "mail.exemple.fr",
       contactEmail: "admin@exemple.fr",
     })
 
-    // Continue advances (always enabled — non-blocking).
     fireEvent.click(screen.getByRole("button", { name: /Continuer/ }))
     expect(onNext).toHaveBeenCalled()
   })
 
-  it("status failed: renders the failed hint Alert", async () => {
+  it("manual: skips configureAcme, shows informative note, Continue advances", async () => {
     const configureAcme = vi.fn(() => Promise.resolve({ ok: true as const }))
-    const acmeStatus = vi.fn(
-      (): Promise<{ status: AcmeStatus }> =>
-        Promise.resolve({ status: "failed" })
-    )
+    const onNext = vi.fn()
 
     wrap(
       <SslStep
         hostname="mail.exemple.fr"
         contactEmail="admin@exemple.fr"
+        dnsManual={true}
         configureAcme={configureAcme}
-        acmeStatus={acmeStatus}
+        acmeStatus={vi.fn(
+          (): Promise<{ status: AcmeStatus }> =>
+            Promise.resolve({ status: "pending" })
+        )}
         onStatusChange={vi.fn()}
-        onNext={vi.fn()}
+        onNext={onNext}
       />
     )
 
     expect(
-      await screen.findByText(/Le défi DNS-01 requiert un fournisseur DNS/)
+      await screen.findByText("Certificat à gérer manuellement")
     ).toBeInTheDocument()
+    expect(configureAcme).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole("button", { name: /Continuer/ }))
+    expect(onNext).toHaveBeenCalled()
   })
 
-  it("configure rejection: shows an error Alert + Retry", async () => {
-    const configureAcme = vi.fn(() => Promise.reject(new Error("boom")))
-    const acmeStatus = vi.fn(
-      (): Promise<{ status: AcmeStatus }> =>
-        Promise.resolve({ status: "pending" })
+  it("auto: configureAcme rejection shows a SetupErrorBox with the SSL code", async () => {
+    const configureAcme = vi.fn(() =>
+      Promise.reject(new Error("SETUP-SSL-REJECTED"))
     )
 
     wrap(
       <SslStep
         hostname="mail.exemple.fr"
         contactEmail="admin@exemple.fr"
+        dnsManual={false}
         configureAcme={configureAcme}
-        acmeStatus={acmeStatus}
+        acmeStatus={vi.fn(
+          (): Promise<{ status: AcmeStatus }> =>
+            Promise.resolve({ status: "pending" })
+        )}
         onStatusChange={vi.fn()}
         onNext={vi.fn()}
       />
     )
 
-    expect(await screen.findByText("boom")).toBeInTheDocument()
+    expect(await screen.findByText("SETUP-SSL-REJECTED")).toBeInTheDocument()
+    expect(
+      screen.getByText("L'obtention du certificat SSL a échoué.")
+    ).toBeInTheDocument()
     expect(screen.getByText("Réessayer")).toBeInTheDocument()
   })
 })
