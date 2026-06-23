@@ -56,6 +56,15 @@ function isSslConfigured(domain: StalwartDomain | null): boolean {
   )
 }
 
+// DNS was configured via the Manual path when the marker is set AND dnsManagement
+// is not Automatic (i.e. the operator confirmed DNS manually instead of delegating
+// to Stalwart).
+export async function isDnsManual(): Promise<boolean> {
+  if (!isDnsConfigured()) return false
+  const domain = await getPrimaryDomain()
+  return domain?.dnsManagement?.["@type"] !== "Automatic"
+}
+
 export async function deriveSetupStep(): Promise<SetupStep> {
   if (isSetupComplete()) return "done"
   if (await isBootstrapMode()) return "collect"

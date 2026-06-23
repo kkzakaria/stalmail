@@ -13,9 +13,15 @@ import { domainSchema } from "@/components/setup/schemas"
 // code (Vite externalizes them → runtime error on access). The handler bodies are
 // stripped from the client build, keeping the dynamic imports server-only.
 
-export async function getStepHandler(): Promise<{ step: string }> {
-  const { deriveSetupStep } = await import("./setup-state")
-  return { step: await deriveSetupStep() }
+export async function getStepHandler(): Promise<{
+  step: string
+  dnsManual: boolean
+}> {
+  const { deriveSetupStep, isDnsManual } = await import("./setup-state")
+  return {
+    step: await deriveSetupStep(),
+    dnsManual: await isDnsManual(),
+  }
 }
 
 export async function submitBootstrapHandler({

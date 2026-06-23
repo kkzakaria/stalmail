@@ -32,6 +32,7 @@ vi.mock("@tanstack/react-start", () => ({
 }))
 vi.mock("./setup-state", () => ({
   deriveSetupStep: vi.fn(async () => "collect"),
+  isDnsManual: vi.fn(async () => false),
 }))
 vi.mock("./stalwart-bootstrap", () => ({
   submitBootstrap: vi.fn(async () => ({
@@ -111,8 +112,17 @@ import { SetupError } from "./setup-errors"
 beforeEach(() => vi.clearAllMocks())
 
 describe("getStepHandler", () => {
-  it("returns the derived step", async () => {
-    expect(await getStepHandler()).toEqual({ step: "collect" })
+  it("returns the derived step with dnsManual false by default", async () => {
+    expect(await getStepHandler()).toEqual({
+      step: "collect",
+      dnsManual: false,
+    })
+  })
+
+  it("returns dnsManual true when isDnsManual resolves true", async () => {
+    const { isDnsManual } = await import("./setup-state")
+    vi.mocked(isDnsManual).mockResolvedValueOnce(true)
+    expect(await getStepHandler()).toEqual({ step: "collect", dnsManual: true })
   })
 })
 

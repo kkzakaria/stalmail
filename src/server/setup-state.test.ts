@@ -22,7 +22,7 @@ import { getPrimaryDomain } from "./stalwart-domain"
 // eslint-disable-next-line import/first
 import { jmapCall } from "./jmap"
 // eslint-disable-next-line import/first
-import { deriveSetupStep } from "./setup-state"
+import { deriveSetupStep, isDnsManual } from "./setup-state"
 
 const flag = vi.mocked(isSetupComplete)
 const dnsFlag = vi.mocked(isDnsConfigured)
@@ -165,5 +165,43 @@ describe("deriveSetupStep — nouvel ordre collect → dns → ssl → account �
       ["error", { type: "serverFail" }, "1"],
     ])
     await expect(deriveSetupStep()).rejects.toThrow()
+  })
+})
+
+describe("isDnsManual", () => {
+  it("returns true when marker is set and dnsManagement is not Automatic (Manual)", async () => {
+    dnsFlag.mockReturnValue(true)
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Manual" },
+    })
+    expect(await isDnsManual()).toBe(true)
+  })
+
+  it("returns false when marker is set but dnsManagement is Automatic (auto path)", async () => {
+    dnsFlag.mockReturnValue(true)
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Automatic" },
+    })
+    expect(await isDnsManual()).toBe(false)
+  })
+
+  it("returns false when marker is not set (DNS step not completed)", async () => {
+    dnsFlag.mockReturnValue(false)
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Manual" },
+    })
+    expect(await isDnsManual()).toBe(false)
+  })
+
+  it("returns false when marker is not set and domain is null", async () => {
+    dnsFlag.mockReturnValue(false)
+    dom.mockResolvedValue(null)
+    expect(await isDnsManual()).toBe(false)
   })
 })
