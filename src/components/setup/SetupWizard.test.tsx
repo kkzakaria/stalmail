@@ -113,6 +113,33 @@ describe("SetupWizard", () => {
     expect(await screen.findByText("Certificat SSL")).toBeInTheDocument()
   })
 
+  it("re-poll failure: surfaces a retryable error and recovers on retry", async () => {
+    const poll = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ step: "ssl", dnsManual: false })
+    wrap(
+      <SetupWizard
+        initialStep="dns"
+        initialTheme="light"
+        submitBootstrap={vi.fn()}
+        pollStep={poll}
+        {...serverProps()}
+      />
+    )
+    // Manual default → submit, grid, then advance triggers the failing re-poll.
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+    await screen.findByRole("button", { name: "Continuer" })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+
+    // Error box appears (no crash, no unhandled rejection), wizard stays put.
+    expect(await screen.findByText("SETUP-UNKNOWN")).toBeInTheDocument()
+
+    // Retry → second poll resolves → advances to SSL.
+    fireEvent.click(screen.getByRole("button", { name: "Réessayer" }))
+    expect(await screen.findByText("Certificat SSL")).toBeInTheDocument()
+  })
+
   it("resume on ssl with dnsManual: shows the manual note, calls acknowledgeManualSsl then advances to account", async () => {
     const poll = vi
       .fn()

@@ -45,13 +45,16 @@ describe("markSetupComplete", () => {
 
   it("respects STALMAIL_RUN_DIR env variable for the path", () => {
     process.env.STALMAIL_RUN_DIR = "/custom/run"
-    markSetupComplete()
-    expect(writeFileSync).toHaveBeenCalledWith(
-      "/custom/run/.stalmail-configured",
-      expect.any(String),
-      "utf-8"
-    )
-    delete process.env.STALMAIL_RUN_DIR
+    try {
+      markSetupComplete()
+      expect(writeFileSync).toHaveBeenCalledWith(
+        "/custom/run/.stalmail-configured",
+        expect.any(String),
+        "utf-8"
+      )
+    } finally {
+      delete process.env.STALMAIL_RUN_DIR
+    }
   })
 })
 
@@ -83,13 +86,16 @@ describe("markDnsConfigured", () => {
 
   it("respects STALMAIL_RUN_DIR env variable for the DNS path", () => {
     process.env.STALMAIL_RUN_DIR = "/custom/run"
-    markDnsConfigured()
-    expect(writeFileSync).toHaveBeenCalledWith(
-      "/custom/run/.stalmail-dns-configured",
-      expect.any(String),
-      "utf-8"
-    )
-    delete process.env.STALMAIL_RUN_DIR
+    try {
+      markDnsConfigured()
+      expect(writeFileSync).toHaveBeenCalledWith(
+        "/custom/run/.stalmail-dns-configured",
+        expect.any(String),
+        "utf-8"
+      )
+    } finally {
+      delete process.env.STALMAIL_RUN_DIR
+    }
   })
 })
 
@@ -121,12 +127,15 @@ describe("markSslAcknowledged", () => {
 
   it("respects STALMAIL_RUN_DIR env variable for the SSL path", () => {
     process.env.STALMAIL_RUN_DIR = "/custom/run"
-    markSslAcknowledged()
-    expect(writeFileSync).toHaveBeenCalledWith(
-      "/custom/run/.stalmail-ssl-configured",
-      expect.any(String),
-      "utf-8"
-    )
-    delete process.env.STALMAIL_RUN_DIR
+    try {
+      markSslAcknowledged()
+      expect(writeFileSync).toHaveBeenCalledWith(
+        "/custom/run/.stalmail-ssl-configured",
+        expect.any(String),
+        "utf-8"
+      )
+    } finally {
+      delete process.env.STALMAIL_RUN_DIR
+    }
   })
 })

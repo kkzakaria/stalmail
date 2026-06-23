@@ -11,6 +11,8 @@ import { DnsStep } from "./steps/DnsStep"
 import { SslStep } from "./steps/SslStep"
 import { DoneStep } from "./steps/DoneStep"
 import { RestartScreen } from "./RestartScreen"
+import { SetupErrorBox } from "./ui/SetupErrorBox"
+import { codeFromError, messageKeyForCode } from "./error-code"
 import type { DomainValues } from "./schemas"
 import type { Theme } from "@/server/setup-theme"
 import type { CreateAccountResult, DnsGridRecord } from "@/server/setup-actions"
@@ -94,14 +96,22 @@ export function SetupWizard({
     adminEmail: string
   }>({ serverHostname: "", defaultDomain: "", adminEmail: "" })
   const [sslStatus, setSslStatus] = useState<AcmeStatus>("pending")
+  // Set when a re-derivation (pollStep) fails so the wizard surfaces a retryable
+  // error instead of silently going stale / emitting an unhandled rejection.
+  const [pollError, setPollError] = useState<string | null>(null)
 
   // Re-derive the server step after each step completes, then advance.
   const refetchStep = () => {
-    void pollStep().then(({ step, dnsManual: manual }) => {
-      setServerStep(step as ServerStep)
-      setDnsManual(manual)
-      setPhase("server")
-    })
+    setPollError(null)
+    pollStep()
+      .then(({ step, dnsManual: manual }) => {
+        setServerStep(step as ServerStep)
+        setDnsManual(manual)
+        setPhase("server")
+      })
+      .catch((e: unknown) => {
+        setPollError(codeFromError(e))
+      })
   }
 
   const steps = [
@@ -123,7 +133,15 @@ export function SetupWizard({
           : STEP_DOT[serverStep]
 
   let content: React.ReactNode
-  if (phase === "welcome") {
+  if (pollError) {
+    content = (
+      <SetupErrorBox
+        code={pollError}
+        messageKey={messageKeyForCode(pollError)}
+        onRetry={refetchStep}
+      />
+    )
+  } else if (phase === "welcome") {
     content = <WelcomeStep onNext={() => setPhase("domain")} />
   } else if (phase === "domain") {
     content = (

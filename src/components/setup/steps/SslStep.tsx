@@ -77,6 +77,29 @@ export function SslStep({
       })
   }
 
+  // Manual DNS: write the SSL acknowledgment marker, then advance. Re-runnable on retry.
+  const acknowledgeManual = () => {
+    acknowledgeManualSsl()
+      .then(() => onNext())
+      .catch((e: unknown) => {
+        if (!mountedRef.current) return
+        setErrorCode(codeFromError(e) || "SETUP-SSL-REJECTED")
+        setPhase("error")
+      })
+  }
+
+  // Retry the action for the CURRENT mode: manual ack in manual DNS mode, the
+  // ACME auto path otherwise. (A manual failure must not jump to configureAcme.)
+  const retry = () => {
+    if (dnsManual) {
+      setErrorCode("")
+      setPhase("manual")
+      acknowledgeManual()
+    } else {
+      run()
+    }
+  }
+
   useEffect(() => {
     if (ranRef.current) return
     ranRef.current = true
@@ -135,14 +158,7 @@ export function SslStep({
             {t("wizard.ssl.manualNote")}
           </Alert>
           <StepNav
-            onNext={() => {
-              acknowledgeManualSsl()
-                .then(() => onNext())
-                .catch((e: unknown) => {
-                  setErrorCode(codeFromError(e) || "SETUP-SSL-REJECTED")
-                  setPhase("error")
-                })
-            }}
+            onNext={acknowledgeManual}
             nextLabel={t("wizard.common.next")}
             backLabel={t("wizard.common.back")}
           />
@@ -153,7 +169,7 @@ export function SslStep({
         <SetupErrorBox
           code={errorCode}
           messageKey={messageKeyForCode(errorCode)}
-          onRetry={run}
+          onRetry={retry}
         />
       ) : null}
 

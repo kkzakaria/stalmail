@@ -108,6 +108,41 @@ describe("SslStep", () => {
     expect(onNext).not.toHaveBeenCalled()
   })
 
+  it("manual: retry re-invokes acknowledgeManualSsl (not the auto path) and stays on the step", async () => {
+    const configureAcme = vi.fn(() => Promise.resolve({ ok: true as const }))
+    const acknowledgeManualSsl = vi.fn(() =>
+      Promise.reject(new Error("SETUP-SSL-REJECTED"))
+    )
+    const onNext = vi.fn()
+
+    wrap(
+      <SslStep
+        hostname="mail.exemple.fr"
+        contactEmail="admin@exemple.fr"
+        dnsManual={true}
+        configureAcme={configureAcme}
+        acmeStatus={vi.fn(
+          (): Promise<{ status: AcmeStatus }> =>
+            Promise.resolve({ status: "pending" })
+        )}
+        onStatusChange={vi.fn()}
+        acknowledgeManualSsl={acknowledgeManualSsl}
+        onNext={onNext}
+      />
+    )
+
+    await screen.findByText("Certificat à gérer manuellement")
+    fireEvent.click(screen.getByRole("button", { name: /Continuer/ }))
+    await screen.findByText("SETUP-SSL-REJECTED")
+    expect(acknowledgeManualSsl).toHaveBeenCalledTimes(1)
+
+    // Retry must re-run the manual ack — NOT configureAcme (auto path).
+    fireEvent.click(screen.getByRole("button", { name: "Réessayer" }))
+    await waitFor(() => expect(acknowledgeManualSsl).toHaveBeenCalledTimes(2))
+    expect(configureAcme).not.toHaveBeenCalled()
+    expect(onNext).not.toHaveBeenCalled()
+  })
+
   it("auto: configureAcme rejection shows a SetupErrorBox with the SSL code", async () => {
     const configureAcme = vi.fn(() =>
       Promise.reject(new Error("SETUP-SSL-REJECTED"))
