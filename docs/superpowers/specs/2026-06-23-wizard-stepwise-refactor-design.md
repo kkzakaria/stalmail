@@ -63,10 +63,12 @@ Changements vs aujourd'hui :
 ```
 done      si isSetupComplete()
 collect   si isBootstrapMode()          // Welcome + Domaine (sous-état client pré-bootstrap)
-dns       si gestion DNS du domaine non configurée   // AVANT compte
+dns       si dnsManagement != Automatic ET pas de marqueur `dnsConfigured`   // AVANT compte
 account   si pas de compte utilisateur admin
 ssl       sinon
 ```
+
+Signal « étape DNS franchie » = `dnsManagement['@type'] === 'Automatic'` (chemin auto) **ou** marqueur `dnsConfigured` présent (chemin Manuel, cf. §6).
 
 - **Marche avant** : une étape exécutée fait avancer la précondition serveur ; on ne revient pas dessus. Le `StepperH` n'expose pas de navigation arrière vers une étape franchie.
 - **Ré-exécution idempotente** : si une étape est ré-affichée (rechargement, retry après erreur), elle ré-exécute proprement sans dupliquer :
@@ -76,13 +78,21 @@ ssl       sinon
 
 ## 6. Mode DNS « Manuel »
 
-En mode Manuel, pas de DnsServer ni de gestion `Automatic` → la dérivation serveur ne peut pas, en l'état, signaler « étape DNS franchie ». La spec impose donc de **persister le choix Manuel côté serveur** pour que la reprise avance.
+**Tranché (doc officielle v0.16, référence objet Domain).** `dnsManagement` est une union à deux variantes :
+- **`Manual`** : *« Manual DNS management. No additional fields. »* → `{ "@type": "Manual" }` ;
+- **`Automatic`** : porte les `DnsManagementProperties` (`dnsServerId`, `origin`, `publishRecords`).
 
-**À vérifier en phase plan** : Stalwart v0.16 expose-t-il une variante `dnsManagement` de type **`Manual`** (en plus de `Automatic`) ? 
-- **Si oui** : le chemin Manuel pose `setDnsManagement({ '@type': 'Manual' })` ; `deriveSetupStep` quitte `dns` dès que `dnsManagement` est **défini** (Automatic **ou** Manual). C'est la solution privilégiée (état 100 % serveur).
-- **Si non** : marquer le choix via un drapeau de setup persistant (`setup-flag`/config partagée) consulté par `deriveSetupStep`.
+(Confirmé aussi par l'exemple CLI : `dnsManagement={"@type":"Manual"}`.)
 
-L'étape DNS Manuel affiche la **grille d'enregistrements** (depuis `domain.dnsZoneFile` via `dnsGridStatus`) à recopier chez le registrar, puis un bouton de confirmation qui exécute la persistance ci-dessus et avance.
+**Mais** un domaine fraîchement bootstrappé est **déjà non-`Automatic`** (c'est précisément ce qui fait que `deriveSetupStep` renvoie `dns` sur un setup neuf). Donc `@type === 'Manual'` **seul** ne distingue pas l'état **par défaut** du **choix explicite** de l'utilisateur. On ne peut pas s'appuyer uniquement sur la variante.
+
+**Décision** : le chemin Manuel
+1. pose explicitement `setDnsManagement({ '@type': 'Manual' })` (cohérence de l'état Stalwart), **et**
+2. écrit un **marqueur de progression persistant** `dnsConfigured` (réutilise le mécanisme `setup-flag`/config partagée), consulté par `deriveSetupStep`.
+
+L'étape DNS Manuel affiche la **grille d'enregistrements** (depuis `domain.dnsZoneFile` via `dnsGridStatus`) à recopier chez le registrar, puis un bouton de confirmation qui exécute (1)+(2) et avance.
+
+Le chemin **Automatique** n'a, lui, pas besoin du marqueur : `dnsManagement['@type'] === 'Automatic'` suffit comme signal serveur.
 
 ## 7. Redémarrage bootstrap→normal
 
@@ -125,9 +135,10 @@ Conforme aux conventions du projet (fonctions pures testées isolément, composa
 
 ## 12. Risques & points à lever (phase plan)
 
-1. **Variante `dnsManagement: Manual`** côté Stalwart v0.16 (cf. §6) — à confirmer via la référence objet / le schéma ; conditionne l'implémentation du chemin Manuel.
+1. ~~Variante `dnsManagement: Manual`~~ — **tranché** (cf. §6) : la variante `{ "@type": "Manual" }` existe (doc objet Domain v0.16), mais le défaut post-bootstrap étant non-`Automatic`, le chemin Manuel utilise un marqueur `dnsConfigured` persistant en plus de poser la variante.
 2. **Idempotence DNS auto** : stratégie exacte de détection/réutilisation d'un DnsServer existant (query par description ? par provider ?) — à préciser dans le plan.
 3. **Écran de redémarrage** : réutiliser tel quel le `pollStep`/`restarting` existant, en s'assurant qu'il enchaîne vers `dns` (et non `account`) après le nouvel ordre.
+4. **Marqueur `dnsConfigured`** : définir son support exact (extension du `setup-flag` existant vs nouvelle entrée de config partagée) et sa prise en compte dans `deriveSetupStep` — à préciser dans le plan.
 
 ## 13. Critères d'acceptation
 
