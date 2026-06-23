@@ -5,6 +5,7 @@ import type { DnsProvider } from "./stalwart-dns"
 import type { AcmeStatus } from "./stalwart-acme"
 import { DNS_PROVIDERS } from "./stalwart-dns"
 import { domainSchema } from "@/components/setup/schemas"
+import type { SetupStep } from "./setup-state"
 
 // The setup-state / stalwart-bootstrap / stalwart-restart modules reach `node:fs`
 // (and the JMAP transport) at module scope. This file is pulled into the client
@@ -12,6 +13,15 @@ import { domainSchema } from "@/components/setup/schemas"
 // handlers — a static top-level import would bind `node:fs` named exports in client
 // code (Vite externalizes them → runtime error on access). The handler bodies are
 // stripped from the client build, keeping the dynamic imports server-only.
+
+// Guard: verifies the current wizard step matches `expected`.
+// Must be called BEFORE the handler's try/catch so a thrown SetupError propagates unchanged.
+async function requireStep(expected: SetupStep): Promise<void> {
+  const { deriveSetupStep } = await import("./setup-state")
+  const { SetupError } = await import("./setup-errors")
+  if ((await deriveSetupStep()) !== expected)
+    throw new SetupError("SETUP-FORBIDDEN")
+}
 
 export async function getStepHandler(): Promise<{
   step: string
@@ -29,6 +39,7 @@ export async function submitBootstrapHandler({
 }: {
   data: BootstrapInput
 }): Promise<{ ok: true }> {
+  await requireStep("collect")
   const { submitBootstrap } = await import("./stalwart-bootstrap")
   const { requestStalwartRestart } = await import("./stalwart-restart")
   await submitBootstrap(data)
@@ -45,11 +56,15 @@ export async function createAdminAccountHandler({
 }: {
   data: { name: string; password: string }
 }): Promise<CreateAccountResult> {
+  await requireStep("account")
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const { createAdminAccount, WeakPasswordError } =
     await import("./stalwart-account")
   const domain = await getPrimaryDomain()
-  if (!domain) throw new Error("No primary domain found")
+  if (!domain) {
+    const { SetupError } = await import("./setup-errors")
+    throw new SetupError("SETUP-UNKNOWN")
+  }
   try {
     await createAdminAccount({
       name: data.name,
@@ -66,8 +81,8 @@ export async function createAdminAccountHandler({
 }
 
 const createAccountSchema = z.object({
-  name: z.string().min(1),
-  password: z.string().min(1),
+  name: z.string().min(1).max(64),
+  password: z.string().min(1).max(256),
 })
 
 export const createAdminAccountFn = createServerFn({ method: "POST" })
@@ -81,6 +96,7 @@ export async function createDnsServerHandler({
 }: {
   data: { provider: string; secret: string }
 }): Promise<{ dnsServerId: string }> {
+  await requireStep("dns")
   const { createDnsServer } = await import("./stalwart-dns")
   try {
     const id = await createDnsServer({
@@ -99,10 +115,14 @@ export async function setDnsManagementHandler({
 }: {
   data: { dnsServerId: string }
 }): Promise<{ ok: true }> {
+  await requireStep("dns")
   const { getPrimaryDomain, setDnsManagementAutomatic } =
     await import("./stalwart-domain")
   const domain = await getPrimaryDomain()
-  if (!domain) throw new Error("No primary domain found")
+  if (!domain) {
+    const { SetupError } = await import("./setup-errors")
+    throw new SetupError("SETUP-UNKNOWN")
+  }
   try {
     await setDnsManagementAutomatic({
       domainId: domain.id,
@@ -150,7 +170,9 @@ export async function dnsGridStatusHandler(): Promise<{
 
 export const createDnsServerFn = createServerFn({ method: "POST" })
   .validator((d: { provider: string; secret: string }) =>
-    z.object({ provider: z.enum(DNS_PROVIDERS), secret: z.string() }).parse(d)
+    z
+      .object({ provider: z.enum(DNS_PROVIDERS), secret: z.string().max(4096) })
+      .parse(d)
   )
   .handler(createDnsServerHandler)
 export const setDnsManagementFn = createServerFn({ method: "POST" })
@@ -163,11 +185,15 @@ export const dnsGridStatusFn = createServerFn({ method: "GET" }).handler(
 )
 
 export async function setDnsManagementManualHandler(): Promise<{ ok: true }> {
+  await requireStep("dns")
   const { getPrimaryDomain, setDnsManagementManual } =
     await import("./stalwart-domain")
   const { markDnsConfigured } = await import("./setup-flag")
   const domain = await getPrimaryDomain()
-  if (!domain) throw new Error("No primary domain found")
+  if (!domain) {
+    const { SetupError } = await import("./setup-errors")
+    throw new SetupError("SETUP-UNKNOWN")
+  }
   try {
     await setDnsManagementManual({ domainId: domain.id })
   } catch (e) {
@@ -192,10 +218,14 @@ export async function configureAcmeHandler({
 }: {
   data: { hostname: string; contactEmail: string }
 }): Promise<{ ok: true }> {
+  await requireStep("ssl")
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const { configureAcme } = await import("./stalwart-acme")
   const domain = await getPrimaryDomain()
-  if (!domain) throw new Error("No primary domain found")
+  if (!domain) {
+    const { SetupError } = await import("./setup-errors")
+    throw new SetupError("SETUP-UNKNOWN")
+  }
   try {
     await configureAcme({
       domainId: domain.id,
@@ -215,6 +245,7 @@ export async function acmeStatusHandler(): Promise<{ status: AcmeStatus }> {
 }
 
 export async function finishSetupHandler(): Promise<{ ok: true }> {
+  await requireStep("done")
   const { enableXForwarded } = await import("./stalwart-hardening")
   const { markSetupComplete } = await import("./setup-flag")
   await enableXForwarded() // go-live condition — recovery admin still active here
@@ -225,7 +256,10 @@ export async function finishSetupHandler(): Promise<{ ok: true }> {
 export const configureAcmeFn = createServerFn({ method: "POST" })
   .validator((d: { hostname: string; contactEmail: string }) =>
     z
-      .object({ hostname: z.string().min(1), contactEmail: z.string().min(1) })
+      .object({
+        hostname: z.string().min(1).max(253),
+        contactEmail: z.string().email().max(254),
+      })
       .parse(d)
   )
   .handler(configureAcmeHandler)
@@ -246,6 +280,12 @@ export const setupStatusFn = createServerFn({ method: "GET" }).handler(
 )
 
 export async function markSslConfiguredHandler(): Promise<{ ok: true }> {
+  await requireStep("ssl")
+  const { isDnsManual } = await import("./setup-state")
+  if (!(await isDnsManual())) {
+    const { SetupError } = await import("./setup-errors")
+    throw new SetupError("SETUP-FORBIDDEN")
+  }
   const { markSslAcknowledged } = await import("./setup-flag")
   markSslAcknowledged()
   return { ok: true }

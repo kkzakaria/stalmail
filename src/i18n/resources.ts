@@ -36,6 +36,7 @@ export const fr = {
           "La création du compte administrateur a échoué.",
         "SETUP-SSL-REJECTED": "L'obtention du certificat SSL a échoué.",
         "SETUP-UNKNOWN": "Une erreur inattendue s'est produite.",
+        "SETUP-FORBIDDEN": "Cette étape n'est pas disponible.",
       },
     },
     welcome: {
@@ -354,6 +355,7 @@ export const en: DeepRecord<typeof fr> = {
         "SETUP-ACCOUNT-REJECTED": "Administrator account creation failed.",
         "SETUP-SSL-REJECTED": "Obtaining the SSL certificate failed.",
         "SETUP-UNKNOWN": "An unexpected error occurred.",
+        "SETUP-FORBIDDEN": "This step is not available.",
       },
     },
     welcome: {

@@ -112,6 +112,8 @@ import {
 import { enableXForwarded } from "./stalwart-hardening"
 // eslint-disable-next-line import/first
 import { SetupError } from "./setup-errors"
+// eslint-disable-next-line import/first
+import { deriveSetupStep, isDnsManual } from "./setup-state"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -124,7 +126,6 @@ describe("getStepHandler", () => {
   })
 
   it("returns dnsManual true when isDnsManual resolves true", async () => {
-    const { isDnsManual } = await import("./setup-state")
     vi.mocked(isDnsManual).mockResolvedValueOnce(true)
     expect(await getStepHandler()).toEqual({ step: "collect", dnsManual: true })
   })
@@ -132,6 +133,7 @@ describe("getStepHandler", () => {
 
 describe("submitBootstrapHandler", () => {
   it("submits bootstrap then requests a Stalwart restart", async () => {
+    // mock returns "collect" by default — matches requireStep("collect")
     const out = await submitBootstrapHandler({
       data: { serverHostname: "mail.exemple.fr", defaultDomain: "exemple.fr" },
     })
@@ -152,9 +154,32 @@ describe("submitBootstrapHandler", () => {
     ).rejects.toThrow("network")
     expect(requestStalwartRestart).not.toHaveBeenCalled()
   })
+
+  it("throws SETUP-FORBIDDEN when step is not 'collect'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("dns")
+    const err = await submitBootstrapHandler({
+      data: { serverHostname: "x", defaultDomain: "y" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
+
+  it("throws SETUP-FORBIDDEN when setup is done", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("done")
+    const err = await submitBootstrapHandler({
+      data: { serverHostname: "x", defaultDomain: "y" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
 })
 
 describe("createAdminAccountHandler", () => {
+  beforeEach(() => {
+    // This handler requires step "account"
+    vi.mocked(deriveSetupStep).mockResolvedValue("account")
+  })
+
   it('returns {status:"ok"} on success and calls createAdminAccount with correct args', async () => {
     vi.mocked(createAdminAccount).mockResolvedValueOnce("acc-1")
     const result = await createAdminAccountHandler({
@@ -189,17 +214,39 @@ describe("createAdminAccountHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-ACCOUNT-REJECTED")
   })
 
-  it("throws when no primary domain is found", async () => {
+  it("throws SETUP-UNKNOWN when no primary domain is found (I2)", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
-    await expect(
-      createAdminAccountHandler({
-        data: { name: "koffi", password: "correct horse battery staple" },
-      })
-    ).rejects.toThrow("No primary domain found")
+    const err = await createAdminAccountHandler({
+      data: { name: "koffi", password: "correct horse battery staple" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
+  })
+
+  it("throws SETUP-FORBIDDEN when step is not 'account'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("collect")
+    const err = await createAdminAccountHandler({
+      data: { name: "koffi", password: "secure-pass" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
+
+  it("throws SETUP-FORBIDDEN when setup is done", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("done")
+    const err = await createAdminAccountHandler({
+      data: { name: "koffi", password: "secure-pass" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
   })
 })
 
 describe("createDnsServerHandler", () => {
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("dns")
+  })
+
   it("returns {dnsServerId} from createDnsServer", async () => {
     vi.mocked(createDnsServer).mockResolvedValueOnce("srv-1")
     const result = await createDnsServerHandler({
@@ -216,9 +263,31 @@ describe("createDnsServerHandler", () => {
     expect(err).toBeInstanceOf(SetupError)
     expect((err as SetupError).code).toBe("SETUP-DNS-REJECTED")
   })
+
+  it("throws SETUP-FORBIDDEN when step is not 'dns'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("collect")
+    const err = await createDnsServerHandler({
+      data: { provider: "Cloudflare", secret: "tok" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
+
+  it("throws SETUP-FORBIDDEN when setup is done", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("done")
+    const err = await createDnsServerHandler({
+      data: { provider: "Cloudflare", secret: "tok" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
 })
 
 describe("setDnsManagementHandler", () => {
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("dns")
+  })
+
   it("resolves the domain and calls setDnsManagementAutomatic with correct args", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce({
       id: "dom-1",
@@ -236,11 +305,13 @@ describe("setDnsManagementHandler", () => {
     })
   })
 
-  it("throws when getPrimaryDomain returns null", async () => {
+  it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
-    await expect(
-      setDnsManagementHandler({ data: { dnsServerId: "srv-1" } })
-    ).rejects.toThrow("No primary domain found")
+    const err = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
   })
 
   it("throws SetupError with SETUP-DNS-MANAGEMENT-REJECTED on setDnsManagementAutomatic failure", async () => {
@@ -252,6 +323,15 @@ describe("setDnsManagementHandler", () => {
     }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
     expect((err as SetupError).code).toBe("SETUP-DNS-MANAGEMENT-REJECTED")
+  })
+
+  it("throws SETUP-FORBIDDEN when step is not 'dns'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("ssl")
+    const err = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
   })
 })
 
@@ -291,6 +371,10 @@ describe("dnsGridStatusHandler", () => {
 })
 
 describe("configureAcmeHandler", () => {
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("ssl")
+  })
+
   it("resolves the domain and calls configureAcme with correct args, returns {ok:true}", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce({
       id: "dom-1",
@@ -308,16 +392,16 @@ describe("configureAcmeHandler", () => {
     expect(result).toEqual({ ok: true })
   })
 
-  it("throws when getPrimaryDomain returns null", async () => {
+  it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
-    await expect(
-      configureAcmeHandler({
-        data: {
-          hostname: "mail.example.com",
-          contactEmail: "admin@example.com",
-        },
-      })
-    ).rejects.toThrow("No primary domain found")
+    const err = await configureAcmeHandler({
+      data: {
+        hostname: "mail.example.com",
+        contactEmail: "admin@example.com",
+      },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
   })
 
   it("throws SetupError with SETUP-SSL-REJECTED on configureAcme failure", async () => {
@@ -327,6 +411,24 @@ describe("configureAcmeHandler", () => {
     }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
     expect((err as SetupError).code).toBe("SETUP-SSL-REJECTED")
+  })
+
+  it("throws SETUP-FORBIDDEN when step is not 'ssl'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("dns")
+    const err = await configureAcmeHandler({
+      data: { hostname: "mail.example.com", contactEmail: "admin@example.com" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
+
+  it("throws SETUP-FORBIDDEN when setup is done", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("done")
+    const err = await configureAcmeHandler({
+      data: { hostname: "mail.example.com", contactEmail: "admin@example.com" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
   })
 })
 
@@ -339,6 +441,10 @@ describe("acmeStatusHandler", () => {
 })
 
 describe("finishSetupHandler", () => {
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("done")
+  })
+
   it("calls enableXForwarded before markSetupComplete and returns {ok:true}", async () => {
     const callOrder: string[] = []
     vi.mocked(enableXForwarded).mockImplementationOnce(async () => {
@@ -361,6 +467,13 @@ describe("finishSetupHandler", () => {
     await expect(finishSetupHandler()).rejects.toThrow("http-set failed")
     expect(markSetupComplete).not.toHaveBeenCalled()
   })
+
+  it("throws SETUP-FORBIDDEN when step is not 'done'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("account")
+    const err = await finishSetupHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
 })
 
 describe("setupStatusHandler", () => {
@@ -380,6 +493,10 @@ describe("setupStatusHandler", () => {
 })
 
 describe("setDnsManagementManualHandler", () => {
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("dns")
+  })
+
   it("calls setDnsManagementManual and markDnsConfigured on success", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce({
       id: "dom-1",
@@ -393,11 +510,11 @@ describe("setDnsManagementManualHandler", () => {
     expect(markDnsConfigured).toHaveBeenCalled()
   })
 
-  it("throws when getPrimaryDomain returns null", async () => {
+  it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
-    await expect(setDnsManagementManualHandler()).rejects.toThrow(
-      "No primary domain found"
-    )
+    const err = await setDnsManagementManualHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
     expect(markDnsConfigured).not.toHaveBeenCalled()
   })
 
@@ -410,13 +527,48 @@ describe("setDnsManagementManualHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-DNS-MANAGEMENT-REJECTED")
     expect(markDnsConfigured).not.toHaveBeenCalled()
   })
+
+  it("throws SETUP-FORBIDDEN when step is not 'dns'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("ssl")
+    const err = await setDnsManagementManualHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
 })
 
 describe("markSslConfiguredHandler", () => {
-  it("calls markSslAcknowledged and returns {ok:true}", async () => {
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("ssl")
+    vi.mocked(isDnsManual).mockResolvedValue(true)
+  })
+
+  it("calls markSslAcknowledged and returns {ok:true} when ssl step and manual DNS", async () => {
     vi.mocked(markSslAcknowledged).mockImplementationOnce(() => {})
     const result = await markSslConfiguredHandler()
     expect(result).toEqual({ ok: true })
     expect(markSslAcknowledged).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-FORBIDDEN when step is not 'ssl'", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("dns")
+    const err = await markSslConfiguredHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+    expect(markSslAcknowledged).not.toHaveBeenCalled()
+  })
+
+  it("throws SETUP-FORBIDDEN when DNS is not manual (non-manual mode)", async () => {
+    vi.mocked(isDnsManual).mockResolvedValueOnce(false)
+    const err = await markSslConfiguredHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+    expect(markSslAcknowledged).not.toHaveBeenCalled()
+  })
+
+  it("throws SETUP-FORBIDDEN when setup is done", async () => {
+    vi.mocked(deriveSetupStep).mockResolvedValueOnce("done")
+    const err = await markSslConfiguredHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
   })
 })
