@@ -22,6 +22,19 @@ describe("isExternalHost", () => {
   it("is case-insensitive", () => {
     expect(isExternalHost("MAIL.Exemple.FR", "exemple.fr")).toBe(false)
   })
+
+  it("handles trailing dots (FQDN root) in hostname", () => {
+    expect(isExternalHost("mail.exemple.fr.", "exemple.fr")).toBe(false)
+  })
+
+  it("handles trailing dots in domain", () => {
+    expect(isExternalHost("mail.exemple.fr", "exemple.fr.")).toBe(false)
+  })
+
+  it("handles whitespace-padded input", () => {
+    expect(isExternalHost(" mail.exemple.fr ", "exemple.fr")).toBe(false)
+    expect(isExternalHost("mail.exemple.fr", " exemple.fr ")).toBe(false)
+  })
 })
 
 describe("hostZone", () => {
@@ -35,5 +48,17 @@ describe("hostZone", () => {
 
   it("returns the input unchanged when empty", () => {
     expect(hostZone("")).toBe("")
+  })
+
+  it("strips trailing dot (FQDN root)", () => {
+    expect(hostZone("mail.exemple.fr.")).toBe("exemple.fr")
+  })
+
+  it("handles whitespace-padded input", () => {
+    expect(hostZone(" mail.exemple.fr ")).toBe("exemple.fr")
+  })
+
+  it("handles mixed case and spaces", () => {
+    expect(hostZone(" SUB.exemple.fr ")).toBe("exemple.fr")
   })
 })
