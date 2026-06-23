@@ -63,18 +63,18 @@ Changements vs aujourd'hui :
 ```
 done      si isSetupComplete()
 collect   si isBootstrapMode()          // Welcome + Domaine (sous-état client pré-bootstrap)
-dns       si dnsManagement != Automatic ET pas de marqueur `dnsConfigured`
-ssl       si certificateManagement != Automatic
+dns       si domaine absent OU (dnsManagement != Automatic ET pas de marqueur `dnsConfigured`)
+ssl       si certificateManagement != Automatic ET pas de marqueur `sslAcknowledged`
 account   si pas de compte utilisateur admin
-finalize  sinon                          // étape Done : finishSetup → isSetupComplete
+done      sinon                          // écran Done : finishSetup → isSetupComplete
 ```
 
 Signaux serveur « étape franchie » :
-- **DNS** = `dnsManagement['@type'] === 'Automatic'` (chemin auto) **ou** marqueur `dnsConfigured` (chemin Manuel, cf. §6).
-- **SSL** = `certificateManagement['@type'] === 'Automatic'` (posé par `configureAcme`). Non bloquant sur la validité du cert : dès l'ACME configuré on avance, même si le cert est encore `pending`.
+- **DNS** = un domaine existe **et** (`dnsManagement['@type'] === 'Automatic'` (chemin auto) **ou** marqueur `dnsConfigured` (chemin Manuel, cf. §6)). Domaine absent ⇒ jamais franchi (étape `dns`).
+- **SSL** = `certificateManagement['@type'] === 'Automatic'` (chemin auto, posé par `configureAcme`) **ou** marqueur dédié `sslAcknowledged` (chemin Manuel, cf. §6). Non bloquant sur la validité du cert : dès l'ACME configuré on avance, même si le cert est encore `pending`.
 - **Compte** = présence d'un compte utilisateur (non-système).
 
-`finalize` correspond à l'écran **Done** qui appelle `finishSetup` (pose le drapeau `isSetupComplete`) — le compte étant la dernière saisie, c'est lui qui débloque l'étape finale.
+L'état terminal `done` correspond à l'écran **Done** qui appelle `finishSetup` (pose le drapeau `isSetupComplete`) — le compte étant la dernière saisie, c'est lui qui débloque l'étape finale.
 
 - **Marche avant** : une étape exécutée fait avancer la précondition serveur ; on ne revient pas dessus. Le `StepperH` n'expose pas de navigation arrière vers une étape franchie.
 - **Ré-exécution idempotente** : si une étape est ré-affichée (rechargement, retry après erreur), elle ré-exécute proprement sans dupliquer :
@@ -100,7 +100,9 @@ L'étape DNS Manuel affiche la **grille d'enregistrements** (depuis `domain.dnsZ
 
 Le chemin **Automatique** n'a, lui, pas besoin du marqueur : `dnsManagement['@type'] === 'Automatic'` suffit comme signal serveur.
 
-**Incompatibilité connue (préexistante) Manuel + SSL ACME DNS-01** : l'étape SSL (`configureAcme`) requiert un `dnsManagement: Automatic` (un `dnsServerId` pour résoudre le challenge DNS-01). En mode DNS **Manuel**, il n'y a pas de DnsServer → l'ACME DNS-01 du serveur mail n'est pas applicable. L'étape SSL devra donc, en mode Manuel, **être informative/optionnelle** (pas de `configureAcme` automatique ; cert mail à gérer autrement). Ce n'est pas introduit par ce refactor — c'est une limite du couple Manuel+DNS-01 — mais le plan doit définir le comportement de l'étape SSL quand DNS est Manuel (probable : sauter `configureAcme` et marquer SSL comme franchi via le même `dnsConfigured`/un marqueur dédié). Le parcours principal validé (Cloudflare, automatique) n'est pas concerné.
+**Incompatibilité connue (préexistante) Manuel + SSL ACME DNS-01** : l'étape SSL (`configureAcme`) requiert un `dnsManagement: Automatic` (un `dnsServerId` pour résoudre le challenge DNS-01). En mode DNS **Manuel**, il n'y a pas de DnsServer → l'ACME DNS-01 du serveur mail n'est pas applicable. L'étape SSL est donc, en mode Manuel, **informative** (pas de `configureAcme` automatique ; cert mail à gérer autrement). Ce n'est pas introduit par ce refactor — c'est une limite du couple Manuel+DNS-01.
+
+**Marqueur SSL dédié (chemin Manuel).** Le franchissement de l'étape SSL en mode Manuel est tracé par un **marqueur de progression persistant dédié `sslAcknowledged`** (`isSslAcknowledged()` / `markSslAcknowledged()`), distinct de `dnsConfigured` — il **calque** le pattern `dnsConfigured` (même mécanisme `setup-flag`). Les deux signaux doivent rester séparés : sinon `deriveSetupStep` ne peut pas distinguer « DNS confirmé manuellement » de « SSL acquitté », et une reprise en mode Manuel franchirait l'étape SSL trop tôt. La confirmation « Continuer » de l'étape SSL informative appelle le handler qui pose `sslAcknowledged`. Le parcours principal validé (Cloudflare, automatique) s'appuie lui sur `certificateManagement === 'Automatic'` et n'a pas besoin du marqueur.
 
 ## 7. Redémarrage bootstrap→normal
 

@@ -12,9 +12,9 @@
 
 - **Spec :** `docs/superpowers/specs/2026-06-23-wizard-stepwise-refactor-design.md` (source de vérité).
 - **Séquence cible :** `Welcome → Domaine [submit→redémarrage] → DNS → SSL → Compte → Done`.
-- **`deriveSetupStep` (nouvel ordre) :** `done` si `isSetupComplete()` ; `collect` si bootstrap ; `dns` si DNS non configuré ; `ssl` si `certificateManagement != Automatic` ; `account` si pas de compte user ; sinon `done`.
-- **Signaux serveur :** DNS = `dnsManagement['@type']==='Automatic'` **ou** marqueur `dnsConfigured` (Manuel) ; SSL = `certificateManagement['@type']==='Automatic'` ; Compte = compte user non-système présent.
-- **Mode Manuel :** `setDnsManagement({'@type':'Manual'})` + marqueur `dnsConfigured` persistant ; étape SSL informative (pas de `configureAcme`) car DNS-01 exige un `dnsServerId`.
+- **`deriveSetupStep` (nouvel ordre) :** `done` si `isSetupComplete()` ; `collect` si bootstrap ; `dns` si domaine absent ou DNS non configuré ; `ssl` si `certificateManagement != Automatic` ET pas de marqueur `sslAcknowledged` ; `account` si pas de compte user ; sinon `done`.
+- **Signaux serveur :** DNS = domaine présent ET (`dnsManagement['@type']==='Automatic'` **ou** marqueur `dnsConfigured` (Manuel)) ; SSL = `certificateManagement['@type']==='Automatic'` **ou** marqueur dédié `sslAcknowledged` (Manuel) ; Compte = compte user non-système présent.
+- **Mode Manuel :** `setDnsManagement({'@type':'Manual'})` + marqueur `dnsConfigured` persistant ; étape SSL informative (pas de `configureAcme`) car DNS-01 exige un `dnsServerId`, franchie via le marqueur dédié `sslAcknowledged` (`isSslAcknowledged()`/`markSslAcknowledged()`, calque de `dnsConfigured`).
 - **Erreurs (uniforme) :** message générique i18n + **code opaque stable** (table fermée serveur, ex. `SETUP-DNS-REJECTED`) + Réessayer ; on reste sur l'étape ; aucune fuite de détail JMAP/HTTP (R6).
 - **Redémarrage :** spinner + légende générique non-technique (« Configuration en cours… ») ; échec → message + code + Réessayer.
 - **i18n :** tout en français via clés `t('...')`, jamais de texte en dur.
@@ -127,11 +127,13 @@ it('ordre : DNS avant compte (compte présent mais DNS non configuré → dns)',
 - [ ] **Step 3 : Implémenter**
 
 ```typescript
-import { isSetupComplete, isDnsConfigured } from './setup-flag'
+import { isSetupComplete, isDnsConfigured, isSslAcknowledged } from './setup-flag'
 // ... helpers inchangés (hasUserAdminAccount, isSystemAdmin) ...
 
 function isDnsManaged(domain: StalwartDomain | null): boolean {
-  return domain?.dnsManagement?.['@type'] === 'Automatic' || isDnsConfigured()
+  // Domaine absent ⇒ jamais "managed" (doit router vers l'étape dns).
+  if (!domain) return false
+  return domain.dnsManagement?.['@type'] === 'Automatic' || isDnsConfigured()
 }
 function isSslConfigured(domain: StalwartDomain | null): boolean {
   return (domain as { certificateManagement?: { '@type'?: string } } | null)
@@ -143,7 +145,8 @@ export async function deriveSetupStep(): Promise<SetupStep> {
   if (await isBootstrapMode()) return 'collect'
   const domain = await getPrimaryDomain()
   if (!isDnsManaged(domain)) return 'dns'
-  if (!isSslConfigured(domain)) return 'ssl'
+  // SSL franchi : auto (certificateManagement Automatic) OU marqueur dédié Manuel.
+  if (!isSslConfigured(domain) && !isSslAcknowledged()) return 'ssl'
   if (!(await hasUserAdminAccount())) return 'account'
   return 'done'
 }
@@ -435,11 +438,11 @@ interface Props {
 - Test: `src/components/setup/steps/SslStep.test.tsx`
 
 **Interfaces:**
-- Consumes: `configureAcme`, `acmeStatus` (inchangés). Ajout : prop `dnsManual: boolean`.
+- Consumes: `configureAcme`, `acmeStatus` (inchangés). Ajout : props `dnsManual: boolean` et `acknowledgeManualSsl()` (handler `markSslConfiguredFn` → pose le marqueur dédié `sslAcknowledged`).
 
-- [ ] **Step 1 : Tests** — mode auto inchangé (configure ACME, statut non bloquant). **Mode Manuel** (`dnsManual=true`) : n'appelle **pas** `configureAcme` ; affiche un encart informatif (cert mail à gérer hors DNS-01) ; « Continuer » → `onNext`.
+- [ ] **Step 1 : Tests** — mode auto inchangé (configure ACME, statut non bloquant). **Mode Manuel** (`dnsManual=true`) : n'appelle **pas** `configureAcme` ; affiche un encart informatif (cert mail à gérer hors DNS-01) ; « Continuer » → `acknowledgeManualSsl()` (marqueur `sslAcknowledged`) puis `onNext`. Le retry doit ré-invoquer l'action du **mode courant** (ack en Manuel, `configureAcme` en auto).
 - [ ] **Step 2 : Lancer → échoue.**
-- [ ] **Step 3 : Implémenter** — early-return du chemin informatif si `dnsManual` ; sinon comportement actuel. Erreur de `configureAcme` → `SetupErrorBox` (code `SETUP-SSL-REJECTED`) + retry.
+- [ ] **Step 3 : Implémenter** — chemin informatif si `dnsManual` (« Continuer » → `acknowledgeManualSsl` → `onNext`) ; sinon comportement auto. Erreur → `SetupErrorBox` (code `SETUP-SSL-REJECTED`) + retry mode-conscient.
 - [ ] **Step 4 : Tests verts.** Run: `bun run test src/components/setup/steps/SslStep.test.tsx`
 - [ ] **Step 5 : Commit** — `git commit -m "feat(setup): SslStep avant Compte + cas DNS Manuel informatif"`
 
