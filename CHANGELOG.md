@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.17](https://github.com/kkzakaria/stalmail/compare/v0.1.16...v0.1.17) (2026-06-23)
+
+
+### Bug Fixes
+
+* **setup:** envoyer le secret DnsServer comme SecretKey typé ([#50](https://github.com/kkzakaria/stalmail/issues/50)) ([e2f70ba](https://github.com/kkzakaria/stalmail/commit/e2f70ba1eea5ed27fd08daa95b13c29292d7922a))
+
 ## [0.1.16](https://github.com/kkzakaria/stalmail/compare/v0.1.15...v0.1.16) (2026-06-23)
 
 
