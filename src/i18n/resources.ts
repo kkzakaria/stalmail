@@ -37,6 +37,8 @@ export const fr = {
         "SETUP-SSL-REJECTED": "L'obtention du certificat SSL a échoué.",
         "SETUP-UNKNOWN": "Une erreur inattendue s'est produite.",
         "SETUP-FORBIDDEN": "Cette étape n'est pas disponible.",
+        "SETUP-UNAUTHENTICATED": "Authentification de setup requise.",
+        "SETUP-UNLOCK-FAILED": "Lien de setup invalide ou expiré.",
       },
     },
     welcome: {
@@ -356,6 +358,8 @@ export const en: DeepRecord<typeof fr> = {
         "SETUP-SSL-REJECTED": "Obtaining the SSL certificate failed.",
         "SETUP-UNKNOWN": "An unexpected error occurred.",
         "SETUP-FORBIDDEN": "This step is not available.",
+        "SETUP-UNAUTHENTICATED": "Setup authentication required.",
+        "SETUP-UNLOCK-FAILED": "Invalid or expired setup link.",
       },
     },
     welcome: {

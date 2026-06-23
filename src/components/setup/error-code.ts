@@ -18,6 +18,8 @@ const KNOWN_CODES = new Set([
   "SETUP-SSL-REJECTED",
   "SETUP-FORBIDDEN",
   "SETUP-UNKNOWN",
+  "SETUP-UNAUTHENTICATED",
+  "SETUP-UNLOCK-FAILED",
 ])
 
 export function messageKeyForCode(code: string): string {

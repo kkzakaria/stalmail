@@ -29,6 +29,8 @@ describe("error-code", () => {
       "SETUP-SSL-REJECTED",
       "SETUP-FORBIDDEN",
       "SETUP-UNKNOWN",
+      "SETUP-UNAUTHENTICATED",
+      "SETUP-UNLOCK-FAILED",
     ]
 
     it.each(knownCodes)("maps %s to wizard.error.codes.%s", (code) => {
