@@ -22,6 +22,7 @@ import type * as DnsResolveModule from "./dns-resolve"
 import type * as StalwartAcmeModule from "./stalwart-acme"
 import type * as SetupFlagModule from "./setup-flag"
 import type * as StalwartHardeningModule from "./stalwart-hardening"
+import type * as SetupErrorsModule from "./setup-errors"
 
 vi.mock("@tanstack/react-start", () => ({
   createServerFn: () => ({
@@ -76,6 +77,9 @@ vi.mock("./stalwart-hardening", async (importActual) => ({
   ...(await importActual<typeof StalwartHardeningModule>()),
   enableXForwarded: vi.fn(async () => undefined),
 }))
+vi.mock("./setup-errors", async (importActual) => ({
+  ...(await importActual<typeof SetupErrorsModule>()),
+}))
 
 // eslint-disable-next-line import/first
 import {
@@ -101,6 +105,8 @@ import {
 } from "./setup-flag"
 // eslint-disable-next-line import/first
 import { enableXForwarded } from "./stalwart-hardening"
+// eslint-disable-next-line import/first
+import { SetupError } from "./setup-errors"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -158,15 +164,15 @@ describe("createAdminAccountHandler", () => {
     expect(result).toEqual({ status: "weak", message: "too weak" })
   })
 
-  it("rethrows other errors", async () => {
+  it("throws SetupError with SETUP-ACCOUNT-REJECTED for non-weak errors", async () => {
     vi.mocked(createAdminAccount).mockRejectedValueOnce(
       new Error("network failure")
     )
-    await expect(
-      createAdminAccountHandler({
-        data: { name: "koffi", password: "correct horse battery staple" },
-      })
-    ).rejects.toThrow("network failure")
+    const err = await createAdminAccountHandler({
+      data: { name: "koffi", password: "correct horse battery staple" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-ACCOUNT-REJECTED")
   })
 
   it("throws when no primary domain is found", async () => {
@@ -186,6 +192,15 @@ describe("createDnsServerHandler", () => {
       data: { provider: "Cloudflare", secret: "tok-abc" },
     })
     expect(result).toEqual({ dnsServerId: "srv-1" })
+  })
+
+  it("throws SetupError with SETUP-DNS-REJECTED on createDnsServer failure", async () => {
+    vi.mocked(createDnsServer).mockRejectedValueOnce(new Error("network"))
+    const err = await createDnsServerHandler({
+      data: { provider: "Cloudflare", secret: "tok" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-DNS-REJECTED")
   })
 })
 
@@ -212,6 +227,17 @@ describe("setDnsManagementHandler", () => {
     await expect(
       setDnsManagementHandler({ data: { dnsServerId: "srv-1" } })
     ).rejects.toThrow("No primary domain found")
+  })
+
+  it("throws SetupError with SETUP-DNS-MANAGEMENT-REJECTED on setDnsManagementAutomatic failure", async () => {
+    vi.mocked(setDnsManagementAutomatic).mockRejectedValueOnce(
+      new Error("network")
+    )
+    const err = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-DNS-MANAGEMENT-REJECTED")
   })
 })
 
@@ -278,6 +304,15 @@ describe("configureAcmeHandler", () => {
         },
       })
     ).rejects.toThrow("No primary domain found")
+  })
+
+  it("throws SetupError with SETUP-SSL-REJECTED on configureAcme failure", async () => {
+    vi.mocked(configureAcme).mockRejectedValueOnce(new Error("acme error"))
+    const err = await configureAcmeHandler({
+      data: { hostname: "mail.example.com", contactEmail: "admin@example.com" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-SSL-REJECTED")
   })
 })
 
@@ -349,6 +384,16 @@ describe("setDnsManagementManualHandler", () => {
     await expect(setDnsManagementManualHandler()).rejects.toThrow(
       "No primary domain found"
     )
+    expect(markDnsConfigured).not.toHaveBeenCalled()
+  })
+
+  it("throws SetupError with SETUP-DNS-MANAGEMENT-REJECTED on setDnsManagementManual failure", async () => {
+    vi.mocked(setDnsManagementManual).mockRejectedValueOnce(
+      new Error("network")
+    )
+    const err = await setDnsManagementManualHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-DNS-MANAGEMENT-REJECTED")
     expect(markDnsConfigured).not.toHaveBeenCalled()
   })
 })

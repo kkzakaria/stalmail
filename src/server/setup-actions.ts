@@ -54,7 +54,8 @@ export async function createAdminAccountHandler({
   } catch (e) {
     if (e instanceof WeakPasswordError)
       return { status: "weak", message: e.description }
-    throw e
+    const { SetupError, toSetupErrorCode } = await import("./setup-errors")
+    throw new SetupError(toSetupErrorCode(e, "SETUP-ACCOUNT-REJECTED"))
   }
 }
 
@@ -75,11 +76,16 @@ export async function createDnsServerHandler({
   data: { provider: string; secret: string }
 }): Promise<{ dnsServerId: string }> {
   const { createDnsServer } = await import("./stalwart-dns")
-  const id = await createDnsServer({
-    provider: data.provider as DnsProvider,
-    secret: data.secret,
-  })
-  return { dnsServerId: id }
+  try {
+    const id = await createDnsServer({
+      provider: data.provider as DnsProvider,
+      secret: data.secret,
+    })
+    return { dnsServerId: id }
+  } catch (e) {
+    const { SetupError, toSetupErrorCode } = await import("./setup-errors")
+    throw new SetupError(toSetupErrorCode(e, "SETUP-DNS-REJECTED"))
+  }
 }
 
 export async function setDnsManagementHandler({
@@ -91,11 +97,16 @@ export async function setDnsManagementHandler({
     await import("./stalwart-domain")
   const domain = await getPrimaryDomain()
   if (!domain) throw new Error("No primary domain found")
-  await setDnsManagementAutomatic({
-    domainId: domain.id,
-    dnsServerId: data.dnsServerId,
-    origin: domain.name,
-  })
+  try {
+    await setDnsManagementAutomatic({
+      domainId: domain.id,
+      dnsServerId: data.dnsServerId,
+      origin: domain.name,
+    })
+  } catch (e) {
+    const { SetupError, toSetupErrorCode } = await import("./setup-errors")
+    throw new SetupError(toSetupErrorCode(e, "SETUP-DNS-MANAGEMENT-REJECTED"))
+  }
   return { ok: true }
 }
 
@@ -151,7 +162,12 @@ export async function setDnsManagementManualHandler(): Promise<{ ok: true }> {
   const { markDnsConfigured } = await import("./setup-flag")
   const domain = await getPrimaryDomain()
   if (!domain) throw new Error("No primary domain found")
-  await setDnsManagementManual({ domainId: domain.id })
+  try {
+    await setDnsManagementManual({ domainId: domain.id })
+  } catch (e) {
+    const { SetupError, toSetupErrorCode } = await import("./setup-errors")
+    throw new SetupError(toSetupErrorCode(e, "SETUP-DNS-MANAGEMENT-REJECTED"))
+  }
   markDnsConfigured()
   return { ok: true }
 }
@@ -174,11 +190,16 @@ export async function configureAcmeHandler({
   const { configureAcme } = await import("./stalwart-acme")
   const domain = await getPrimaryDomain()
   if (!domain) throw new Error("No primary domain found")
-  await configureAcme({
-    domainId: domain.id,
-    hostname: data.hostname,
-    contactEmail: data.contactEmail,
-  })
+  try {
+    await configureAcme({
+      domainId: domain.id,
+      hostname: data.hostname,
+      contactEmail: data.contactEmail,
+    })
+  } catch (e) {
+    const { SetupError, toSetupErrorCode } = await import("./setup-errors")
+    throw new SetupError(toSetupErrorCode(e, "SETUP-SSL-REJECTED"))
+  }
   return { ok: true }
 }
 
