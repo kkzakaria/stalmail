@@ -104,16 +104,20 @@ Le chemin **Automatique** n'a, lui, pas besoin du marqueur : `dnsManagement['@ty
 
 ## 7. Redémarrage bootstrap→normal
 
-Le `submitBootstrap` (étape Domaine) déclenche le **redémarrage Stalwart**. Le wizard affiche un écran transitoire **« configuration du serveur… »** (réutilise le mécanisme `restarting`/`pollStep` existant) tant que `getStep()` ne répond pas en mode normal. À la reprise du service, `deriveSetupStep` renvoie `dns` → l'étape DNS s'affiche. C'est l'unique attente longue du parcours, et elle est désormais **juste après la saisie du domaine**, pas après une collecte massive.
+Le `submitBootstrap` (étape Domaine) déclenche le **redémarrage Stalwart**. Le wizard affiche un écran transitoire (réutilise le mécanisme `restarting`/`pollStep` existant) tant que `getStep()` ne répond pas en mode normal. À la reprise du service, `deriveSetupStep` renvoie `dns` → l'étape DNS s'affiche. C'est l'unique attente longue du parcours, et elle est désormais **juste après la saisie du domaine**, pas après une collecte massive.
+
+**Présentation (décidée)** : un **spinner + légende générique non-technique** — *« Configuration en cours… »* — qui **ne mentionne ni « serveur » ni « redémarrage »** (pas de jargon), mais évite l'effet « écran figé » sur une attente de 10-30 s. Pas de barre de progression factice.
+
+**En cas d'échec** du redémarrage (timeout du `pollStep` ou erreur) : le triptyque uniforme (cf. §8) — message générique + **code d'erreur stable et opaque** (ex. `SETUP-RESTART-TIMEOUT`, jamais le détail JMAP/HTTP brut) affiché en petit/copiable + bouton **« Réessayer »** (relance le `pollStep`).
 
 ## 8. Gestion d'erreur par étape
 
-Chaque exécution peut échouer (ex. token DNS invalide, mot de passe faible). Comportement uniforme :
-- message d'erreur **inline** (générique côté UI, sans fuite de détail serveur — cf. R6 du socle) ;
-- bouton **« Réessayer »** qui ré-exécute l'action de l'étape ;
-- on **reste sur l'étape** (pas d'avance tant que l'exécution n'a pas réussi).
+Chaque exécution peut échouer (ex. token DNS invalide, mot de passe faible, timeout de redémarrage). **Triptyque uniforme** sur toutes les étapes :
+1. **message générique** court côté UI (« La configuration n'a pas pu aboutir. », « Token refusé. »…), **sans fuite de détail serveur** (R6 du socle) ;
+2. **code d'erreur stable et opaque** (ex. `SETUP-DNS-REJECTED`, `SETUP-RESTART-TIMEOUT`) affiché en petit, copiable — pour le support/les logs, **jamais** le détail JMAP/HTTP brut ;
+3. bouton **« Réessayer »** qui ré-exécute l'action de l'étape ; on **reste sur l'étape** (pas d'avance tant que l'exécution n'a pas réussi).
 
-C'est précisément le comportement qui aurait rendu lisible le bug du secret DnsServer.
+Les codes sont une **table fermée** côté serveur (mapping erreur interne → code public), pour rester stables et ne rien divulguer. C'est précisément le comportement qui aurait rendu lisible le bug du secret DnsServer.
 
 ## 9. Fichiers impactés (cartographie)
 
@@ -147,6 +151,7 @@ Conforme aux conventions du projet (fonctions pures testées isolément, composa
 2. **Idempotence DNS auto** : stratégie exacte de détection/réutilisation d'un DnsServer existant (query par description ? par provider ?) — à préciser dans le plan.
 3. **Écran de redémarrage** : réutiliser tel quel le `pollStep`/`restarting` existant, en s'assurant qu'il enchaîne vers `dns` (et non `account`) après le nouvel ordre.
 4. **Marqueur `dnsConfigured`** : définir son support exact (extension du `setup-flag` existant vs nouvelle entrée de config partagée) et sa prise en compte dans `deriveSetupStep` — à préciser dans le plan.
+5. **Table de codes d'erreur** : énumérer les codes publics stables (`SETUP-RESTART-TIMEOUT`, `SETUP-DNS-REJECTED`, `SETUP-ACCOUNT-WEAK`, …) et le mapping erreur interne → code, côté serveur — à définir dans le plan.
 
 ## 13. Critères d'acceptation
 
