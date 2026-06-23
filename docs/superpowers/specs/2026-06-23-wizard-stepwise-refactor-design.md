@@ -121,7 +121,7 @@ Les codes sont une **table fermée** côté serveur (mapping erreur interne → 
 
 ## 9. Fichiers impactés (cartographie)
 
-- `src/server/setup-state.ts` — `deriveSetupStep` : nouvel ordre (`dns` avant `account`) ; prise en compte du marqueur Manuel.
+- `src/server/setup-state.ts` — `deriveSetupStep` : nouvel ordre (`dns → ssl → account`, compte en dernier) ; prise en compte du marqueur Manuel.
 - `src/components/setup/SetupWizard.tsx` — refonte de l'orchestration : suppression du split config/activation, machine linéaire, exécution par étape, mapping étape→composant, gestion d'erreur/retry, écran de redémarrage entre Domaine et DNS.
 - `src/components/setup/steps/` :
   - **Supprimés/fusionnés** : `DnsProviderStep` (fusionné dans l'étape DNS), `RecapStep`, `AdminAccountStep`/`AccountStep` (un seul composant « Compte » collecte+exécute).
@@ -134,7 +134,7 @@ Les codes sont une **table fermée** côté serveur (mapping erreur interne → 
 ## 10. Stratégie de test
 
 Conforme aux conventions du projet (fonctions pures testées isolément, composants présentationnels avec props injectées) :
-- **`deriveSetupStep`** (fonction pure côté serveur, mocks JMAP) : couvre le nouvel ordre `collect → dns → account → ssl → done`, le cas Manuel, et l'idempotence (étape déjà franchie → on n'y revient pas).
+- **`deriveSetupStep`** (fonction pure côté serveur, mocks JMAP) : couvre le nouvel ordre `collect → dns → ssl → account → done`, le cas Manuel, et l'idempotence (étape déjà franchie → on n'y revient pas).
 - **Composants d'étape** : rendu présentationnel, props injectées (pas de hooks de route) ; tests de collecte → exécution (succès) → avance, et exécution (échec) → message + retry sans avance.
 - **Idempotence DnsServer** : `createDnsServer`/réutilisation ne duplique pas ; test unitaire du helper de détection d'existant.
 
@@ -155,8 +155,8 @@ Conforme aux conventions du projet (fonctions pures testées isolément, composa
 
 ## 13. Critères d'acceptation
 
-- Le parcours complet `Welcome → Domaine → DNS → Compte → SSL → Done` fonctionne de bout en bout avec Cloudflare (token saisi et **consommé à l'étape DNS**).
+- Le parcours complet `Welcome → Domaine → DNS → SSL → Compte → Done` fonctionne de bout en bout avec Cloudflare (token saisi et **consommé à l'étape DNS**).
 - **Rechargement à n'importe quelle étape** → la reprise revient sur **la même étape**, avec son formulaire, sans « repartir à zéro » ni perte de progression serveur.
 - Un échec d'exécution d'étape **reste sur l'étape** avec retry, sans avancer.
-- L'ordre **DNS avant Compte** est effectif.
+- L'ordre **`DNS → SSL → Compte`** (compte en dernière étape de saisie) est effectif.
 - Tests verts (lint, typecheck, vitest) ; couverture des fonctions pures (`deriveSetupStep`) et des composants d'étape.
