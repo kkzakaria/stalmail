@@ -84,7 +84,8 @@ if [ ! -f .env ]; then
     SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c 256 /dev/urandom))
     SECRET=${SECRET:0:64}
     # Fallback setup token : lire une tranche LARGE (4096 octets) pour garantir assez de
-    # caractères hex après filtrage (~22 % de rendement sur a-f0-9), puis couper en bash.
+    # caractères hex après filtrage (~6 % de rendement : 16 chars hex sur 256 valeurs
+    # d'octet → ~256 chars attendus pour 4096 octets lus, ≫ 48 requis), puis couper en bash.
     SETUP_TOKEN=$(LC_ALL=C tr -dc 'a-f0-9' < <(head -c 4096 /dev/urandom))
     SETUP_TOKEN=${SETUP_TOKEN:0:48}
   fi
