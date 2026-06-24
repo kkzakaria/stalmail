@@ -1,82 +1,18 @@
-import { jmapCall, resolveAccountId, firstResponse, JmapError } from "./jmap"
+import {
+  jmapCall,
+  resolveAccountId,
+  firstResponse,
+  expectResult,
+  JmapError,
+} from "./jmap"
+// DNS_PROVIDERS / DnsProvider live in a client-safe shared module so the wizard
+// UI can import the runtime constant without pulling this server-only file
+// (node:fs, JMAP transport) into the browser bundle. Re-exported here for the
+// server-side call sites.
+import { DNS_PROVIDERS } from "@/lib/dns-providers"
+import type { DnsProvider } from "@/lib/dns-providers"
 
-// Captured from the v0.16 schema enum DnsServerBootstrapType. The enum lists 71
-// entries; the deprecated placeholder ("Deprecated1") is omitted here, leaving 70.
-// See docs/superpowers/specs/2026-06-09-stalwart-api-capture.md §6.
-export const DNS_PROVIDERS = [
-  "Manual",
-  "Tsig",
-  "Cloudflare",
-  "DigitalOcean",
-  "DeSEC",
-  "Ovh",
-  "Bunny",
-  "Porkbun",
-  "Dnsimple",
-  "Spaceship",
-  "Route53",
-  "GoogleCloudDns",
-  "Alidns",
-  "ArvanCloud",
-  "Autodns",
-  "AzureDns",
-  "BaiduCloud",
-  "BluecatV2",
-  "ClouDns",
-  "Constellix",
-  "Cpanel",
-  "Ddnss",
-  "DnsMadeEasy",
-  "Domeneshop",
-  "Dreamhost",
-  "DuckDns",
-  "Dynu",
-  "EasyDns",
-  "EdgeDns",
-  "Exoscale",
-  "FreeMyIp",
-  "GandiV5",
-  "Gcore",
-  "Glesys",
-  "Godaddy",
-  "Hetzner",
-  "HostingDe",
-  "Hostinger",
-  "HuaweiCloud",
-  "Hurricane",
-  "IbmCloud",
-  "Infoblox",
-  "Infomaniak",
-  "Inwx",
-  "Ionos",
-  "Ipv64",
-  "Joker",
-  "Lightsail",
-  "Linode",
-  "LuaDns",
-  "MythicBeasts",
-  "Namecheap",
-  "NameDotCom",
-  "NameSilo",
-  "Netcup",
-  "Netlify",
-  "Nifcloud",
-  "Ns1",
-  "OracleCloud",
-  "Plesk",
-  "Safedns",
-  "Scaleway",
-  "TencentCloud",
-  "Transip",
-  "UltraDns",
-  "Vercel",
-  "Volcengine",
-  "Vultr",
-  "WebSupport",
-  "YandexCloud",
-] as const
-
-export type DnsProvider = (typeof DNS_PROVIDERS)[number]
+export { DNS_PROVIDERS, type DnsProvider }
 
 export interface DnsServerInput {
   provider: DnsProvider
@@ -97,8 +33,57 @@ function secretKey(value: string): { "@type": "Value"; secret: string } {
   return { "@type": "Value", secret: value }
 }
 
+export async function findDnsServerId(
+  provider: DnsProvider
+): Promise<string | null> {
+  const accountId = await resolveAccountId()
+  const responses = await jmapCall([
+    ["x:DnsServer/query", { accountId }, "0"],
+    [
+      "x:DnsServer/get",
+      {
+        accountId,
+        "#ids": { resultOf: "0", name: "x:DnsServer/query", path: "/ids" },
+      },
+      "1",
+    ],
+  ])
+  const list =
+    (
+      expectResult(responses, 1) as {
+        list?: Array<{ id: string; "@type"?: string }>
+      }
+    ).list ?? []
+  return list.find((s) => s["@type"] === provider)?.id ?? null
+}
+
 export async function createDnsServer(input: DnsServerInput): Promise<string> {
   const accountId = await resolveAccountId()
+
+  // Idempotent reuse: a DnsServer for this provider already exists. Update its
+  // secret rather than returning it unchanged so a retry with a CORRECTED token
+  // takes effect (a known-bad token must not be replayed). Still no duplicate.
+  const existing = await findDnsServerId(input.provider)
+  if (existing) {
+    const responses = await jmapCall([
+      [
+        "x:DnsServer/set",
+        {
+          accountId,
+          update: { [existing]: { secret: secretKey(input.secret) } },
+        },
+        "0",
+      ],
+    ])
+    const upd = firstResponse(responses)[1] as {
+      updated?: Record<string, unknown>
+      notUpdated?: unknown
+    }
+    if (!upd.updated || !(existing in upd.updated))
+      throw new JmapError("dns server secret update rejected", upd.notUpdated)
+    return existing
+  }
+
   const responses = await jmapCall([
     [
       "x:DnsServer/set",

@@ -10,7 +10,7 @@ vi.mock("./jmap", async (importActual) => ({
 // eslint-disable-next-line import/first
 import { jmapCall } from "./jmap"
 // eslint-disable-next-line import/first
-import { createDnsServer, DNS_PROVIDERS } from "./stalwart-dns"
+import { createDnsServer, findDnsServerId, DNS_PROVIDERS } from "./stalwart-dns"
 
 const mj = vi.mocked(jmapCall)
 beforeEach(() => vi.clearAllMocks())
@@ -24,9 +24,96 @@ describe("DNS_PROVIDERS", () => {
   })
 })
 
+// Mock response for findDnsServerId when no existing server is found.
+const NO_EXISTING_DNS_SERVER: [
+  [string, Record<string, unknown>, string],
+  [string, Record<string, unknown>, string],
+] = [
+  ["x:DnsServer/query", { ids: [] }, "0"],
+  ["x:DnsServer/get", { list: [] }, "1"],
+]
+
+describe("findDnsServerId", () => {
+  it("retourne null quand aucun DnsServer ne correspond au provider", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/query", { ids: ["srvA"] }, "0"],
+      [
+        "x:DnsServer/get",
+        { list: [{ id: "srvA", "@type": "DigitalOcean" }] },
+        "1",
+      ],
+    ])
+    const id = await findDnsServerId("Cloudflare")
+    expect(id).toBeNull()
+  })
+
+  it("retourne l'id si un DnsServer du même provider existe", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/query", { ids: ["srvX"] }, "0"],
+      [
+        "x:DnsServer/get",
+        { list: [{ id: "srvX", "@type": "Cloudflare" }] },
+        "1",
+      ],
+    ])
+    const id = await findDnsServerId("Cloudflare")
+    expect(id).toBe("srvX")
+  })
+})
+
 describe("createDnsServer", () => {
+  it("réutilise un DnsServer existant (idempotence) en mettant à jour le secret", async () => {
+    // find → existing server
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/query", { ids: ["srvX"] }, "0"],
+      [
+        "x:DnsServer/get",
+        { list: [{ id: "srvX", "@type": "Cloudflare" }] },
+        "1",
+      ],
+    ])
+    // update → applies the corrected secret to the found id (no create)
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/set", { updated: { srvX: null } }, "0"],
+    ])
+    const id = await createDnsServer({
+      provider: "Cloudflare",
+      secret: "corrected-tok",
+    })
+    expect(id).toBe("srvX")
+    // second call is an UPDATE of the existing id, not a create
+    const [[method, args]] = mj.mock.calls[1][0] as [
+      [string, Record<string, unknown>, string],
+    ]
+    expect(method).toBe("x:DnsServer/set")
+    expect(args.create).toBeUndefined()
+    expect(args.update).toEqual({
+      srvX: { secret: { "@type": "Value", secret: "corrected-tok" } },
+    })
+  })
+
+  it("throws when the idempotent secret update is rejected", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/query", { ids: ["srvX"] }, "0"],
+      [
+        "x:DnsServer/get",
+        { list: [{ id: "srvX", "@type": "Cloudflare" }] },
+        "1",
+      ],
+    ])
+    mj.mockResolvedValueOnce([
+      ["x:DnsServer/set", { notUpdated: { srvX: { type: "forbidden" } } }, "0"],
+    ])
+    await expect(
+      createDnsServer({ provider: "Cloudflare", secret: "x" })
+    ).rejects.toThrow()
+  })
+
   it('creates a provider variant, wrapping the secret as a SecretKey "Value"', async () => {
-    mj.mockResolvedValue([
+    // First call: findDnsServerId returns no match
+    mj.mockResolvedValueOnce([...NO_EXISTING_DNS_SERVER])
+    // Second call: DnsServer/set creates successfully
+    mj.mockResolvedValueOnce([
       ["x:DnsServer/set", { created: { new1: { id: "srv1" } } }, "0"],
     ])
     const id = await createDnsServer({
@@ -35,7 +122,8 @@ describe("createDnsServer", () => {
       description: "cf",
     })
     expect(id).toBe("srv1")
-    const [[, args]] = mj.mock.calls[0][0] as [
+    // The create call is the second jmapCall (index 1)
+    const [[, args]] = mj.mock.calls[1][0] as [
       [string, Record<string, unknown>, string],
     ]
     // secret must be the typed SecretKey object, NOT a bare string (Stalwart v0.16
@@ -50,7 +138,8 @@ describe("createDnsServer", () => {
   })
 
   it("throws when creation is rejected", async () => {
-    mj.mockResolvedValue([
+    mj.mockResolvedValueOnce([...NO_EXISTING_DNS_SERVER])
+    mj.mockResolvedValueOnce([
       [
         "x:DnsServer/set",
         { notCreated: { new1: { type: "invalidProperties" } } },

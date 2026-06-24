@@ -6,17 +6,13 @@ export const fr = {
       retry: "Réessayer",
       copy: "Copier",
       copied: "Copié",
-      stepOf: "Étape {{n}} sur 9",
+      stepOf: "Étape {{n}} sur 6",
     },
-    groups: { config: "Configuration", activation: "Activation" },
     steps: {
       welcome: "Bienvenue",
       domain: "Domaine",
-      dnsProvider: "Fournisseur DNS",
-      admin: "Administrateur",
+      dns: "DNS",
       account: "Compte",
-      recap: "Récapitulatif",
-      dnsRecords: "Enregistrements DNS",
       ssl: "SSL",
       done: "Terminé",
     },
@@ -25,7 +21,24 @@ export const fr = {
       toDark: "Passer au thème sombre",
     },
     langs: { fr: "Français", en: "English" },
-    error: { title: "Une erreur est survenue", retry: "Réessayer" },
+    error: {
+      title: "Une erreur est survenue",
+      retry: "Réessayer",
+      generic: "La configuration n'a pas pu aboutir.",
+      codes: {
+        "SETUP-RESTART-TIMEOUT": "Le serveur met trop de temps à répondre.",
+        "SETUP-DNS-REJECTED": "Le fournisseur DNS a refusé ces informations.",
+        "SETUP-DNS-MANAGEMENT-REJECTED":
+          "La gestion DNS automatique a été refusée.",
+        "SETUP-ACCOUNT-WEAK":
+          "Le mot de passe choisi n'est pas suffisamment robuste.",
+        "SETUP-ACCOUNT-REJECTED":
+          "La création du compte administrateur a échoué.",
+        "SETUP-SSL-REJECTED": "L'obtention du certificat SSL a échoué.",
+        "SETUP-UNKNOWN": "Une erreur inattendue s'est produite.",
+        "SETUP-FORBIDDEN": "Cette étape n'est pas disponible.",
+      },
+    },
     welcome: {
       title: "Bienvenue sur Stalmail",
       subtitle:
@@ -137,23 +150,11 @@ export const fr = {
         retry: "Créer le compte",
       },
     },
-    recap: {
-      title: "Récapitulatif",
-      subtitle: "Vérifiez ces informations — le serveur sera configuré avec.",
-      hostname: "Nom d'hôte",
-      domain: "Domaine",
-      dns: "DNS",
-      dnsAuto: "Automatique via {{provider}}",
-      dnsManual: "Manuel",
-      account: "Administrateur",
-      edit: "Modifier",
-      submit: "Configurer le serveur",
-      note: "Stalwart écrira sa configuration puis redémarrera.",
-    },
     restart: {
       title: "Configuration en cours",
       subtitle:
         "Le serveur écrit sa configuration et redémarre. Cela prend généralement moins d'une minute.",
+      configuring: "Configuration en cours…",
       timeout: "Cela prend plus de temps que prévu. Vous pouvez réessayer.",
       poll: "getStep() · tentative {{n}}",
       restarting: "redémarrage…",
@@ -184,6 +185,9 @@ export const fr = {
         "Vous pouvez continuer : Stalwart réessaiera automatiquement et l'administration reste accessible sur :8080/admin.",
       failedHint:
         "Le défi DNS-01 requiert un fournisseur DNS configuré et accessible (token valide).",
+      manualTitle: "Certificat à gérer manuellement",
+      manualNote:
+        "En DNS manuel, le défi ACME DNS-01 ne peut pas être automatisé ici. Obtenez et installez le certificat du serveur mail vous-même (hors de ce wizard), puis continuez.",
       status: {
         pending: "En attente",
         failed: "Échec — nouvel essai planifié",
@@ -326,23 +330,34 @@ export const en: DeepRecord<typeof fr> = {
       retry: "Retry",
       copy: "Copy",
       copied: "Copied",
-      stepOf: "Step {{n}} of 9",
+      stepOf: "Step {{n}} of 6",
     },
-    groups: { config: "Configuration", activation: "Activation" },
     steps: {
       welcome: "Welcome",
       domain: "Domain",
-      dnsProvider: "DNS provider",
-      admin: "Administrator",
+      dns: "DNS",
       account: "Account",
-      recap: "Summary",
-      dnsRecords: "DNS records",
       ssl: "SSL",
       done: "Done",
     },
     theme: { toLight: "Switch to light theme", toDark: "Switch to dark theme" },
     langs: { fr: "Français", en: "English" },
-    error: { title: "Something went wrong", retry: "Retry" },
+    error: {
+      title: "Something went wrong",
+      retry: "Retry",
+      generic: "Configuration could not complete.",
+      codes: {
+        "SETUP-RESTART-TIMEOUT": "The server is taking too long to respond.",
+        "SETUP-DNS-REJECTED": "The DNS provider rejected these details.",
+        "SETUP-DNS-MANAGEMENT-REJECTED":
+          "Automatic DNS management was rejected.",
+        "SETUP-ACCOUNT-WEAK": "The chosen password is not strong enough.",
+        "SETUP-ACCOUNT-REJECTED": "Administrator account creation failed.",
+        "SETUP-SSL-REJECTED": "Obtaining the SSL certificate failed.",
+        "SETUP-UNKNOWN": "An unexpected error occurred.",
+        "SETUP-FORBIDDEN": "This step is not available.",
+      },
+    },
     welcome: {
       title: "Welcome to Stalmail",
       subtitle:
@@ -454,24 +469,11 @@ export const en: DeepRecord<typeof fr> = {
         retry: "Create account",
       },
     },
-    recap: {
-      title: "Summary",
-      subtitle:
-        "Review this information — the server will be configured with it.",
-      hostname: "Hostname",
-      domain: "Domain",
-      dns: "DNS",
-      dnsAuto: "Automatic via {{provider}}",
-      dnsManual: "Manual",
-      account: "Administrator",
-      edit: "Edit",
-      submit: "Configure the server",
-      note: "Stalwart will write its configuration, then restart.",
-    },
     restart: {
       title: "Configuring",
       subtitle:
         "The server is writing its configuration and restarting. This usually takes less than a minute.",
+      configuring: "Setting things up…",
       timeout: "This is taking longer than expected. You can retry.",
       poll: "getStep() · attempt {{n}}",
       restarting: "restarting…",
@@ -502,6 +504,9 @@ export const en: DeepRecord<typeof fr> = {
         "You can continue: Stalwart will retry automatically and the admin stays reachable on :8080/admin.",
       failedHint:
         "The DNS-01 challenge requires a configured, reachable DNS provider (valid token).",
+      manualTitle: "Certificate to manage manually",
+      manualNote:
+        "With manual DNS, the ACME DNS-01 challenge can't be automated here. Obtain and install the mail server certificate yourself (outside this wizard), then continue.",
       status: {
         pending: "Pending",
         failed: "Failed — retry scheduled",
