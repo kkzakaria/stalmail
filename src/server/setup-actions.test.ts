@@ -93,6 +93,7 @@ vi.mock("./setup-auth", () => ({
   isSetupAuthed: vi.fn(() => true),
   unlockSetup: vi.fn(() => undefined),
   issueSetupCookie: vi.fn(() => undefined),
+  clearSetupCookie: vi.fn(() => undefined),
 }))
 
 // Mock session-cookie: assertSameOriginStrict is a no-op by default
@@ -136,6 +137,7 @@ import {
   isSetupAuthed,
   unlockSetup,
   issueSetupCookie,
+  clearSetupCookie,
 } from "./setup-auth"
 // eslint-disable-next-line import/first
 import { assertSameOriginStrict } from "./session-cookie"
@@ -705,9 +707,10 @@ describe("finishSetupHandler", () => {
     expect(result).toEqual({ ok: true })
   })
 
-  it("calls issueSetupCookie on success", async () => {
+  it("calls clearSetupCookie (not issueSetupCookie) on success", async () => {
     await finishSetupHandler()
-    expect(issueSetupCookie).toHaveBeenCalledOnce()
+    expect(clearSetupCookie).toHaveBeenCalledOnce()
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {

@@ -48,7 +48,8 @@ export function isSetupAuthed(): boolean {
     return false // invalid / tampered / wrong-aad ciphertext (GCM auth failure)
   }
   if (!Number.isFinite(issuedAt)) return false
-  return Date.now() - issuedAt <= TTL_MS
+  const age = Date.now() - issuedAt
+  return age >= 0 && age <= TTL_MS
 }
 
 export function requireSetupAuth(): void {

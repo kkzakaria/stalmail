@@ -125,6 +125,12 @@ describe("issueSetupCookie / isSetupAuthed", () => {
     jar.set(COOKIE_NAME, `enc:stalmail-setup:not-a-number`)
     expect(isSetupAuthed()).toBe(false)
   })
+
+  it("returns false when issuedAt is in the future (negative age)", () => {
+    const future = Date.now() + 60_000 // 1 minute in the future
+    jar.set(COOKIE_NAME, `enc:stalmail-setup:${future}`)
+    expect(isSetupAuthed()).toBe(false)
+  })
 })
 
 describe("requireSetupAuth", () => {

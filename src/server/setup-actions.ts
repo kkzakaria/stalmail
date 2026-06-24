@@ -326,8 +326,8 @@ export async function finishSetupHandler(): Promise<{ ok: true }> {
   const { markSetupComplete } = await import("./setup-flag")
   await enableXForwarded() // go-live condition — recovery admin still active here
   markSetupComplete()
-  const { issueSetupCookie } = await import("./setup-auth")
-  issueSetupCookie()
+  const { clearSetupCookie } = await import("./setup-auth")
+  clearSetupCookie()
   return { ok: true }
 }
 
