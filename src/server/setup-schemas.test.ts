@@ -107,6 +107,15 @@ describe("configureAcmeSchema", () => {
     ).not.toThrow()
   })
 
+  it("rejects a non-empty non-email contactEmail", () => {
+    expect(() =>
+      configureAcmeSchema.parse({
+        hostname: "mail.example.com",
+        contactEmail: "x",
+      })
+    ).toThrow()
+  })
+
   it("rejects a hostname longer than 253 chars", () => {
     expect(() =>
       configureAcmeSchema.parse({

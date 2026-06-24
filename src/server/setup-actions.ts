@@ -288,7 +288,7 @@ export async function finishSetupHandler(): Promise<{ ok: true }> {
 // handler resolves hostname/contactEmail server-side. Bound the lengths only.
 export const configureAcmeSchema = z.object({
   hostname: z.string().max(253),
-  contactEmail: z.string().max(254),
+  contactEmail: z.union([z.literal(""), z.string().email().max(254)]),
 })
 
 export const configureAcmeFn = createServerFn({ method: "POST" })
