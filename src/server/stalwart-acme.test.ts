@@ -12,7 +12,12 @@ vi.mock("./jmap", async (importActual) => ({
 // eslint-disable-next-line import/first
 import { jmapCall, JmapError } from "./jmap"
 // eslint-disable-next-line import/first
-import { configureAcme, getAcmeStatus } from "./stalwart-acme"
+import {
+  configureAcme,
+  getAcmeStatus,
+  classifyAcmeRenewal,
+  RENEWAL_LEAD_MS,
+} from "./stalwart-acme"
 
 const mj = vi.mocked(jmapCall)
 beforeEach(() => vi.clearAllMocks())
@@ -135,5 +140,67 @@ describe("getAcmeStatus", () => {
       ],
     ])
     await expect(getAcmeStatus()).resolves.toBe("valid")
+  })
+
+  it("returns 'valid' when the AcmeRenewal task is Pending but due far in the future (cert issued, renewal scheduled)", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: ["t1"] }, "0"],
+      [
+        "x:Task/get",
+        {
+          list: [
+            {
+              "@type": "AcmeRenewal",
+              status: { "@type": "Pending" },
+              due: "2099-01-01T00:00:00Z",
+            },
+          ],
+        },
+        "1",
+      ],
+    ])
+    await expect(getAcmeStatus()).resolves.toBe("valid")
+  })
+})
+
+describe("classifyAcmeRenewal", () => {
+  const NOW = Date.parse("2026-06-24T12:00:00Z")
+
+  it("returns 'valid' when there is no task", () => {
+    expect(classifyAcmeRenewal(undefined, NOW)).toBe("valid")
+  })
+
+  it("returns 'failed' when the task status is Failed", () => {
+    expect(classifyAcmeRenewal({ status: { "@type": "Failed" } }, NOW)).toBe(
+      "failed"
+    )
+  })
+
+  it("returns 'valid' for a Pending task due well in the future (renewal scheduled)", () => {
+    // ~60 days out, like the live prod task (cert already obtained).
+    const due = new Date(NOW + 60 * RENEWAL_LEAD_MS).toISOString()
+    expect(
+      classifyAcmeRenewal({ status: { "@type": "Pending" }, due }, NOW)
+    ).toBe("valid")
+  })
+
+  it("returns 'pending' for a Pending task due imminently (issuance in flight)", () => {
+    const due = new Date(NOW + 60_000).toISOString() // 1 min out
+    expect(
+      classifyAcmeRenewal({ status: { "@type": "Pending" }, due }, NOW)
+    ).toBe("pending")
+  })
+
+  it("returns 'pending' for a Retry task overdue (still trying)", () => {
+    const due = new Date(NOW - 3_600_000).toISOString() // 1h ago
+    expect(
+      classifyAcmeRenewal({ status: { "@type": "Retry" }, due }, NOW)
+    ).toBe("pending")
+  })
+
+  it("returns 'pending' for a Pending task with no due", () => {
+    expect(classifyAcmeRenewal({ status: { "@type": "Pending" } }, NOW)).toBe(
+      "pending"
+    )
   })
 })
