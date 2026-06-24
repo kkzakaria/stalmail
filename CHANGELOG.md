@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.20](https://github.com/kkzakaria/stalmail/compare/v0.1.19...v0.1.20) (2026-06-24)
+
+
+### Bug Fixes
+
+* **setup:** statut SSL "valid" quand le renouvellement ACME est planifié ([#59](https://github.com/kkzakaria/stalmail/issues/59)) ([5bdb57a](https://github.com/kkzakaria/stalmail/commit/5bdb57a94f8c434644169360015bd20638979b63))
+* **setup:** vérifier les enregistrements CNAME dans la grille DNS ([#58](https://github.com/kkzakaria/stalmail/issues/58)) ([5c5e186](https://github.com/kkzakaria/stalmail/commit/5c5e18684527d525a28559ad306dcc52130a05fc))
+
 ## [0.1.19](https://github.com/kkzakaria/stalmail/compare/v0.1.18...v0.1.19) (2026-06-24)
 
 
