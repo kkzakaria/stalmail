@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.18](https://github.com/kkzakaria/stalmail/compare/v0.1.17...v0.1.18) (2026-06-24)
+
+
+### Features
+
+* **setup:** authentification du bootstrap du wizard (jeton dédié) ([#54](https://github.com/kkzakaria/stalmail/issues/54)) ([bbb992b](https://github.com/kkzakaria/stalmail/commit/bbb992bac910ec1eb6043fb143b9976be468007d))
+
 ## [0.1.17](https://github.com/kkzakaria/stalmail/compare/v0.1.16...v0.1.17) (2026-06-23)
 
 
