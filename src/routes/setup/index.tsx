@@ -13,6 +13,8 @@ import {
   finishSetupFn,
   setupStatusFn,
   markSslConfiguredFn,
+  unlockSetupFn,
+  setupAuthStatusFn,
 } from "@/server/setup-actions"
 import { getServerTheme } from "@/server/setup-theme"
 import { SetupWizard } from "@/components/setup/SetupWizard"
@@ -40,6 +42,8 @@ function SetupPage() {
       initialStep={step}
       initialDnsManual={dnsManual}
       initialTheme={theme}
+      unlock={(token) => unlockSetupFn({ data: { token } })}
+      authStatus={() => setupAuthStatusFn()}
       submitBootstrap={(data) =>
         submitBootstrapFn({ data }).then(() => undefined)
       }

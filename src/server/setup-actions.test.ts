@@ -14,6 +14,8 @@ import {
   finishSetupHandler,
   setupStatusHandler,
   markSslConfiguredHandler,
+  unlockSetupHandler,
+  setupAuthStatusHandler,
 } from "./setup-actions"
 import type * as StalwartAccountModule from "./stalwart-account"
 import type * as StalwartDomainModule from "./stalwart-domain"
@@ -85,6 +87,21 @@ vi.mock("./setup-errors", async (importActual) => ({
   ...(await importActual<typeof SetupErrorsModule>()),
 }))
 
+// Mock setup-auth: requireSetupAuth is a no-op by default (authed), issueSetupCookie tracked
+vi.mock("./setup-auth", () => ({
+  requireSetupAuth: vi.fn(async () => undefined),
+  isSetupAuthed: vi.fn(() => true),
+  unlockSetup: vi.fn(() => undefined),
+  issueSetupCookie: vi.fn(() => undefined),
+  clearSetupCookie: vi.fn(() => undefined),
+}))
+
+// Mock session-cookie: assertSameOriginStrict is a no-op by default
+vi.mock("./session-cookie", () => ({
+  assertSameOriginStrict: vi.fn(() => undefined),
+  clientIp: vi.fn(() => "127.0.0.1"),
+}))
+
 // eslint-disable-next-line import/first
 import {
   getPrimaryDomain,
@@ -114,8 +131,33 @@ import { enableXForwarded } from "./stalwart-hardening"
 import { SetupError } from "./setup-errors"
 // eslint-disable-next-line import/first
 import { deriveSetupStep, isDnsManual } from "./setup-state"
+// eslint-disable-next-line import/first
+import {
+  requireSetupAuth,
+  isSetupAuthed,
+  unlockSetup,
+  issueSetupCookie,
+  clearSetupCookie,
+} from "./setup-auth"
+// eslint-disable-next-line import/first
+import { assertSameOriginStrict } from "./session-cookie"
 
 beforeEach(() => vi.clearAllMocks())
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Make requireSetupAuth throw SETUP-UNAUTHENTICATED (simulates unauthed request). */
+function simulateUnauthed(): void {
+  vi.mocked(requireSetupAuth).mockImplementationOnce(async () => {
+    throw new SetupError("SETUP-UNAUTHENTICATED")
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Read-only handlers — no auth guard
+// ---------------------------------------------------------------------------
 
 describe("getStepHandler", () => {
   it("returns the derived step with dnsManual false by default", async () => {
@@ -131,6 +173,52 @@ describe("getStepHandler", () => {
   })
 })
 
+describe("setupAuthStatusHandler", () => {
+  it("returns {authed:true} when isSetupAuthed returns true", async () => {
+    vi.mocked(isSetupAuthed).mockReturnValueOnce(true)
+    const result = await setupAuthStatusHandler()
+    expect(result).toEqual({ authed: true })
+  })
+
+  it("returns {authed:false} when isSetupAuthed returns false", async () => {
+    vi.mocked(isSetupAuthed).mockReturnValueOnce(false)
+    const result = await setupAuthStatusHandler()
+    expect(result).toEqual({ authed: false })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// unlockSetupHandler — special: no requireSetupAuth, calls unlockSetup
+// ---------------------------------------------------------------------------
+
+describe("unlockSetupHandler", () => {
+  it("calls unlockSetup with the provided token and returns {ok:true}", async () => {
+    const result = await unlockSetupHandler({ data: { token: "secret-tok" } })
+    expect(unlockSetup).toHaveBeenCalledWith("secret-tok")
+    expect(result).toEqual({ ok: true })
+  })
+
+  it("propagates errors thrown by unlockSetup", async () => {
+    vi.mocked(unlockSetup).mockImplementationOnce(() => {
+      throw new SetupError("SETUP-UNLOCK-FAILED")
+    })
+    const err = await unlockSetupHandler({
+      data: { token: "bad" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNLOCK-FAILED")
+  })
+
+  it("does NOT call requireSetupAuth", async () => {
+    await unlockSetupHandler({ data: { token: "tok" } })
+    expect(requireSetupAuth).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// submitBootstrapHandler
+// ---------------------------------------------------------------------------
+
 describe("submitBootstrapHandler", () => {
   it("submits bootstrap then requests a Stalwart restart", async () => {
     // mock returns "collect" by default — matches requireStep("collect")
@@ -143,6 +231,43 @@ describe("submitBootstrapHandler", () => {
     })
     expect(requestStalwartRestart).toHaveBeenCalled()
     expect(out).toEqual({ ok: true })
+  })
+
+  it("calls assertSameOriginStrict and requireSetupAuth before action", async () => {
+    const callOrder: string[] = []
+    vi.mocked(assertSameOriginStrict).mockImplementationOnce(() => {
+      callOrder.push("assertSameOriginStrict")
+    })
+    vi.mocked(requireSetupAuth).mockImplementationOnce(async () => {
+      callOrder.push("requireSetupAuth")
+    })
+    vi.mocked(submitBootstrap).mockImplementationOnce(async () => {
+      callOrder.push("submitBootstrap")
+      return { username: "u", secret: "s" }
+    })
+    await submitBootstrapHandler({
+      data: { serverHostname: "mail.exemple.fr", defaultDomain: "exemple.fr" },
+    })
+    expect(callOrder[0]).toBe("assertSameOriginStrict")
+    expect(callOrder[1]).toBe("requireSetupAuth")
+    expect(callOrder[2]).toBe("submitBootstrap")
+  })
+
+  it("calls issueSetupCookie on success", async () => {
+    await submitBootstrapHandler({
+      data: { serverHostname: "mail.exemple.fr", defaultDomain: "exemple.fr" },
+    })
+    expect(issueSetupCookie).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await submitBootstrapHandler({
+      data: { serverHostname: "x", defaultDomain: "y" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it("does not request a restart if submitBootstrap throws", async () => {
@@ -174,6 +299,10 @@ describe("submitBootstrapHandler", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// createAdminAccountHandler
+// ---------------------------------------------------------------------------
+
 describe("createAdminAccountHandler", () => {
   beforeEach(() => {
     // This handler requires step "account"
@@ -191,6 +320,23 @@ describe("createAdminAccountHandler", () => {
       domainId: "dom-1",
       password: "correct horse battery staple",
     })
+  })
+
+  it("calls issueSetupCookie on success", async () => {
+    await createAdminAccountHandler({
+      data: { name: "koffi", password: "correct horse battery staple" },
+    })
+    expect(issueSetupCookie).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await createAdminAccountHandler({
+      data: { name: "koffi", password: "correct horse battery staple" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it('returns {status:"weak"} when createAdminAccount throws WeakPasswordError', async () => {
@@ -242,6 +388,10 @@ describe("createAdminAccountHandler", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// createDnsServerHandler
+// ---------------------------------------------------------------------------
+
 describe("createDnsServerHandler", () => {
   beforeEach(() => {
     vi.mocked(deriveSetupStep).mockResolvedValue("dns")
@@ -253,6 +403,23 @@ describe("createDnsServerHandler", () => {
       data: { provider: "Cloudflare", secret: "tok-abc" },
     })
     expect(result).toEqual({ dnsServerId: "srv-1" })
+  })
+
+  it("calls issueSetupCookie on success", async () => {
+    await createDnsServerHandler({
+      data: { provider: "Cloudflare", secret: "tok-abc" },
+    })
+    expect(issueSetupCookie).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await createDnsServerHandler({
+      data: { provider: "Cloudflare", secret: "tok" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it("throws SetupError with SETUP-DNS-REJECTED on createDnsServer failure", async () => {
@@ -283,6 +450,10 @@ describe("createDnsServerHandler", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// setDnsManagementHandler
+// ---------------------------------------------------------------------------
+
 describe("setDnsManagementHandler", () => {
   beforeEach(() => {
     vi.mocked(deriveSetupStep).mockResolvedValue("dns")
@@ -303,6 +474,21 @@ describe("setDnsManagementHandler", () => {
       dnsServerId: "srv-1",
       origin: "example.com",
     })
+  })
+
+  it("calls issueSetupCookie on success", async () => {
+    await setDnsManagementHandler({ data: { dnsServerId: "srv-1" } })
+    expect(issueSetupCookie).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
@@ -334,6 +520,10 @@ describe("setDnsManagementHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
   })
 })
+
+// ---------------------------------------------------------------------------
+// dnsGridStatusHandler — read-only, no auth guard
+// ---------------------------------------------------------------------------
 
 describe("dnsGridStatusHandler", () => {
   it("maps verified/mismatch/missing to verified/error/pending", async () => {
@@ -370,6 +560,10 @@ describe("dnsGridStatusHandler", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// configureAcmeHandler
+// ---------------------------------------------------------------------------
+
 describe("configureAcmeHandler", () => {
   beforeEach(() => {
     vi.mocked(deriveSetupStep).mockResolvedValue("ssl")
@@ -390,6 +584,26 @@ describe("configureAcmeHandler", () => {
       contactEmail: "admin@example.com",
     })
     expect(result).toEqual({ ok: true })
+  })
+
+  it("calls issueSetupCookie on success", async () => {
+    await configureAcmeHandler({
+      data: { hostname: "mail.example.com", contactEmail: "admin@example.com" },
+    })
+    expect(issueSetupCookie).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await configureAcmeHandler({
+      data: {
+        hostname: "mail.example.com",
+        contactEmail: "admin@example.com",
+      },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
@@ -457,6 +671,10 @@ describe("configureAcmeHandler", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// acmeStatusHandler — read-only, no auth guard
+// ---------------------------------------------------------------------------
+
 describe("acmeStatusHandler", () => {
   it("returns {status} from getAcmeStatus", async () => {
     vi.mocked(getAcmeStatus).mockResolvedValueOnce("pending")
@@ -464,6 +682,10 @@ describe("acmeStatusHandler", () => {
     expect(result).toEqual({ status: "pending" })
   })
 })
+
+// ---------------------------------------------------------------------------
+// finishSetupHandler
+// ---------------------------------------------------------------------------
 
 describe("finishSetupHandler", () => {
   beforeEach(() => {
@@ -485,6 +707,20 @@ describe("finishSetupHandler", () => {
     expect(result).toEqual({ ok: true })
   })
 
+  it("calls clearSetupCookie (not issueSetupCookie) on success", async () => {
+    await finishSetupHandler()
+    expect(clearSetupCookie).toHaveBeenCalledOnce()
+    expect(issueSetupCookie).not.toHaveBeenCalled()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await finishSetupHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
+  })
+
   it("does not mark setup complete when enableXForwarded rejects", async () => {
     vi.mocked(enableXForwarded).mockRejectedValueOnce(
       new Error("http-set failed")
@@ -500,6 +736,10 @@ describe("finishSetupHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
   })
 })
+
+// ---------------------------------------------------------------------------
+// setupStatusHandler — read-only, no auth guard
+// ---------------------------------------------------------------------------
 
 describe("setupStatusHandler", () => {
   it("returns {configured:false} when isSetupComplete returns false", async () => {
@@ -517,6 +757,10 @@ describe("setupStatusHandler", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// setDnsManagementManualHandler
+// ---------------------------------------------------------------------------
+
 describe("setDnsManagementManualHandler", () => {
   beforeEach(() => {
     vi.mocked(deriveSetupStep).mockResolvedValue("dns")
@@ -533,6 +777,19 @@ describe("setDnsManagementManualHandler", () => {
     expect(result).toEqual({ ok: true })
     expect(setDnsManagementManual).toHaveBeenCalledWith({ domainId: "dom-1" })
     expect(markDnsConfigured).toHaveBeenCalled()
+  })
+
+  it("calls issueSetupCookie on success", async () => {
+    await setDnsManagementManualHandler()
+    expect(issueSetupCookie).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await setDnsManagementManualHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
@@ -561,6 +818,10 @@ describe("setDnsManagementManualHandler", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// markSslConfiguredHandler
+// ---------------------------------------------------------------------------
+
 describe("markSslConfiguredHandler", () => {
   beforeEach(() => {
     vi.mocked(deriveSetupStep).mockResolvedValue("ssl")
@@ -572,6 +833,19 @@ describe("markSslConfiguredHandler", () => {
     const result = await markSslConfiguredHandler()
     expect(result).toEqual({ ok: true })
     expect(markSslAcknowledged).toHaveBeenCalledOnce()
+  })
+
+  it("calls issueSetupCookie on success", async () => {
+    await markSslConfiguredHandler()
+    expect(issueSetupCookie).toHaveBeenCalledOnce()
+  })
+
+  it("throws SETUP-UNAUTHENTICATED when requireSetupAuth throws", async () => {
+    simulateUnauthed()
+    const err = await markSslConfiguredHandler().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNAUTHENTICATED")
+    expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
   it("throws SETUP-FORBIDDEN when step is not 'ssl'", async () => {

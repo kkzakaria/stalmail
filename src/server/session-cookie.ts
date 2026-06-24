@@ -1,14 +1,19 @@
-import { getCookie, setCookie, deleteCookie, getRequestHeader } from '@tanstack/react-start/server'
+import {
+  getCookie,
+  setCookie,
+  deleteCookie,
+  getRequestHeader,
+} from "@tanstack/react-start/server"
 
 const ABSOLUTE_TTL_S = 30 * 24 * 60 * 60 // 30d, aligned with the session absolute TTL
 
 function secure(): boolean {
-  return process.env.NODE_ENV === 'production'
+  return process.env.NODE_ENV === "production"
 }
 
 // __Host- requires Secure + Path=/ + no Domain; only valid over https (prod).
 export function cookieName(): string {
-  return secure() ? '__Host-stalmail_session' : 'stalmail_session'
+  return secure() ? "__Host-stalmail_session" : "stalmail_session"
 }
 
 export function readSid(): string | undefined {
@@ -19,15 +24,15 @@ export function writeSid(sid: string): void {
   setCookie(cookieName(), sid, {
     httpOnly: true,
     secure: secure(),
-    sameSite: 'lax',
-    path: '/',
+    sameSite: "lax",
+    path: "/",
     maxAge: ABSOLUTE_TTL_S,
   })
 }
 
 export function clearSid(): void {
   // h3's deleteCookie emits Set-Cookie with Max-Age=0; __Host- deletion needs the same attributes.
-  deleteCookie(cookieName(), { path: '/', secure: secure() })
+  deleteCookie(cookieName(), { path: "/", secure: secure() })
 }
 
 // CSRF: reject state-changing requests whose Origin (or, failing that, Referer)
@@ -35,19 +40,42 @@ export function clearSid(): void {
 // x-forwarded-proto MUST be overwritten by Caddy — never relayed from the client
 // (see spec §8/§9).
 export function assertSameOrigin(): void {
-  const origin = getRequestHeader('origin') ?? getRequestHeader('referer')
+  const origin = getRequestHeader("origin") ?? getRequestHeader("referer")
   if (!origin) return // same-origin navigations may omit both headers
-  const host = getRequestHeader('x-forwarded-host') ?? getRequestHeader('host')
-  if (!host) throw new Error('cross-origin request rejected')
-  const proto = getRequestHeader('x-forwarded-proto') ?? (secure() ? 'https' : 'http')
+  const host = getRequestHeader("x-forwarded-host") ?? getRequestHeader("host")
+  if (!host) throw new Error("cross-origin request rejected")
+  const proto =
+    getRequestHeader("x-forwarded-proto") ?? (secure() ? "https" : "http")
   let parsed: URL
   try {
     parsed = new URL(origin)
   } catch {
-    throw new Error('invalid Origin/Referer header')
+    throw new Error("invalid Origin/Referer header")
   }
   if (parsed.origin !== `${proto}://${host.toLowerCase()}`) {
-    throw new Error('cross-origin request rejected')
+    throw new Error("cross-origin request rejected")
+  }
+}
+
+// Strict variant: also throws when both Origin and Referer are absent.
+// Use for security-critical endpoints (e.g. setup unlock) where a missing
+// Origin/Referer must not be silently accepted.
+export function assertSameOriginStrict(): void {
+  const origin = getRequestHeader("origin") ?? getRequestHeader("referer")
+  if (!origin)
+    throw new Error("cross-origin request rejected: missing Origin/Referer")
+  const host = getRequestHeader("x-forwarded-host") ?? getRequestHeader("host")
+  if (!host) throw new Error("cross-origin request rejected")
+  const proto =
+    getRequestHeader("x-forwarded-proto") ?? (secure() ? "https" : "http")
+  let parsed: URL
+  try {
+    parsed = new URL(origin)
+  } catch {
+    throw new Error("invalid Origin/Referer header")
+  }
+  if (parsed.origin !== `${proto}://${host.toLowerCase()}`) {
+    throw new Error("cross-origin request rejected")
   }
 }
 
@@ -55,6 +83,6 @@ export function assertSameOrigin(): void {
 // First X-Forwarded-For hop — safe ONLY because Caddy overwrites the incoming
 // header for untrusted clients (do NOT add Internet to trusted_proxies).
 export function clientIp(): string | undefined {
-  const ip = getRequestHeader('x-forwarded-for')?.split(',')[0]?.trim()
+  const ip = getRequestHeader("x-forwarded-for")?.split(",")[0]?.trim()
   return ip || undefined
 }

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useForm } from "@tanstack/react-form"
 import { useTranslation } from "react-i18next"
 import type { DomainValues } from "../schemas"
@@ -18,6 +18,15 @@ export function DomainStep({ defaults, submitBootstrap, onRestart }: Props) {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   const [errorCode, setErrorCode] = useState<string | null>(null)
+
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const form = useForm({
     defaultValues: {
       serverHostname: defaults?.serverHostname ?? "",
@@ -29,8 +38,10 @@ export function DomainStep({ defaults, submitBootstrap, onRestart }: Props) {
       setErrorCode(null)
       try {
         await submitBootstrap(value)
+        if (!mountedRef.current) return
         onRestart()
       } catch (e) {
+        if (!mountedRef.current) return
         setErrorCode(codeFromError(e))
         setBusy(false)
       }

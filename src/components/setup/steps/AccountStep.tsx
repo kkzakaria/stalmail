@@ -1,7 +1,7 @@
 // Stalmail wizard — admin account step: collect name+password (merged from the
 // former AdminAccountStep) then execute createAccount. The weak-password retry
 // loop ({status:'weak'}) is kept distinct from SetupErrorBox (server rejections).
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useForm } from "@tanstack/react-form"
 import { useTranslation } from "react-i18next"
 import type { CreateAccountResult } from "@/server/setup-actions"
@@ -39,6 +39,14 @@ export function AccountStep({ domain, createAccount, onNext }: Props) {
   const [name, setName] = useState("")
   const [errorCode, setErrorCode] = useState("")
 
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const email = `${name || "marie"}@${domain}`
 
   const form = useForm({
@@ -58,9 +66,11 @@ export function AccountStep({ domain, createAccount, onNext }: Props) {
     setErrorCode("")
     return createAccount({ name: n, password })
       .then((result) => {
+        if (!mountedRef.current) return
         setPhase(result.status === "ok" ? "done" : "weak")
       })
       .catch((e: unknown) => {
+        if (!mountedRef.current) return
         setErrorCode(codeFromError(e))
         setPhase("error")
       })

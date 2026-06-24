@@ -23,6 +23,17 @@ async function requireStep(expected: SetupStep): Promise<void> {
     throw new SetupError("SETUP-FORBIDDEN")
 }
 
+// Auth guard for every mutating handler.
+// Must be called BEFORE requireStep (and outside any try/catch that maps errors)
+// so the thrown SetupError('SETUP-UNAUTHENTICATED') propagates unchanged.
+// Order: assertSameOriginStrict → requireSetupAuth.
+async function requireSetupAuthGuard(): Promise<void> {
+  const { assertSameOriginStrict } = await import("./session-cookie")
+  const { requireSetupAuth } = await import("./setup-auth")
+  assertSameOriginStrict()
+  await requireSetupAuth()
+}
+
 export async function getStepHandler(): Promise<{
   step: string
   dnsManual: boolean
@@ -34,16 +45,34 @@ export async function getStepHandler(): Promise<{
   }
 }
 
+export async function setupAuthStatusHandler(): Promise<{ authed: boolean }> {
+  const { isSetupAuthed } = await import("./setup-auth")
+  return { authed: isSetupAuthed() }
+}
+
+export async function unlockSetupHandler({
+  data,
+}: {
+  data: { token: string }
+}): Promise<{ ok: true }> {
+  const { unlockSetup } = await import("./setup-auth")
+  unlockSetup(data.token)
+  return { ok: true }
+}
+
 export async function submitBootstrapHandler({
   data,
 }: {
   data: BootstrapInput
 }): Promise<{ ok: true }> {
+  await requireSetupAuthGuard()
   await requireStep("collect")
   const { submitBootstrap } = await import("./stalwart-bootstrap")
   const { requestStalwartRestart } = await import("./stalwart-restart")
   await submitBootstrap(data)
   requestStalwartRestart()
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
   return { ok: true }
 }
 
@@ -56,6 +85,7 @@ export async function createAdminAccountHandler({
 }: {
   data: { name: string; password: string }
 }): Promise<CreateAccountResult> {
+  await requireSetupAuthGuard()
   await requireStep("account")
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const { createAdminAccount, WeakPasswordError } =
@@ -71,13 +101,18 @@ export async function createAdminAccountHandler({
       domainId: domain.id,
       password: data.password,
     })
-    return { status: "ok" }
   } catch (e) {
     if (e instanceof WeakPasswordError)
       return { status: "weak", message: e.description }
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
     throw new SetupError(toSetupErrorCode(e, "SETUP-ACCOUNT-REJECTED"))
   }
+  // Le renouvellement du cookie suit l'écriture Stalwart réussie : le placer hors du
+  // catch évite de mapper un échec de cookie en "compte rejeté" (ce qui pousserait l'UI
+  // à rejouer une création déjà effectuée).
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
+  return { status: "ok" }
 }
 
 export const createAccountSchema = z.object({
@@ -96,18 +131,24 @@ export async function createDnsServerHandler({
 }: {
   data: { provider: string; secret: string }
 }): Promise<{ dnsServerId: string }> {
+  await requireSetupAuthGuard()
   await requireStep("dns")
   const { createDnsServer } = await import("./stalwart-dns")
+  let id: string
   try {
-    const id = await createDnsServer({
+    id = await createDnsServer({
       provider: data.provider as DnsProvider,
       secret: data.secret,
     })
-    return { dnsServerId: id }
   } catch (e) {
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
     throw new SetupError(toSetupErrorCode(e, "SETUP-DNS-REJECTED"))
   }
+  // Cookie renouvelé seulement après une création DNS réussie, hors du catch de mapping
+  // (sinon un échec de cookie serait signalé comme "DNS rejeté").
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
+  return { dnsServerId: id }
 }
 
 export async function setDnsManagementHandler({
@@ -115,6 +156,7 @@ export async function setDnsManagementHandler({
 }: {
   data: { dnsServerId: string }
 }): Promise<{ ok: true }> {
+  await requireSetupAuthGuard()
   await requireStep("dns")
   const { getPrimaryDomain, setDnsManagementAutomatic } =
     await import("./stalwart-domain")
@@ -133,6 +175,8 @@ export async function setDnsManagementHandler({
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
     throw new SetupError(toSetupErrorCode(e, "SETUP-DNS-MANAGEMENT-REJECTED"))
   }
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
   return { ok: true }
 }
 
@@ -188,6 +232,7 @@ export const dnsGridStatusFn = createServerFn({ method: "GET" }).handler(
 )
 
 export async function setDnsManagementManualHandler(): Promise<{ ok: true }> {
+  await requireSetupAuthGuard()
   await requireStep("dns")
   const { getPrimaryDomain, setDnsManagementManual } =
     await import("./stalwart-domain")
@@ -204,6 +249,8 @@ export async function setDnsManagementManualHandler(): Promise<{ ok: true }> {
     throw new SetupError(toSetupErrorCode(e, "SETUP-DNS-MANAGEMENT-REJECTED"))
   }
   markDnsConfigured()
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
   return { ok: true }
 }
 export const setDnsManagementManualFn = createServerFn({
@@ -239,6 +286,7 @@ export async function configureAcmeHandler({
 }: {
   data: { hostname: string; contactEmail: string }
 }): Promise<{ ok: true }> {
+  await requireSetupAuthGuard()
   await requireStep("ssl")
   const { isDnsManual } = await import("./setup-state")
   if (await isDnsManual()) {
@@ -267,6 +315,8 @@ export async function configureAcmeHandler({
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
     throw new SetupError(toSetupErrorCode(e, "SETUP-SSL-REJECTED"))
   }
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
   return { ok: true }
 }
 
@@ -276,11 +326,14 @@ export async function acmeStatusHandler(): Promise<{ status: AcmeStatus }> {
 }
 
 export async function finishSetupHandler(): Promise<{ ok: true }> {
+  await requireSetupAuthGuard()
   await requireStep("done")
   const { enableXForwarded } = await import("./stalwart-hardening")
   const { markSetupComplete } = await import("./setup-flag")
   await enableXForwarded() // go-live condition — recovery admin still active here
   markSetupComplete()
+  const { clearSetupCookie } = await import("./setup-auth")
+  clearSetupCookie()
   return { ok: true }
 }
 
@@ -313,6 +366,7 @@ export const setupStatusFn = createServerFn({ method: "GET" }).handler(
 )
 
 export async function markSslConfiguredHandler(): Promise<{ ok: true }> {
+  await requireSetupAuthGuard()
   await requireStep("ssl")
   const { isDnsManual } = await import("./setup-state")
   if (!(await isDnsManual())) {
@@ -321,9 +375,21 @@ export async function markSslConfiguredHandler(): Promise<{ ok: true }> {
   }
   const { markSslAcknowledged } = await import("./setup-flag")
   markSslAcknowledged()
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
   return { ok: true }
 }
 
 export const markSslConfiguredFn = createServerFn({ method: "POST" }).handler(
   markSslConfiguredHandler
+)
+
+export const unlockSetupFn = createServerFn({ method: "POST" })
+  .validator((d: { token: string }) =>
+    z.object({ token: z.string().min(1).max(512) }).parse(d)
+  )
+  .handler(unlockSetupHandler)
+
+export const setupAuthStatusFn = createServerFn({ method: "GET" }).handler(
+  setupAuthStatusHandler
 )

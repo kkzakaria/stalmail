@@ -65,7 +65,39 @@ curl -fsSL "${REPO_RAW}/compose.prod.yml" -o compose.prod.yml
 curl -fsSL "${REPO_RAW}/Caddyfile" -o Caddyfile
 echo "✓ compose.prod.yml + Caddyfile récupérés dans ${DIR}"
 
+# Helper SHA-256 portable (macOS/BSD n'ont pas sha256sum).
+# Lit stdin → imprime l'empreinte hex 64 chars en minuscules.
+# Pipefail-safe : openssl dgst lit un stdin FINI (printf '%s' ...) ; aucun pipe infini.
+sha256hex() {
+  if command -v openssl > /dev/null 2>&1; then
+    openssl dgst -sha256 | awk '{print $NF}'
+  elif command -v sha256sum > /dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+# Génère un jeton de setup (48 hex) dans la variable SETUP_TOKEN. Même précaution
+# pipefail que pour SECRET : `openssl rand` en priorité ; fallback tranche FINIE lue par
+# bash (pas de pipe sur un producteur infini → pas de SIGPIPE sous `set -o pipefail`).
+gen_setup_token() {
+  if command -v openssl &> /dev/null; then
+    SETUP_TOKEN=$(openssl rand -hex 24)
+  else
+    # Tranche LARGE (4096 octets) pour garantir assez de caractères hex après filtrage
+    # (~6 % de rendement ≫ 48 requis), puis coupe en bash (aucun pipe en aval).
+    SETUP_TOKEN=$(LC_ALL=C tr -dc 'a-f0-9' < <(head -c 4096 /dev/urandom))
+    SETUP_TOKEN=${SETUP_TOKEN:0:48}
+  fi
+}
+
 # 4. .env (généré une fois, conservé ensuite).
+# SETUP_TOKEN : en clair uniquement en shell (pour l'URL finale), jamais écrit dans .env.
+# Seul le hash SHA-256 est persisté. Même précaution pipefail que pour SECRET :
+# on utilise `openssl rand` en priorité ; fallback tranche finie lue par bash (pas de pipe
+# sur un producteur infini).
+SETUP_TOKEN=""
 if [ ! -f .env ]; then
   # Secret 64 caractères alphanumériques. NE PAS écrire `tr </dev/urandom | head` :
   # sous `set -o pipefail`, `head` ferme le tuyau dès 64 octets lus → `tr` reçoit
@@ -78,10 +110,14 @@ if [ ! -f .env ]; then
     SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c 256 /dev/urandom))
     SECRET=${SECRET:0:64}
   fi
+  gen_setup_token
+  # Hash SHA-256 du jeton — via le helper portable sha256hex (openssl / sha256sum / shasum).
+  SETUP_TOKEN_HASH=$(printf '%s' "${SETUP_TOKEN}" | sha256hex)
   {
     printf 'STALMAIL_SECRET=%s\n' "${SECRET}"
     printf 'STALMAIL_HOSTNAME=%s\n' "${HOSTNAME_ARG}"
     printf 'STALMAIL_PUBLIC_URL=https://%s\n' "${HOSTNAME_ARG}"
+    printf 'STALMAIL_SETUP_TOKEN_HASH=%s\n' "${SETUP_TOKEN_HASH}"
   } > .env
   chmod 600 .env
   echo "✓ .env créé (secret généré, hostname=${HOSTNAME_ARG})"
@@ -96,6 +132,20 @@ else
   fi
   HOSTNAME_ARG="${EXISTING_HOSTNAME:-${HOSTNAME_ARG}}"
   echo "✓ .env existant conservé (hostname=${HOSTNAME_ARG})"
+  # Migration douce : un .env antérieur à l'auth bootstrap n'a pas STALMAIL_SETUP_TOKEN_HASH.
+  # Cette variable est désormais REQUISE par compose.prod.yml → sans elle, `docker compose up`
+  # échoue avant tout affichage. On génère donc un jeton et on ajoute son hash au .env ; le
+  # jeton en clair (SETUP_TOKEN) sert à imprimer le lien fonctionnel dans l'encadré final.
+  EXISTING_SETUP_HASH=$(awk -F= '$1=="STALMAIL_SETUP_TOKEN_HASH"{print $2}' .env | tail -n1)
+  if [ -z "${EXISTING_SETUP_HASH}" ]; then
+    gen_setup_token
+    SETUP_TOKEN_HASH=$(printf '%s' "${SETUP_TOKEN}" | sha256hex)
+    printf 'STALMAIL_SETUP_TOKEN_HASH=%s\n' "${SETUP_TOKEN_HASH}" >> .env
+    chmod 600 .env
+    echo "✓ .env migré (STALMAIL_SETUP_TOKEN_HASH ajouté)"
+  fi
+  # Si le hash existait déjà, le jeton en clair n'est pas récupérable (seul le hash est
+  # persisté) → SETUP_TOKEN reste vide, géré dans l'encadré final ci-dessous.
 fi
 
 # 5. Démarrage.
@@ -128,12 +178,30 @@ IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 [ -z "${IP}" ] && IP="<ip-du-serveur>"
 echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║  Stalmail démarré.                                               ║"
-echo "║                                                                  ║"
-echo "║  1. Ouvre le wizard via l'IP (certificat auto-signé, accepte     ║"
-echo "║     l'avertissement) :   https://${IP}/setup"
-echo "║  2. Renseigne le domaine + le token Cloudflare : le wizard       ║"
-echo "║     publie TOUT le DNS (A, MX, SPF, DKIM, DMARC).                 ║"
-echo "║  3. Une fois le DNS propagé, utilise :                           ║"
+echo "║  Stalmail démarré.                                             ║"
+echo "║                                                                ║"
+if [ -n "${SETUP_TOKEN}" ]; then
+echo "║  1. Ouvre le wizard (certificat auto-signé → accepte           ║"
+echo "║     l'avertissement) avec CE lien contenant ton jeton :        ║"
+echo "║                                                                ║"
+echo "║    https://${IP}/setup#token=${SETUP_TOKEN}"
+echo "║                                                                ║"
+echo "║     Le jeton autorise le wizard ; il n'est pas stocké côté     ║"
+echo "║     serveur (seul son hash SHA-256 est dans .env).             ║"
+echo "║     ⚠ Ne partage pas cette URL — elle ouvre le setup.          ║"
+else
+echo "║  1. Jeton de setup non disponible (.env existant).             ║"
+echo "║     Pour regénérer un lien de setup :                          ║"
+echo "║       TOKEN=\$(openssl rand -hex 24)                            ║"
+echo "║       HASH=\$(printf '%s' \"\$TOKEN\" | openssl dgst -sha256 | awk '{print \$NF}')"
+echo "║       # Mettre à jour STALMAIL_SETUP_TOKEN_HASH dans .env,     ║"
+echo "║       # puis redémarrer : docker compose -f compose.prod.yml   ║"
+echo "║       #   up -d app                                            ║"
+echo "║       # URL : https://${IP}/setup#token=\$TOKEN               ║"
+fi
+echo "║                                                                ║"
+echo "║  2. Renseigne le domaine + le token Cloudflare : le wizard     ║"
+echo "║     publie TOUT le DNS (A, MX, SPF, DKIM, DMARC).             ║"
+echo "║  3. Une fois le DNS propagé, utilise :                         ║"
 echo "║         https://${HOSTNAME_ARG}"
 echo "╚════════════════════════════════════════════════════════════════╝"

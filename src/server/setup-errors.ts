@@ -7,6 +7,8 @@ export const SETUP_CODES = [
   "SETUP-SSL-REJECTED",
   "SETUP-UNKNOWN",
   "SETUP-FORBIDDEN",
+  "SETUP-UNAUTHENTICATED",
+  "SETUP-UNLOCK-FAILED",
 ] as const
 
 export type SetupErrorCode = (typeof SETUP_CODES)[number]
