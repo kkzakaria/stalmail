@@ -387,6 +387,63 @@ describe("SetupWizard — auth gate", () => {
     expect(screen.queryByText("Session expirée")).not.toBeInTheDocument()
   })
 
+  it("malformed % sequence in URL fragment does not crash — treats as no token", async () => {
+    // A malformed percent-encoding that would throw inside decodeURIComponent
+    window.location.hash = "#token=%invalid%percent"
+    const authStatus = vi.fn().mockResolvedValue({ authed: true })
+    const unlock = vi.fn().mockResolvedValue({ ok: true as const })
+
+    wrap(
+      <SetupWizard
+        initialStep="collect"
+        initialTheme="light"
+        unlock={unlock}
+        authStatus={authStatus}
+        submitBootstrap={vi.fn()}
+        pollStep={vi.fn()}
+        {...serverProps()}
+      />
+    )
+
+    // Should fall back to authStatus check (authed=true) → normal wizard flow, no crash
+    expect(
+      await screen.findByText("Bienvenue sur Stalmail")
+    ).toBeInTheDocument()
+    // unlock should NOT have been called (malformed token treated as absent)
+    expect(unlock).not.toHaveBeenCalled()
+  })
+
+  it("finishSetup throws SETUP-UNAUTHENTICATED with token → re-unlocks and retries", async () => {
+    window.location.hash = "#token=valid-token"
+    const unlock = vi.fn().mockResolvedValue({ ok: true as const })
+    const authStatus = vi.fn().mockResolvedValue({ authed: true })
+    const finishSetup = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("SETUP-UNAUTHENTICATED"))
+      .mockResolvedValue({ ok: true as const })
+
+    wrap(
+      <SetupWizard
+        initialStep="done"
+        initialTheme="light"
+        unlock={unlock}
+        authStatus={authStatus}
+        submitBootstrap={vi.fn()}
+        pollStep={vi.fn()}
+        {...serverProps()}
+        finishSetup={finishSetup}
+      />
+    )
+
+    // DoneStep calls finishSetup on mount automatically
+    // After SETUP-UNAUTHENTICATED: re-unlock then retry → finishSetup called twice
+    await waitFor(() => expect(finishSetup).toHaveBeenCalledTimes(2))
+    // unlock: once on mount for token + once for re-auth recovery
+    expect(unlock).toHaveBeenCalledTimes(2)
+    // Should NOT show expired screen
+    expect(screen.queryByText("Session expirée")).not.toBeInTheDocument()
+  })
+
   it("action throws SETUP-UNAUTHENTICATED without token in ref → shows expired screen", async () => {
     // No token in hash — cookie already valid at mount
     const authStatus = vi.fn().mockResolvedValue({ authed: true })

@@ -113,7 +113,15 @@ export function SetupWizard({
 
     const hash = window.location.hash
     const match = /[#&]token=([^&]+)/.exec(hash)
-    const token = match ? decodeURIComponent(match[1]) : null
+    let token: string | null = null
+    if (match) {
+      try {
+        token = decodeURIComponent(match[1])
+      } catch {
+        // Malformed percent-encoding — treat as no token present
+        token = null
+      }
+    }
 
     if (token) {
       tokenRef.current = token
@@ -171,9 +179,21 @@ export function SetupWizard({
   const pollStepRef = useRef(pollStep)
   const submitBootstrapRef = useRef(submitBootstrap)
   const createAccountRef = useRef(createAccount)
+  const createDnsServerRef = useRef(createDnsServer)
+  const setDnsManagementRef = useRef(setDnsManagement)
+  const setDnsManagementManualRef = useRef(setDnsManagementManual)
+  const configureAcmeRef = useRef(configureAcme)
+  const acknowledgeManualSslRef = useRef(acknowledgeManualSsl)
+  const finishSetupRef = useRef(finishSetup)
   pollStepRef.current = pollStep
   submitBootstrapRef.current = submitBootstrap
   createAccountRef.current = createAccount
+  createDnsServerRef.current = createDnsServer
+  setDnsManagementRef.current = setDnsManagement
+  setDnsManagementManualRef.current = setDnsManagementManual
+  configureAcmeRef.current = configureAcme
+  acknowledgeManualSslRef.current = acknowledgeManualSsl
+  finishSetupRef.current = finishSetup
 
   // Stable re-auth recovery helper.
   // Wraps any async call: on SETUP-UNAUTHENTICATED, re-unlocks if token available, then retries.
@@ -252,6 +272,45 @@ export function SetupWizard({
   const stableRefetchStep = useCallback(
     () => withReauth(async () => refetchStep())(),
     [withReauth, refetchStep]
+  )
+
+  const stableCreateDnsServer = useCallback(
+    (input: { provider: string; secret: string }) =>
+      withReauth((i: { provider: string; secret: string }) =>
+        createDnsServerRef.current(i)
+      )(input),
+    [withReauth]
+  )
+
+  const stableSetDnsManagement = useCallback(
+    (input: { dnsServerId: string }) =>
+      withReauth((i: { dnsServerId: string }) =>
+        setDnsManagementRef.current(i)
+      )(input),
+    [withReauth]
+  )
+
+  const stableSetDnsManagementManual = useCallback(
+    () => withReauth(() => setDnsManagementManualRef.current())(),
+    [withReauth]
+  )
+
+  const stableConfigureAcme = useCallback(
+    (input: { hostname: string; contactEmail: string }) =>
+      withReauth((i: { hostname: string; contactEmail: string }) =>
+        configureAcmeRef.current(i)
+      )(input),
+    [withReauth]
+  )
+
+  const stableAcknowledgeManualSsl = useCallback(
+    () => withReauth(() => acknowledgeManualSslRef.current())(),
+    [withReauth]
+  )
+
+  const stableFinishSetup = useCallback(
+    () => withReauth(() => finishSetupRef.current())(),
+    [withReauth]
   )
 
   const steps = [
@@ -411,9 +470,9 @@ export function SetupWizard({
       <DnsStep
         hostname={collected.serverHostname}
         domain={collected.defaultDomain}
-        createDnsServer={createDnsServer}
-        setDnsManagement={setDnsManagement}
-        setDnsManagementManual={setDnsManagementManual}
+        createDnsServer={stableCreateDnsServer}
+        setDnsManagement={stableSetDnsManagement}
+        setDnsManagementManual={stableSetDnsManagementManual}
         gridStatus={gridStatus}
         onNext={(manual) => {
           setDnsManual(manual)
@@ -429,10 +488,10 @@ export function SetupWizard({
           collected.adminEmail || `admin@${collected.defaultDomain}`
         }
         dnsManual={dnsManual}
-        configureAcme={configureAcme}
+        configureAcme={stableConfigureAcme}
         acmeStatus={acmeStatus}
         onStatusChange={setSslStatus}
-        acknowledgeManualSsl={acknowledgeManualSsl}
+        acknowledgeManualSsl={stableAcknowledgeManualSsl}
         onNext={stableRefetchStep}
       />
     )
@@ -451,7 +510,7 @@ export function SetupWizard({
         hostname={collected.serverHostname}
         adminEmail={collected.adminEmail || `admin@${collected.defaultDomain}`}
         sslStatus={sslStatus}
-        finishSetup={finishSetup}
+        finishSetup={stableFinishSetup}
       />
     )
   }
