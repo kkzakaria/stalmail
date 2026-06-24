@@ -90,10 +90,41 @@ export async function configureAcme(
 
 export type AcmeStatus = "pending" | "failed" | "valid"
 
-/** Polls the AcmeRenewal task. NON-BLOCKING: Pending/Retry → pending, Failed → failed,
- *  no AcmeRenewal task found → valid (the renewal task is cleared once a cert is active).
- *  NOTE: the "valid" path could not be confirmed live (no public IP in dev); this heuristic
- *  is best-effort and should be revisited if a real cert is obtained. */
+// Une tâche de renouvellement planifiée plus loin que ce seuil signifie qu'un
+// certificat est DÉJÀ en place : Stalwart planifie le renouvellement ~30 j avant
+// l'expiration à 90 j. Une émission/retry encore en cours est due de façon imminente
+// ou dépassée. 1 jour sépare nettement le délai de renouvellement (~30-60 j) de tout
+// backoff de retry ACME (minutes/heures). Confirmé en prod : tâche Pending due à +60 j
+// alors que `openssl s_client` renvoyait déjà un cert Let's Encrypt valide.
+export const RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000
+
+export interface AcmeRenewalTask {
+  "@type"?: string
+  status?: { "@type"?: string }
+  due?: string
+}
+
+/**
+ * Décide le statut SSL à partir de la tâche AcmeRenewal et de l'instant courant.
+ * Pure et temps-injecté pour des tests déterministes.
+ *
+ *  - aucune tâche → valid (rien en attente)
+ *  - statut Failed → failed
+ *  - Pending/Retry due loin dans le futur → valid (cert obtenu, renouvellement planifié)
+ *  - Pending/Retry due imminente/dépassée/absente → pending (émission en cours)
+ */
+export function classifyAcmeRenewal(
+  task: AcmeRenewalTask | undefined,
+  nowMs: number
+): AcmeStatus {
+  if (!task) return "valid"
+  if (task.status?.["@type"] === "Failed") return "failed"
+  const dueMs = Date.parse(task.due ?? "")
+  if (Number.isFinite(dueMs) && dueMs - nowMs > RENEWAL_LEAD_MS) return "valid"
+  return "pending"
+}
+
+/** Sonde la tâche AcmeRenewal (non bloquant). Voir classifyAcmeRenewal pour le mapping. */
 export async function getAcmeStatus(): Promise<AcmeStatus> {
   const accountId = await resolveAccountId()
   const responses = await jmapCall([
@@ -108,14 +139,7 @@ export async function getAcmeStatus(): Promise<AcmeStatus> {
     ],
   ])
   const list =
-    (
-      expectResult(responses, 1) as {
-        list?: { "@type"?: string; status?: { "@type"?: string } }[]
-      }
-    ).list ?? []
+    (expectResult(responses, 1) as { list?: AcmeRenewalTask[] }).list ?? []
   const task = list.find((t) => t["@type"] === "AcmeRenewal")
-  if (!task) return "valid"
-  const s = task.status?.["@type"]
-  if (s === "Failed") return "failed"
-  return "pending" // Pending | Retry (and any other in-flight state)
+  return classifyAcmeRenewal(task, Date.now())
 }
