@@ -9,7 +9,11 @@ import type { ZoneRecord } from "./dns-zone"
 
 export type RecordStatus = "verified" | "mismatch" | "missing" | "unsupported"
 
-const stripDot = (s: string) => s.replace(/\.$/, "")
+// Normalise un nom DNS pour comparaison : retire le point final ET replie la casse.
+// Les noms DNS sont insensibles à la casse (RFC 4343) ; un resolver peut renvoyer une
+// casse différente de la zone. Les deux côtés des comparaisons MX/SRV/CNAME passent par
+// ici, donc la normalisation reste cohérente.
+const stripDot = (s: string) => s.replace(/\.$/, "").toLowerCase()
 const norm = (s: string) => s.trim().replace(/\s+/g, " ")
 
 export async function resolveRecordStatus(

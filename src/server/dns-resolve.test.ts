@@ -224,6 +224,16 @@ describe("resolveRecordStatus", () => {
     expect(s).toBe("verified")
   })
 
+  it("verifies a CNAME case-insensitively (RFC 4343)", async () => {
+    resolveCname.mockResolvedValue(["Mail.Exemple.FR"])
+    const s = await resolveRecordStatus({
+      name: "autoconfig.exemple.fr.",
+      type: "CNAME",
+      value: "mail.exemple.fr.",
+    })
+    expect(s).toBe("verified")
+  })
+
   it('returns "mismatch" for a CNAME pointing elsewhere', async () => {
     resolveCname.mockResolvedValue(["autre.exemple.fr"])
     const s = await resolveRecordStatus({
