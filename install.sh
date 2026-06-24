@@ -65,6 +65,19 @@ curl -fsSL "${REPO_RAW}/compose.prod.yml" -o compose.prod.yml
 curl -fsSL "${REPO_RAW}/Caddyfile" -o Caddyfile
 echo "✓ compose.prod.yml + Caddyfile récupérés dans ${DIR}"
 
+# Helper SHA-256 portable (macOS/BSD n'ont pas sha256sum).
+# Lit stdin → imprime l'empreinte hex 64 chars en minuscules.
+# Pipefail-safe : openssl dgst lit un stdin FINI (printf '%s' ...) ; aucun pipe infini.
+sha256hex() {
+  if command -v openssl > /dev/null 2>&1; then
+    openssl dgst -sha256 | awk '{print $NF}'
+  elif command -v sha256sum > /dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
 # 4. .env (généré une fois, conservé ensuite).
 # SETUP_TOKEN : en clair uniquement en shell (pour l'URL finale), jamais écrit dans .env.
 # Seul le hash SHA-256 est persisté. Même précaution pipefail que pour SECRET :
@@ -89,8 +102,8 @@ if [ ! -f .env ]; then
     SETUP_TOKEN=$(LC_ALL=C tr -dc 'a-f0-9' < <(head -c 4096 /dev/urandom))
     SETUP_TOKEN=${SETUP_TOKEN:0:48}
   fi
-  # Hash SHA-256 du jeton : sha256sum sort toujours 0 ; awk sort toujours 0 — pipefail-safe.
-  SETUP_TOKEN_HASH=$(printf '%s' "${SETUP_TOKEN}" | sha256sum | awk '{print $1}')
+  # Hash SHA-256 du jeton — via le helper portable sha256hex (openssl / sha256sum / shasum).
+  SETUP_TOKEN_HASH=$(printf '%s' "${SETUP_TOKEN}" | sha256hex)
   {
     printf 'STALMAIL_SECRET=%s\n' "${SECRET}"
     printf 'STALMAIL_HOSTNAME=%s\n' "${HOSTNAME_ARG}"
@@ -159,7 +172,7 @@ else
 echo "║  1. Jeton de setup non disponible (.env existant).             ║"
 echo "║     Pour regénérer un lien de setup :                          ║"
 echo "║       TOKEN=\$(openssl rand -hex 24)                            ║"
-echo "║       HASH=\$(printf '%s' \"\$TOKEN\" | sha256sum | awk '{print \$1}')"
+echo "║       HASH=\$(printf '%s' \"\$TOKEN\" | openssl dgst -sha256 | awk '{print \$NF}')"
 echo "║       # Mettre à jour STALMAIL_SETUP_TOKEN_HASH dans .env,     ║"
 echo "║       # puis redémarrer : docker compose -f compose.prod.yml   ║"
 echo "║       #   up -d app                                            ║"
