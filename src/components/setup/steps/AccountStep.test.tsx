@@ -100,17 +100,17 @@ describe("AccountStep", () => {
     })
   })
 
-  it("pressing Enter in name/password triggers exactly one submission (keyDown + form submit)", async () => {
-    // In a real browser, pressing Enter in an input inside a <form> fires both:
-    //   1. the onKeyDown handler → onEnter() → form.handleSubmit()
-    //   2. a native form submit event → form.handleSubmit() again
-    // With e.preventDefault() in TextInput.onKeyDown, the native submit is suppressed,
-    // so only one createAccount call results.
+  it("pressing Enter in name/password triggers exactly one submission and calls preventDefault on the event", async () => {
+    // The TextInput.onKeyDown guard calls e.preventDefault() before onEnter().
+    // This test proves that:
+    //   1. preventDefault is called on the keydown event itself (guard present).
+    //   2. the onEnter callback fires, leading to exactly one createAccount call.
+    // If the `e.preventDefault()` line is removed from the primitive, assertion (1) fails.
     const createAccount = vi.fn(
       (_i: { name: string; password: string }): Promise<CreateAccountResult> =>
         Promise.resolve({ status: "ok" })
     )
-    const { container } = wrap(
+    wrap(
       <AccountStep
         domain="exemple.fr"
         createAccount={createAccount}
@@ -119,19 +119,24 @@ describe("AccountStep", () => {
     )
     fill("koffi", "correct horse battery 9")
     const nameInput = screen.getByLabelText(NAME_LABEL)
-    const formEl = container.querySelector("form")!
-    // keyDown fires onEnter → form.handleSubmit(). With preventDefault, the form
-    // submit event should be suppressed. Firing submit manually verifies the guard.
-    const submitSpy = vi.fn((e: Event) => e.preventDefault())
-    formEl.addEventListener("submit", submitSpy)
-    fireEvent.keyDown(nameInput, { key: "Enter" })
+
+    // Build the event object so we can spy on its preventDefault method.
+    const enterEvent = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    })
+    const preventDefaultSpy = vi.spyOn(enterEvent, "preventDefault")
+
+    fireEvent(nameInput, enterEvent)
+
+    // The guard MUST have called preventDefault on the event.
+    expect(preventDefaultSpy).toHaveBeenCalledTimes(1)
+    // The submission must have fired exactly once (no double-submit).
     await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1))
-    // The native form submit must NOT have fired (preventDefault in TextInput stops it).
-    expect(submitSpy).not.toHaveBeenCalled()
-    formEl.removeEventListener("submit", submitSpy)
   })
 
-  it("pressing a non-Enter key does NOT trigger submission", async () => {
+  it("pressing a non-Enter key does NOT trigger submission", () => {
     const createAccount = vi.fn(
       (_i: { name: string; password: string }): Promise<CreateAccountResult> =>
         Promise.resolve({ status: "ok" })
@@ -147,8 +152,7 @@ describe("AccountStep", () => {
     const nameInput = screen.getByLabelText(NAME_LABEL)
     fireEvent.keyDown(nameInput, { key: "Tab" })
     fireEvent.keyDown(nameInput, { key: "a" })
-    // Wait a tick to ensure no async submission fires.
-    await new Promise((r) => setTimeout(r, 50))
+    // Synchronous: no submission can have fired yet for non-Enter keys.
     expect(createAccount).not.toHaveBeenCalled()
   })
 

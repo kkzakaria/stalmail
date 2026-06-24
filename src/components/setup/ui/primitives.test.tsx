@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import {
   PasswordInput,
@@ -39,6 +39,20 @@ describe("Alert", () => {
 })
 
 describe("CopyButton", () => {
+  let originalClipboard: Clipboard
+
+  beforeEach(() => {
+    originalClipboard = navigator.clipboard
+  })
+
+  afterEach(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: originalClipboard,
+      configurable: true,
+      writable: true,
+    })
+  })
+
   it("writes to clipboard on click", () => {
     const writeText = vi.fn()
     Object.assign(navigator, { clipboard: { writeText } })
@@ -71,6 +85,20 @@ describe("TextInput className — résistance au formateur", () => {
 })
 
 describe("CopyButton className — résistance au formateur", () => {
+  let originalClipboard: Clipboard
+
+  beforeEach(() => {
+    originalClipboard = navigator.clipboard
+  })
+
+  afterEach(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: originalClipboard,
+      configurable: true,
+      writable: true,
+    })
+  })
+
   it("small=true → copy-btn et copy-btn-sm séparés par un espace", () => {
     const writeText = vi.fn()
     Object.assign(navigator, { clipboard: { writeText } })
