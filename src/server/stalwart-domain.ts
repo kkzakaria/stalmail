@@ -15,21 +15,6 @@ export interface StalwartDomain {
   [k: string]: unknown
 }
 
-// Default record set Stalwart publishes (DnsRecordType enum, minus tlsa).
-export const DEFAULT_PUBLISH_RECORDS = [
-  "dkim",
-  "spf",
-  "mx",
-  "dmarc",
-  "srv",
-  "mtaSts",
-  "tlsRpt",
-  "caa",
-  "autoConfig",
-  "autoConfigLegacy",
-  "autoDiscover",
-] as const
-
 export async function getPrimaryDomain(): Promise<StalwartDomain | null> {
   const accountId = await resolveAccountId()
   const responses = await jmapCall([
@@ -62,11 +47,15 @@ export async function setDnsManagementAutomatic(opts: {
         accountId,
         update: {
           [domainId]: {
+            // publishRecords est OMIS volontairement : Stalwart applique alors son
+            // défaut (tous les types d'enregistrement à true). L'envoyer explicitement
+            // exige la forme objet-de-booléens ({ dkim: true, ... }) — un tableau est
+            // rejeté en invalidPatch. Omettre est aussi forward-compatible : un nouveau
+            // type d'enregistrement ajouté par Stalwart sera publié par défaut.
             dnsManagement: {
               "@type": "Automatic",
               dnsServerId,
               origin,
-              publishRecords: DEFAULT_PUBLISH_RECORDS,
             },
           },
         },

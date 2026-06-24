@@ -81,25 +81,14 @@ describe("setDnsManagementAutomatic", () => {
     const [[, args]] = mj.mock.calls[0][0] as [
       [string, Record<string, unknown>, string],
     ]
+    // publishRecords est volontairement absent : Stalwart applique son défaut
+    // (tout publier). L'envoyer comme tableau était rejeté en invalidPatch.
     expect(args.update).toEqual({
       b: {
         dnsManagement: {
           "@type": "Automatic",
           dnsServerId: "srv1",
           origin: "exemple.fr",
-          publishRecords: [
-            "dkim",
-            "spf",
-            "mx",
-            "dmarc",
-            "srv",
-            "mtaSts",
-            "tlsRpt",
-            "caa",
-            "autoConfig",
-            "autoConfigLegacy",
-            "autoDiscover",
-          ],
         },
       },
     })
