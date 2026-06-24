@@ -101,15 +101,18 @@ export async function createAdminAccountHandler({
       domainId: domain.id,
       password: data.password,
     })
-    const { issueSetupCookie } = await import("./setup-auth")
-    issueSetupCookie()
-    return { status: "ok" }
   } catch (e) {
     if (e instanceof WeakPasswordError)
       return { status: "weak", message: e.description }
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
     throw new SetupError(toSetupErrorCode(e, "SETUP-ACCOUNT-REJECTED"))
   }
+  // Le renouvellement du cookie suit l'écriture Stalwart réussie : le placer hors du
+  // catch évite de mapper un échec de cookie en "compte rejeté" (ce qui pousserait l'UI
+  // à rejouer une création déjà effectuée).
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
+  return { status: "ok" }
 }
 
 export const createAccountSchema = z.object({
@@ -131,18 +134,21 @@ export async function createDnsServerHandler({
   await requireSetupAuthGuard()
   await requireStep("dns")
   const { createDnsServer } = await import("./stalwart-dns")
+  let id: string
   try {
-    const id = await createDnsServer({
+    id = await createDnsServer({
       provider: data.provider as DnsProvider,
       secret: data.secret,
     })
-    const { issueSetupCookie } = await import("./setup-auth")
-    issueSetupCookie()
-    return { dnsServerId: id }
   } catch (e) {
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
     throw new SetupError(toSetupErrorCode(e, "SETUP-DNS-REJECTED"))
   }
+  // Cookie renouvelé seulement après une création DNS réussie, hors du catch de mapping
+  // (sinon un échec de cookie serait signalé comme "DNS rejeté").
+  const { issueSetupCookie } = await import("./setup-auth")
+  issueSetupCookie()
+  return { dnsServerId: id }
 }
 
 export async function setDnsManagementHandler({

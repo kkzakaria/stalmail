@@ -78,6 +78,20 @@ sha256hex() {
   fi
 }
 
+# Génère un jeton de setup (48 hex) dans la variable SETUP_TOKEN. Même précaution
+# pipefail que pour SECRET : `openssl rand` en priorité ; fallback tranche FINIE lue par
+# bash (pas de pipe sur un producteur infini → pas de SIGPIPE sous `set -o pipefail`).
+gen_setup_token() {
+  if command -v openssl &> /dev/null; then
+    SETUP_TOKEN=$(openssl rand -hex 24)
+  else
+    # Tranche LARGE (4096 octets) pour garantir assez de caractères hex après filtrage
+    # (~6 % de rendement ≫ 48 requis), puis coupe en bash (aucun pipe en aval).
+    SETUP_TOKEN=$(LC_ALL=C tr -dc 'a-f0-9' < <(head -c 4096 /dev/urandom))
+    SETUP_TOKEN=${SETUP_TOKEN:0:48}
+  fi
+}
+
 # 4. .env (généré une fois, conservé ensuite).
 # SETUP_TOKEN : en clair uniquement en shell (pour l'URL finale), jamais écrit dans .env.
 # Seul le hash SHA-256 est persisté. Même précaution pipefail que pour SECRET :
@@ -92,16 +106,11 @@ if [ ! -f .env ]; then
   # avec `openssl` en chemin préféré quand il est disponible.
   if command -v openssl &> /dev/null; then
     SECRET=$(openssl rand -hex 32)
-    SETUP_TOKEN=$(openssl rand -hex 24)
   else
     SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c 256 /dev/urandom))
     SECRET=${SECRET:0:64}
-    # Fallback setup token : lire une tranche LARGE (4096 octets) pour garantir assez de
-    # caractères hex après filtrage (~6 % de rendement : 16 chars hex sur 256 valeurs
-    # d'octet → ~256 chars attendus pour 4096 octets lus, ≫ 48 requis), puis couper en bash.
-    SETUP_TOKEN=$(LC_ALL=C tr -dc 'a-f0-9' < <(head -c 4096 /dev/urandom))
-    SETUP_TOKEN=${SETUP_TOKEN:0:48}
   fi
+  gen_setup_token
   # Hash SHA-256 du jeton — via le helper portable sha256hex (openssl / sha256sum / shasum).
   SETUP_TOKEN_HASH=$(printf '%s' "${SETUP_TOKEN}" | sha256hex)
   {
@@ -123,8 +132,20 @@ else
   fi
   HOSTNAME_ARG="${EXISTING_HOSTNAME:-${HOSTNAME_ARG}}"
   echo "✓ .env existant conservé (hostname=${HOSTNAME_ARG})"
-  # Le jeton en clair n'est pas récupérable depuis un .env existant (seul le hash y est).
-  # SETUP_TOKEN reste vide → géré dans l'encadré final ci-dessous.
+  # Migration douce : un .env antérieur à l'auth bootstrap n'a pas STALMAIL_SETUP_TOKEN_HASH.
+  # Cette variable est désormais REQUISE par compose.prod.yml → sans elle, `docker compose up`
+  # échoue avant tout affichage. On génère donc un jeton et on ajoute son hash au .env ; le
+  # jeton en clair (SETUP_TOKEN) sert à imprimer le lien fonctionnel dans l'encadré final.
+  EXISTING_SETUP_HASH=$(awk -F= '$1=="STALMAIL_SETUP_TOKEN_HASH"{print $2}' .env | tail -n1)
+  if [ -z "${EXISTING_SETUP_HASH}" ]; then
+    gen_setup_token
+    SETUP_TOKEN_HASH=$(printf '%s' "${SETUP_TOKEN}" | sha256hex)
+    printf 'STALMAIL_SETUP_TOKEN_HASH=%s\n' "${SETUP_TOKEN_HASH}" >> .env
+    chmod 600 .env
+    echo "✓ .env migré (STALMAIL_SETUP_TOKEN_HASH ajouté)"
+  fi
+  # Si le hash existait déjà, le jeton en clair n'est pas récupérable (seul le hash est
+  # persisté) → SETUP_TOKEN reste vide, géré dans l'encadré final ci-dessous.
 fi
 
 # 5. Démarrage.
