@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.19](https://github.com/kkzakaria/stalmail/compare/v0.1.18...v0.1.19) (2026-06-24)
+
+
+### Bug Fixes
+
+* **setup:** publishRecords est un objet, pas un tableau (gestion DNS auto) ([#56](https://github.com/kkzakaria/stalmail/issues/56)) ([79ad0f5](https://github.com/kkzakaria/stalmail/commit/79ad0f5a004471c71e4bae5039b0b7ca9a1091e4))
+
 ## [0.1.18](https://github.com/kkzakaria/stalmail/compare/v0.1.17...v0.1.18) (2026-06-24)
 
 
