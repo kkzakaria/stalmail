@@ -151,9 +151,12 @@ describe("SetupWizard", () => {
         initialTheme="light"
         submitBootstrap={vi.fn()}
         pollStep={poll}
+        {...authProps()}
         {...serverProps()}
       />
     )
+    // wait for the auth gate to resolve and the DnsStep to render
+    await screen.findByText("Fournisseur DNS")
     // Manual default → submit, grid, then advance triggers the failing re-poll.
     fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
     await screen.findByRole("button", { name: "Continuer" })
