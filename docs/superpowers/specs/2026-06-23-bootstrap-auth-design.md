@@ -49,16 +49,16 @@ Deux artefacts :
 3. **Invalidation** : `unlockSetupFn` refuse si `isSetupComplete()`. (Jeton mort post-setup.)
 4. **TTL court** sur le cookie (1 h, glissant).
 5. **Rate-limit par IP** (`clientIp()`) + back-off sur `unlockSetupFn` ; **log d'événement de sécurité** (succès/échec, IP, UA) ; **réponses génériques** (ne pas distinguer jeton faux / setup déjà fait / rate-limité → même `SETUP-UNLOCK-FAILED`).
-6. **Fragment-only** : le JS lit `location.hash`, POST same-origin (`assertSameOrigin`), puis **`history.replaceState`** pour effacer `#token` de l'URL. Jamais le jeton en query string ni en log.
+6. **Fragment-only** : le JS lit `location.hash`, POST same-origin (`assertSameOriginStrict` — rejette aussi les requêtes sans Origin/Referer), puis **`history.replaceState`** pour effacer `#token` de l'URL. Jamais le jeton en query string ni en log.
 7. **Cookie** `__Host-stalmail_setup` (prod) / `stalmail_setup` (dev), `httpOnly`, `secure`, `sameSite:lax`, `path:/`, valeur **chiffrée-authentifiée** via `encryptToken`/`decryptToken` (AES-GCM, clé `STALMAIL_SECRET`) avec timestamp pour le contrôle d'âge.
 8. **Erreurs client génériques** (« lien de setup invalide ou expiré ») — aucun détail interne (R6).
 
 ## 6. Surface serveur (gate)
 
-- **Fns mutatrices** (gardées par `requireSetupAuth()` **+** `assertSameOrigin()` **+** `requireStep()`) : `submitBootstrapFn`, `createDnsServerFn`, `setDnsManagementFn`, `setDnsManagementManualFn`, `configureAcmeFn`, `markSslConfiguredFn`, `createAdminAccountFn`, `finishSetupFn`.
+- **Fns mutatrices** (gardées par `requireSetupAuth()` **+** `assertSameOriginStrict()` **+** `requireStep()`) : `submitBootstrapFn`, `createDnsServerFn`, `setDnsManagementFn`, `setDnsManagementManualFn`, `configureAcmeFn`, `markSslConfiguredFn`, `createAdminAccountFn`, `finishSetupFn`.
 - **Fns lecture seule NON gardées par `requireSetupAuth`** (nécessaires avant déverrouillage / pour poller) : `getStep`, `setupStatusFn`, `setupAuthStatusFn`, `dnsGridStatusFn`, `acmeStatusFn`. Elles ne fuient rien de sensible pré-déverrouillage (pas encore de domaine ; `dnsGridStatus` vide).
 - **Nouvelles fns** :
-  - `unlockSetupFn(token)` (POST) : `assertSameOrigin` + rate-limit + refuse si `isSetupComplete()` ; `timingSafeEqual(sha256(token), hash)` ; succès → pose le cookie + renvoie `{ ok: true }` ; échec → `SETUP-UNLOCK-FAILED` (générique).
+  - `unlockSetupFn(token)` (POST) : `assertSameOriginStrict` (rejette requêtes sans Origin/Referer) + rate-limit + refuse si `isSetupComplete()` ; `timingSafeEqual(sha256(token), hash)` ; succès → pose le cookie + renvoie `{ ok: true }` ; échec → `SETUP-UNLOCK-FAILED` (générique).
   - `setupAuthStatusFn()` (GET) : `{ authed: boolean }` (lit/vérifie le cookie).
 
 `requireSetupAuth()` lit le cookie, déchiffre/vérifie l'âge ; absent/invalide/expiré → `SetupError('SETUP-UNAUTHENTICATED')`. Placé **avant** le bloc `try/catch` de mapping (le `SetupError` traverse opaque).
@@ -90,7 +90,7 @@ Le jeton en mémoire (durée de vie = l'onglet) permet la reprise transparente s
 
 ## 10. Fichiers impactés
 
-- **Serveur** : `src/server/setup-auth.ts` *(nouveau : cookie issue/verify/clear, `requireSetupAuth`, `isSetupAuthed`, `unlockSetup` avec hash+timingSafeEqual+gate isSetupComplete)* ; un rate-limiter (réutiliser/étendre le pattern `send-rate-limit.ts`, clé `clientIp()`) ; `setup-actions.ts` (unlockSetupFn, setupAuthStatusFn, garde `requireSetupAuth`+`assertSameOrigin` sur les mutatrices) ; `setup-errors.ts` (+2 codes).
+- **Serveur** : `src/server/setup-auth.ts` *(nouveau : cookie issue/verify/clear, `requireSetupAuth`, `isSetupAuthed`, `unlockSetup` avec hash+timingSafeEqual+gate isSetupComplete)* ; un rate-limiter (réutiliser/étendre le pattern `send-rate-limit.ts`, clé `clientIp()`) ; `setup-actions.ts` (unlockSetupFn, setupAuthStatusFn, garde `requireSetupAuth`+`assertSameOriginStrict` sur les mutatrices) ; `setup-errors.ts` (+2 codes).
 - **Client** : `setup-actions` route wiring (`src/routes/setup/index.tsx`) ; `SetupWizard.tsx` (auto-unlock hash + replaceState + mémoire + état non-authed/expiré) ; `error-code.ts` (+2 codes dans `KNOWN_CODES`) ; i18n `resources.ts` (unlock/expired + codes, fr/en).
 - **Orchestration** : `install.sh`, `compose.prod.yml`, `.env.example` ; doc runbook.
 

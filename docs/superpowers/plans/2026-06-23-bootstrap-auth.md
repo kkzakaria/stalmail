@@ -4,7 +4,7 @@
 
 **Goal:** Authentifier le premier accès au wizard de setup via un jeton dédié jetable (fragment d'URL) → cookie de session setup, et garder toutes les server functions mutatrices de setup derrière ce cookie. Fermer la prise de contrôle sur instance fraîche exposée (A01/A04).
 
-**Architecture:** Jeton de setup généré par `install.sh` (clair dans l'URL `#token=…`, **hash** seul dans `.env`/env app). `unlockSetupFn` vérifie en temps constant et pose un cookie chiffré-authentifié (réutilise `session-crypto`/`session-cookie`). `requireSetupAuth()` + `assertSameOrigin()` + `requireStep()` gardent les fns mutatrices. UI : déverrouillage auto depuis `location.hash` + `replaceState`, jeton gardé en mémoire pour reprise transparente.
+**Architecture:** Jeton de setup généré par `install.sh` (clair dans l'URL `#token=…`, **hash** seul dans `.env`/env app). `unlockSetupFn` vérifie en temps constant et pose un cookie chiffré-authentifié (réutilise `session-crypto`/`session-cookie`). `requireSetupAuth()` + `assertSameOriginStrict()` (rejette requêtes sans Origin/Referer) + `requireStep()` gardent les fns mutatrices. UI : déverrouillage auto depuis `location.hash` + `replaceState`, jeton gardé en mémoire pour reprise transparente.
 
 **Tech Stack:** TanStack Start server fns, React 19, Vitest, Node crypto (`createHash`, `timingSafeEqual`, `randomBytes`), `@tanstack/react-start/server` (cookies/headers).
 
@@ -14,7 +14,7 @@
 - **Jeton** : CSPRNG ≥128 bits, **distinct** de `STALMAIL_SECRET`. Serveur ne détient que `STALMAIL_SETUP_TOKEN_HASH` (SHA-256). Vérif `timingSafeEqual(sha256(présenté), hash)`.
 - **Invalidation** : `unlockSetupFn` refuse si `isSetupComplete()`. Jeton valide jusqu'à `finishSetup`.
 - **Cookie** : `__Host-stalmail_setup` (prod) / `stalmail_setup` (dev), `httpOnly`/`secure`/`sameSite:lax`/`path:/`, valeur = `encryptToken(timestamp, 'stalmail-setup')`, **TTL 1 h glissant** (réémis à chaque action mutatrice réussie).
-- **Gate mutatrices** (`requireSetupAuth`+`assertSameOrigin`+`requireStep`) : `submitBootstrapFn`, `createDnsServerFn`, `setDnsManagementFn`, `setDnsManagementManualFn`, `configureAcmeFn`, `markSslConfiguredFn`, `createAdminAccountFn`, `finishSetupFn`. **Lecture seule non gardée par requireSetupAuth** : `getStep`, `setupStatusFn`, `setupAuthStatusFn`, `dnsGridStatusFn`, `acmeStatusFn`.
+- **Gate mutatrices** (`requireSetupAuth`+`assertSameOriginStrict`+`requireStep`) : `submitBootstrapFn`, `createDnsServerFn`, `setDnsManagementFn`, `setDnsManagementManualFn`, `configureAcmeFn`, `markSslConfiguredFn`, `createAdminAccountFn`, `finishSetupFn`. **Lecture seule non gardée par requireSetupAuth** : `getStep`, `setupStatusFn`, `setupAuthStatusFn`, `dnsGridStatusFn`, `acmeStatusFn`.
 - **Rate-limit** par `clientIp()` + back-off + **log de sécurité** ; **réponses génériques** (`SETUP-UNLOCK-FAILED` indistinct entre jeton faux / déjà-configuré / rate-limité).
 - **Fragment-only** : JS lit `location.hash`, POST same-origin, `history.replaceState` pour nettoyer l'URL ; jeton **jamais** en query ni en log ; gardé **en mémoire** (onglet) pour reprise.
 - **R6** : aucune fuite de détail interne ; erreurs via codes opaques.
@@ -48,7 +48,7 @@
   - `isSetupAuthed(): boolean` (lit+déchiffre+contrôle d'âge ≤ 1 h).
   - `requireSetupAuth(): void` (throw `SetupError('SETUP-UNAUTHENTICATED')` si non authed).
   - `clearSetupCookie(): void`.
-  - `unlockSetup(token: string): void` — `assertSameOrigin()` ; rate-limit par `clientIp()` ; refuse si `isSetupComplete()` ; `timingSafeEqual(sha256(token), envHash)` ; succès → `issueSetupCookie()` ; échec/refus → `SetupError('SETUP-UNLOCK-FAILED')` (générique, après consommation du rate-limit) ; log de sécurité.
+  - `unlockSetup(token: string): void` — `assertSameOriginStrict()` (rejette requêtes sans Origin/Referer) ; rate-limit par `clientIp()` ; refuse si `isSetupComplete()` ; `timingSafeEqual(sha256(token), envHash)` ; succès → `issueSetupCookie()` ; échec/refus → `SetupError('SETUP-UNLOCK-FAILED')` (générique, après consommation du rate-limit) ; log de sécurité.
 
 - [ ] **Step 1 :** Tests (mock `session-crypto`, env, `clientIp`, `isSetupComplete`) :
   - `issueSetupCookie` puis `isSetupAuthed()===true` ; cookie expiré (>1 h, horodatage forcé) → `false` ; cookie absent/corrompu → `false`.
@@ -67,13 +67,13 @@
 
 **Interfaces:**
 - Produces: `unlockSetupFn` (POST, validator `{ token: z.string().min(1).max(512) }`) → `unlockSetup(data.token)` → `{ ok: true }` ; `setupAuthStatusFn` (GET) → `{ authed: isSetupAuthed() }`.
-- Modifie: chaque handler mutateur appelle, **avant `requireStep`**, `assertSameOrigin()` puis `requireSetupAuth()` (lazy `await import('./setup-auth')`). À chaque **succès** d'action mutatrice, réémettre le cookie (`issueSetupCookie()`) pour le TTL glissant.
+- Modifie: chaque handler mutateur appelle, **avant `requireStep`**, `assertSameOriginStrict()` puis `requireSetupAuth()` (lazy `await import('./setup-auth')`). À chaque **succès** d'action mutatrice, réémettre le cookie (`issueSetupCookie()`) pour le TTL glissant.
 
 - [ ] **Step 1 :** Tests (mock `setup-auth` : `requireSetupAuth`, `isSetupAuthed`, `unlockSetup`, `issueSetupCookie`) :
   - chaque fn mutatrice throw `SETUP-UNAUTHENTICATED` quand `requireSetupAuth` throw ; passe quand il ne throw pas (et `issueSetupCookie` appelé au succès) ;
   - `unlockSetupFn` appelle `unlockSetup(token)` ; `setupAuthStatusFn` renvoie `{authed}` reflétant `isSetupAuthed`.
 - [ ] **Step 2 :** Lancer → échoue.
-- [ ] **Step 3 :** Implémenter. Placer `assertSameOrigin()`+`requireSetupAuth()` en tête (hors du try de mapping, comme `requireStep`). Réémettre le cookie après l'action réussie. Ordre dans chaque handler : `assertSameOrigin()` → `requireSetupAuth()` → `requireStep(<étape>)` → action → `issueSetupCookie()`.
+- [ ] **Step 3 :** Implémenter. Placer `assertSameOriginStrict()`+`requireSetupAuth()` en tête (hors du try de mapping, comme `requireStep`). Réémettre le cookie après l'action réussie. Ordre dans chaque handler : `assertSameOriginStrict()` → `requireSetupAuth()` → `requireStep(<étape>)` → action → `issueSetupCookie()`.
 - [ ] **Step 4 :** Tests verts (`bun run test src/server/setup-actions.test.ts`) + full suite.
 - [ ] **Step 5 :** Commit `feat(setup): garde requireSetupAuth sur les fns mutatrices + unlock/status`.
 
