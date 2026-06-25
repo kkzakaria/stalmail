@@ -205,7 +205,7 @@ Cloudflare (MX/SPF/DKIM/DMARC/SRV/CNAME). **Les A/AAAA restent à ta charge** (�
 | E4 Répondre (threading) | | |
 | E5 Répondre à tous (auto-exclusion) | | |
 | E6 Transférer (Fwd: + citation) | | |
-| E7 Sanitisation HTML | | |
+| E7 Sanitisation HTML | ✅ (en pratique) | Mail commercial réel (AliExpress, HTML complexe + traceurs) transféré et ouvert : **aucune exécution JS** (console/erreurs vides, iframe `sandbox` sans `allow-scripts`), images/pixels distants **bloqués** par défaut, liens assainis (`rel=noopener`, nouvel onglet). **Réserve** : les vecteurs injectés *exacts* (`<script>`/`onerror`/`javascript:`) n'ont pas été testés via Gmail (son composer échappe le HTML brut) → preuve littérale = envoi SMTP brut, à faire si besoin. Garantie de fond indépendante du vecteur : sandbox sans `allow-scripts`. |
 | E8 Adresse invalide (toast, pas d'envoi) | | |
 | E9 Rate-limit (best-effort) | | |
 | F1 mail-tester ≥ 9/10 | ✅ Pass | **10/10**. |
