@@ -1,8 +1,8 @@
-import { Icon, Avatar } from './mail-icons'
-import { formatThreadDate } from './format-date'
-import type { AppThread } from '../../server/mail-types'
+import { Icon, Avatar } from "./mail-icons"
+import { formatThreadDate } from "./format-date"
+import type { AppThread } from "../../server/mail-types"
 
-const RECIPIENT_FOLDERS = new Set(['sent', 'drafts'])
+const RECIPIENT_FOLDERS = new Set(["sent", "drafts"])
 
 export function ThreadRow({
   thread,
@@ -35,17 +35,19 @@ export function ThreadRow({
 
   const addrs = RECIPIENT_FOLDERS.has(folder) ? thread.to : thread.from
   const lead = addrs.at(0)
-  const leadName = lead?.name || lead?.email || '—'
-  const leadEmail = lead?.email ?? ''
+  const leadName = lead?.name || lead?.email || "—"
+  const leadEmail = lead?.email ?? ""
 
   return (
     <div
-      className={'row' + (thread.unread ? ' unread' : '') + (selected ? ' sel' : '')}
-      onClick={() => onOpen?.(thread.id)}
+      className={
+        "row" + (thread.unread ? " unread" : "") + (selected ? " sel" : "")
+      }
+      onClick={() => onOpen?.(thread.threadId)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
-          onOpen?.(thread.id)
+          onOpen?.(thread.threadId)
         }
       }}
       role="button"
@@ -68,7 +70,9 @@ export function ThreadRow({
             {thread.hasAttachment && (
               <Icon name="paperclip" size={13} className="row-attach" />
             )}
-            <span className="row-time">{formatThreadDate(thread.receivedAt, now)}</span>
+            <span className="row-time">
+              {formatThreadDate(thread.receivedAt, now)}
+            </span>
           </div>
           <div className="subj">{thread.subject}</div>
           <div className="snippet">{thread.preview}</div>
