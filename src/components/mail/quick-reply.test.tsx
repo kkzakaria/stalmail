@@ -94,7 +94,8 @@ describe("QuickReply", () => {
   })
 
   it("réinitialise la réponse rapide après un envoi réussi (onSend → true)", async () => {
-    const onSend = vi.fn(() => true)
+    // Contrat async réel : onSend renvoie une Promise<boolean> (comme composer.send).
+    const onSend = vi.fn().mockResolvedValue(true)
     render(
       <QuickReply
         detail={detail}
@@ -106,7 +107,7 @@ describe("QuickReply", () => {
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
     expect(screen.getByLabelText("mail.compose.body")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
-    // Succès → l'éditeur disparaît et la barre de réponse revient.
+    // Succès (après résolution de la promesse) → l'éditeur disparaît, la barre revient.
     await waitFor(() =>
       expect(
         screen.queryByLabelText("mail.compose.body")
@@ -117,8 +118,8 @@ describe("QuickReply", () => {
     ).toBeInTheDocument()
   })
 
-  it("garde la réponse rapide ouverte si l'envoi échoue (onSend → false)", async () => {
-    const onSend = vi.fn(() => false)
+  it("garde la réponse rapide ouverte ET préserve le contenu si l'envoi échoue (onSend résout false)", async () => {
+    const onSend = vi.fn().mockResolvedValue(false)
     render(
       <QuickReply
         detail={detail}
@@ -128,10 +129,16 @@ describe("QuickReply", () => {
       />
     )
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
+    // La citation pré-remplie ("corps" du dernier message) est dans l'éditeur.
+    expect(screen.getByLabelText("mail.compose.body")).toHaveTextContent(
+      "corps"
+    )
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
     await waitFor(() => expect(onSend).toHaveBeenCalled())
-    // Échec → l'éditeur reste affiché (contenu préservé pour réessayer).
-    expect(screen.getByLabelText("mail.compose.body")).toBeInTheDocument()
+    // Échec → l'éditeur reste affiché AVEC son contenu (pour réessayer sans tout reperdre).
+    expect(screen.getByLabelText("mail.compose.body")).toHaveTextContent(
+      "corps"
+    )
   })
 
   it("threading reply : inReplyTo et references reprennent le Message-ID du dernier message", () => {
