@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { QuickReply } from "./quick-reply"
 import type { AppThreadDetail } from "../../server/mail-types"
 
@@ -91,6 +91,47 @@ describe("QuickReply", () => {
         subject: "Re: Sujet",
       })
     )
+  })
+
+  it("réinitialise la réponse rapide après un envoi réussi (onSend → true)", async () => {
+    const onSend = vi.fn(() => true)
+    render(
+      <QuickReply
+        detail={detail}
+        selfEmail="me@x.fr"
+        sending={false}
+        onSend={onSend}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
+    expect(screen.getByLabelText("mail.compose.body")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
+    // Succès → l'éditeur disparaît et la barre de réponse revient.
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText("mail.compose.body")
+      ).not.toBeInTheDocument()
+    )
+    expect(
+      screen.getByRole("button", { name: "mail.compose.reply" })
+    ).toBeInTheDocument()
+  })
+
+  it("garde la réponse rapide ouverte si l'envoi échoue (onSend → false)", async () => {
+    const onSend = vi.fn(() => false)
+    render(
+      <QuickReply
+        detail={detail}
+        selfEmail="me@x.fr"
+        sending={false}
+        onSend={onSend}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
+    await waitFor(() => expect(onSend).toHaveBeenCalled())
+    // Échec → l'éditeur reste affiché (contenu préservé pour réessayer).
+    expect(screen.getByLabelText("mail.compose.body")).toBeInTheDocument()
   })
 
   it("threading reply : inReplyTo et references reprennent le Message-ID du dernier message", () => {
