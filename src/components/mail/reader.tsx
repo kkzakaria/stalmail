@@ -15,7 +15,7 @@ export interface ReaderProps {
   markRead: (value: boolean) => void
   move: (to: MoveTo) => void
   onBack: () => void
-  onSend?: (draft: ComposerDraft) => void
+  onSend?: (draft: ComposerDraft) => boolean | void | Promise<boolean | void>
   sending?: boolean
   selfEmail?: string
 }

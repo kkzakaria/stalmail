@@ -11,7 +11,8 @@ export interface QuickReplyProps {
   detail: AppThreadDetail
   selfEmail: string
   sending: boolean
-  onSend: (draft: ComposerDraft) => void
+  // Retourne true si l'envoi a réussi → la réponse rapide se réinitialise.
+  onSend: (draft: ComposerDraft) => boolean | void | Promise<boolean | void>
 }
 
 function formatAddrs(addrs: MailAddress[]): string {
@@ -134,7 +135,12 @@ export function QuickReply({
           className="btn-primary"
           disabled={sending}
           aria-label={t("mail.compose.send")}
-          onClick={() => onSend(draft)}
+          onClick={async () => {
+            // Réinitialise la réponse rapide sur succès (sinon elle reste ouverte
+            // avec le contenu envoyé). onSend renvoie true quand l'envoi a abouti.
+            const ok = await onSend(draft)
+            if (ok) setDraft(null)
+          }}
         >
           <Icon name="send" size={16} /> {t("mail.compose.send")}
         </button>
