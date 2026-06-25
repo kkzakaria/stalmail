@@ -73,6 +73,41 @@ describe("Composer", () => {
     ).toBeInTheDocument()
   })
 
+  it("draft pré-rempli : seul le champ concerné est ouvert au départ (pas les deux)", () => {
+    // Cc pré-rempli, Cci vide → seul le champ Cc est affiché.
+    const { unmount } = render(
+      <Composer
+        initial={{ ...initial, cc: "x@y.fr" }}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("textbox", { name: "mail.compose.bcc" })
+    ).toBeNull()
+    unmount()
+
+    // Inverse : Cci pré-rempli, Cc vide → seul le champ Cci est affiché.
+    render(
+      <Composer
+        initial={{ ...initial, bcc: "z@y.fr" }}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.bcc" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeNull()
+  })
+
   it("envoie le brouillon saisi", () => {
     const onSend = vi.fn()
     render(
