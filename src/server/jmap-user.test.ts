@@ -6,6 +6,7 @@ import {
   jmapUserCall,
   JmapUserError,
   SUBMISSION_CAPABILITIES,
+  capabilitiesForBatch,
 } from "./jmap-user"
 
 vi.mock("./session", () => ({ withFreshAccessToken: vi.fn() }))
@@ -135,5 +136,57 @@ describe("jmapUserCall", () => {
       using: string[]
     }
     expect(sent.using).not.toContain("urn:ietf:params:jmap:submission")
+  })
+
+  it("auto-inclut submission quand le batch contient Identity/get (sans cap explicite)", async () => {
+    // Régression : sendMailFn lit Mailbox/get + Identity/get sans passer de capabilities.
+    // Identity/* relève de la spec submission → Stalwart rejetait l'appel en unknownMethod.
+    vi.mocked(withFreshAccessToken).mockResolvedValue("tok")
+    vi.mocked(stalwartUserFetch).mockResolvedValue(
+      new Response(JSON.stringify({ methodResponses: [] }), { status: 200 })
+    )
+
+    await jmapUserCall("sid", [
+      ["Mailbox/get", {}, "0"],
+      ["Identity/get", {}, "1"],
+    ] as never)
+
+    const [, , init] = vi.mocked(stalwartUserFetch).mock.calls[0]
+    const sent = JSON.parse((init as RequestInit).body as string) as {
+      using: string[]
+    }
+    expect(sent.using).toContain("urn:ietf:params:jmap:submission")
+  })
+})
+
+describe("capabilitiesForBatch", () => {
+  const SUB = "urn:ietf:params:jmap:submission"
+
+  it("ne contient PAS submission pour un batch mail seul", () => {
+    expect(
+      capabilitiesForBatch([["Mailbox/get", {}, "0"]] as never)
+    ).not.toContain(SUB)
+  })
+
+  it("ajoute submission si le batch contient Identity/get", () => {
+    expect(
+      capabilitiesForBatch([
+        ["Mailbox/get", {}, "0"],
+        ["Identity/get", {}, "1"],
+      ] as never)
+    ).toContain(SUB)
+  })
+
+  it("ajoute submission si le batch contient EmailSubmission/set", () => {
+    expect(
+      capabilitiesForBatch([["EmailSubmission/set", {}, "0"]] as never)
+    ).toContain(SUB)
+  })
+
+  it("conserve toujours les capabilities mail de base", () => {
+    expect(capabilitiesForBatch([["Email/get", {}, "0"]] as never)).toEqual([
+      "urn:ietf:params:jmap:core",
+      "urn:ietf:params:jmap:mail",
+    ])
   })
 })
