@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.22](https://github.com/kkzakaria/stalmail/compare/v0.1.21...v0.1.22) (2026-06-25)
+
+
+### Bug Fixes
+
+* **reader:** préférer le HTML au text/plain (iframe sandbox + blocage images) ([#68](https://github.com/kkzakaria/stalmail/issues/68)) ([1a8bbfd](https://github.com/kkzakaria/stalmail/commit/1a8bbfd41533f8a2f257f590daa236ce35c86e17))
+
 ## [0.1.21](https://github.com/kkzakaria/stalmail/compare/v0.1.20...v0.1.21) (2026-06-25)
 
 
