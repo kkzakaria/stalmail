@@ -12,16 +12,21 @@ blocage d'images, délivrabilité) sur Hetzner + domaine `getstalmail.com` + Clo
 `compose.prod.yml` (images GHCR), `Caddyfile` (templété par `STALMAIL_HOSTNAME`),
 `.env.example`.
 
-**Principe :** déploiement en **une commande** (`install.sh`), puis **tout** le reste
-(domaine, **DNS y compris l'A record**, SSL, DKIM) est publié par le **wizard in-app**.
-Aucune copie de fichier ni enregistrement DNS manuel.
+**Principe :** déploiement en **une commande** (`install.sh`), puis le **wizard in-app**
+publie automatiquement la **zone mail** (MX, SPF, DKIM, DMARC, SRV, CNAME autoconfig…)
+via le provider DNS. **Exception : les enregistrements A/AAAA sont créés MANUELLEMENT.**
+Stalwart ne publie jamais d'adresse (son enum `DnsRecordType` n'a pas de `a`/`aaaa` — il
+ignore l'IP publique de l'hôte). Voir issue **#61** (auto A/AAAA + guidage, à concevoir).
+Aucune autre copie de fichier ni enregistrement DNS manuel.
 
 ## Global Constraints (valeurs exactes)
 
-- Hostname webmail : **`mail.getstalmail.com`** ; URL publique : **`https://mail.getstalmail.com`**.
+- Hostname webmail (= `STALMAIL_HOSTNAME`) : **`getstalmail.com`** ; URL publique : **`https://getstalmail.com`**. *(Validation réelle : le webmail a été déployé sur l'apex `getstalmail.com`, pas sur `mail.`.)*
 - Domaine mail : **`getstalmail.com`** ; DNS provider wizard : **Cloudflare** (token API scope *DNS edit* sur la zone).
+- **Host mail** (cible des MX/SRV/CNAME de la zone Stalwart) : **`mail.getstalmail.com`** — distinct du hostname webmail. Nécessite son propre A record (manuel).
+- **Enregistrements A à créer MANUELLEMENT dans Cloudflare** (DNS only / nuage gris) : `getstalmail.com` → `<ip-hetzner>` **et** `mail.getstalmail.com` → `<ip-hetzner>`. Cf. #61.
 - Images : **`ghcr.io/kkzakaria/stalmail-app:latest`** + **`ghcr.io/kkzakaria/stalmail-stalwart:latest`** (repo public → pas de `docker login`).
-- `.env` (généré par `install.sh`) : `STALMAIL_SECRET`, `STALMAIL_HOSTNAME=mail.getstalmail.com`, `STALMAIL_PUBLIC_URL=https://mail.getstalmail.com`, `STALMAIL_SETUP_TOKEN_HASH` (SHA-256 du jeton de setup — le clair n'est imprimé qu'une fois dans l'URL finale).
+- `.env` (généré par `install.sh`) : `STALMAIL_SECRET`, `STALMAIL_HOSTNAME=getstalmail.com`, `STALMAIL_PUBLIC_URL=https://getstalmail.com`, `STALMAIL_SETUP_TOKEN_HASH` (SHA-256 du jeton de setup — le clair n'est imprimé qu'une fois dans l'URL finale).
 - Boîte externe de contrôle : une adresse **que tu possèdes** (ex. Gmail) — notée `<gmail>` ci-dessous.
 - Placeholders à substituer : `<ip-hetzner>` (IP publique du serveur), `<gmail>`.
 - Secrets dans `.env` (chmod 600), **jamais commités**.
@@ -60,7 +65,7 @@ Aucune copie de fichier, aucun DNS manuel.
 - [ ] **1.1 — Installer en une commande** (sur le serveur) :
   ```bash
   curl -fsSL https://raw.githubusercontent.com/kkzakaria/stalmail/main/install.sh \
-    | bash -s -- mail.getstalmail.com
+    | bash -s -- getstalmail.com
   ```
   Le script : vérifie Docker, récupère `compose.prod.yml` + `Caddyfile` dans `~/stalmail`, génère `.env` (secret + hostname), tire les images GHCR, démarre la stack.
   Attendu : `✓ Services démarrés (stalwart, app, caddy)` puis l'encadré avec l'URL `https://<ip>/setup#token=<jeton>` (lien à usage unique — conserver pour la Phase 2.1).
@@ -73,8 +78,8 @@ Aucune copie de fichier, aucun DNS manuel.
 ## Phase 2 — Wizard (accès par IP, DNS publié automatiquement)
 
 Le DNS n'existe pas encore → on atteint le wizard via l'**IP** (certificat **auto-signé**,
-servi par le fallback `:443` de Caddy). Le wizard publie ensuite **toute** la zone via
-Cloudflare, **A record inclus**.
+servi par le fallback `:443` de Caddy). Le wizard publie ensuite la **zone mail** via
+Cloudflare (MX/SPF/DKIM/DMARC/SRV/CNAME). **Les A/AAAA restent à ta charge** (étape 2.3bis).
 
 - [ ] **2.1 — Ouvrir le lien de setup imprimé par `install.sh`** (format `https://<ip-hetzner>/setup#token=<jeton>`) ; **accepter l'avertissement de certificat auto-signé** (normal, c'est ton serveur). Le fragment `#token=…` autorise le wizard — sans lui la page est verrouillée. Attendu : écran du wizard (mode bootstrap).
   > Si le lien est perdu (`.env` existant, relance) : générer un nouveau jeton et mettre à jour `STALMAIL_SETUP_TOKEN_HASH` dans `.env`, redémarrer `app`, ouvrir la nouvelle URL.
@@ -85,9 +90,16 @@ Cloudflare, **A record inclus**.
   > docker compose -f ~/stalmail/compose.prod.yml up -d app
   > echo "https://<ip-hetzner>/setup#token=$TOKEN"
   > ```
-- [ ] **2.2 — Domaine :** saisir `getstalmail.com` (hostname serveur `mail.getstalmail.com`).
-- [ ] **2.3 — DNS = Cloudflare :** sélectionner **Cloudflare**, coller le **token API** (scope *DNS edit* sur la zone). Le wizard publie **A (mail→IP) + MX + SPF + DKIM + DMARC**.
-- [ ] **2.4 — SSL / DKIM :** laisser le wizard demander le certificat mail + générer les clés DKIM.
+- [ ] **2.2 — Domaine :** saisir `getstalmail.com` (hostname serveur `getstalmail.com`).
+- [ ] **2.3 — DNS = Cloudflare :** sélectionner **Cloudflare**, coller le **token API** (scope *DNS edit* sur la zone). Le wizard publie **MX + SPF + DKIM + DMARC + SRV + CNAME** (**pas** les A/AAAA — cf. #61).
+  > ⚠️ Si le token est **invalide**, le wizard n'affiche **pas** d'erreur (la grille se fie à la résolution DNS, satisfiable par du cache) alors que la tâche Stalwart `DnsManagement` est `Failed` → publication en réalité échouée. Voir issue **#62**. Vérifie avec un **bon** token (scope *Zone:DNS:Edit*).
+- [ ] **2.3bis — A records MANUELS** dans Cloudflare (**avant** ou pendant le step SSL), **DNS only (nuage gris)** :
+  | Type | Nom | Contenu |
+  |---|---|---|
+  | A | `getstalmail.com` (`@`) | `<ip-hetzner>` |
+  | A | `mail.getstalmail.com` | `<ip-hetzner>` |
+  > Sans ces A, ni le webmail ni l'ACME ne fonctionnent (les MX/SRV/CNAME pointent dans le vide). Laisse **~1-2 min de propagation** avant de tester l'HTTPS.
+- [ ] **2.4 — SSL / DKIM :** laisser le wizard demander le certificat mail (ACME **DNS-01**) + générer les clés DKIM. Le badge peut afficher « en attente » brièvement ; la délivrance se fait en arrière-plan (corrigé en v0.1.20 : statut `valid` quand le renouvellement est planifié).
 - [ ] **2.5 — Terminer :** le superviseur redémarre Stalwart (bootstrap→normal) ; écran *done*.
 - [ ] **2.6 — Compte admin :** noter `admin@getstalmail.com` + mot de passe.
 
@@ -95,24 +107,26 @@ Cloudflare, **A record inclus**.
 
 - [ ] **3.1 — DNS publié & propagé (1–5 min) :**
   ```bash
-  dig +short A   mail.getstalmail.com      # → <ip-hetzner> (publié par le wizard)
-  dig +short MX  getstalmail.com
-  dig +short TXT getstalmail.com           # SPF (v=spf1 …)
-  dig +short TXT default._domainkey.getstalmail.com   # DKIM
-  dig +short TXT _dmarc.getstalmail.com    # DMARC
+  dig +short A   getstalmail.com           # → <ip-hetzner> (A MANUEL apex)
+  dig +short A   mail.getstalmail.com       # → <ip-hetzner> (A MANUEL host mail)
+  dig +short MX  getstalmail.com            # → mail.getstalmail.com (auto wizard)
+  dig +short TXT getstalmail.com            # SPF (v=spf1 …) (auto)
+  dig +short TXT _dmarc.getstalmail.com     # DMARC (auto)
+  # DKIM : sélecteurs réels de la forme v1-ed25519-AAAAMMJJ / v1-rsa-AAAAMMJJ
   ```
-  Attendu : A → IP du serveur ; MX → serveur ; SPF, DKIM, DMARC présents. **Vérifier que l'A record est bien automatique (publié par le wizard, pas créé à la main).**
-- [ ] **3.2 — Certificat ACME du domaine :** une fois l'A record propagé, Caddy émet le certificat pour `mail.getstalmail.com` (au besoin forcer une nouvelle tentative : `docker compose -f compose.prod.yml restart caddy`).
+  Attendu : les **2 A** (apex + mail) → IP du serveur (**créés à la main** — Stalwart ne les publie pas, #61) ; MX/SPF/DKIM/DMARC/SRV/CNAME présents (publiés par le wizard).
+- [ ] **3.2 — Certificat ACME (webmail) :** une fois l'A apex propagé, Caddy émet le certificat Let's Encrypt pour `getstalmail.com` (challenge **HTTP-01** sur :80). Tant que l'A n'est pas propagé, Caddy échoue avec `no valid A records found` → le navigateur voit `SSL_ERROR_INTERNAL_ERROR_ALERT` (transitoire ; Caddy retente seul avec backoff).
   ```bash
-  curl -sI https://mail.getstalmail.com/ | head -1
+  echo | openssl s_client -connect 127.0.0.1:443 -servername getstalmail.com 2>/dev/null | openssl x509 -noout -issuer -subject -dates
+  curl -sI https://getstalmail.com/ | head -1
   ```
-  Attendu : `HTTP/2 200` ou `307`, **sans** erreur TLS (cert valide, plus auto-signé).
+  Attendu : cert `issuer=…Let's Encrypt…`, `subject=CN=getstalmail.com` ; `HTTP/2 200`/`307` **sans** erreur TLS. *(Le cert **mail** de Stalwart, lui, se vérifie sur le port 993 : `openssl s_client -connect 127.0.0.1:993 -servername getstalmail.com`.)*
 - [ ] **3.3 — Mode normal :**
   ```bash
   cd ~/stalmail && docker compose -f compose.prod.yml logs stalwart | grep -i 'WITHOUT recovery admin'
   ```
   Attendu : passage en mode normal (recovery admin retiré).
-- [ ] **3.4 — Login admin** sur `https://mail.getstalmail.com` avec `admin@getstalmail.com`. Attendu : accès à la boîte.
+- [ ] **3.4 — Login admin** sur `https://getstalmail.com` avec `admin@getstalmail.com`. Attendu : accès à la boîte.
 - [ ] **3.5 — Compte de test :** créer `user@getstalmail.com` (mot de passe connu) via l'admin Stalwart / l'UI de gestion. *(Si la création de compte n'est pas exposée à ce stade, utiliser `admin@getstalmail.com` comme compte de test et `<gmail>` comme contrepartie externe.)*
 
 ---
@@ -124,8 +138,8 @@ Cloudflare, **A record inclus**.
 
 ## A. Wizard & setup
 - [ ] **A1** Bootstrap → wizard accessible via l'IP (Phase 2.1). *Attendu : écran wizard.*
-- [ ] **A2** DNS publié automatiquement par Cloudflare, **A record inclus** (Phase 3.1). *Attendu : A/MX/SPF/DKIM/DMARC présents, aucun créé à la main.*
-- [ ] **A3** SSL ACME émis pour le domaine, HTTPS valide (Phase 3.2). *Attendu : certif valide, plus d'avertissement.*
+- [ ] **A2** Zone mail publiée automatiquement par Cloudflare (MX/SPF/DKIM/DMARC/SRV/CNAME) ; **A/AAAA créés manuellement** (Phase 2.3bis / 3.1). *Attendu : zone mail auto présente ; les 2 A (apex + mail) présents, créés à la main (#61).*
+- [ ] **A3** SSL ACME émis pour `getstalmail.com`, HTTPS valide (Phase 3.2). *Attendu : cert Let's Encrypt valide, plus d'avertissement.*
 - [ ] **A4** Restart bootstrap→normal (Phase 3.3). *Attendu : mode normal, recovery admin retiré.*
 - [ ] **A5** `/setup` re-protégé après configuration. *Étape : ouvrir `/setup` reconnecté.* *Attendu : redirection (plus le wizard).*
 
@@ -171,11 +185,11 @@ Cloudflare, **A record inclus**.
 
 | Cas | Pass/Fail | Notes / observé / issue |
 |---|---|---|
-| A1 Wizard accessible | | |
-| A2 DNS auto Cloudflare | | |
-| A3 SSL/HTTPS | | |
-| A4 Restart normal | | |
-| A5 /setup re-protégé | | |
+| A1 Wizard accessible | ✅ Pass | Accès par IP `https://<ip>/setup#token=…`, cert bootstrap auto-signé. |
+| A2 DNS auto Cloudflare | ✅ Pass | Zone mail auto OK (CNAME inclus après fix v0.1.20). **A/AAAA manuels** (Stalwart ne les publie pas → #61). Token invalide non détecté → #62. |
+| A3 SSL/HTTPS | ✅ Pass | Cert Let's Encrypt `CN=getstalmail.com` (Caddy, HTTP-01). `SSL_ERROR_INTERNAL_ERROR_ALERT` **transitoire** tant que l'A apex n'est pas propagé. Cert mail Stalwart OK (:993, DNS-01). Statut SSL `valid` corrigé en v0.1.20. |
+| A4 Restart normal | ✅ Pass | Wizard terminé, superviseur bootstrap→normal OK ; webmail affiché. |
+| A5 /setup re-protégé | ⏳ À vérifier | Non testé explicitement. |
 | B1 Login | | |
 | B2 Persistance session | | |
 | B3 Expiration→/login | | |
@@ -198,7 +212,29 @@ Cloudflare, **A record inclus**.
 | F2 rDNS | | |
 | F3 Blacklist | | |
 
-**Synthèse :** _(à remplir)_ — nb pass / fail, anomalies bloquantes, décisions (corriger avant 4d ?).
+**Synthèse (au 2026-06-24) :** socle validé **de bout en bout jusqu'à l'accès webmail** —
+install one-command → bootstrap auth → wizard (DNS mail auto + A manuels) → certs
+Let's Encrypt (Stalwart mail :993 + Caddy webmail :443) → **webmail accessible en HTTPS valide**.
+Acceptation A1–A4 ✅ ; A5 + B→F (auth, lecteur, composer, délivrabilité) **restent à dérouler**.
+
+### Bugs trouvés en validation & correctifs
+
+| Découverte | Résolution |
+|---|---|
+| `install.sh` pipefail / Caddyfile bootstrap / assets / secret DnsServer | corrigés (pré-0.1.18) |
+| Auth bootstrap (jeton dédié) | **v0.1.18** |
+| `publishRecords` doit être un objet, pas un tableau (gestion DNS auto rejetée) | **v0.1.19** |
+| Vérif CNAME absente + comparaison sensible à la casse (grille DNS) | **v0.1.20** |
+| Statut SSL bloqué « en attente » alors que le cert est émis (`AcmeRenewal` planifié) | **v0.1.20** |
+| **A/AAAA non auto-créés** (Stalwart n'a pas de `a`/`aaaa`) + pas de guidage | issue **#61** (à concevoir) |
+| **Token DNS invalide non détecté** (`DnsManagement: Failed` non surfacé) | issue **#62** |
+| Erreurs pré-`try` masquées en `SETUP-UNKNOWN` opaque | issue **#63** |
+
+### Hygiène pour les itérations de test
+
+- **Éviter les `down -v` répétés** : ça efface le volume `stalmail-caddy-data` → Caddy (et Stalwart) redemandent les certs ACME à zéro à chaque run → risque d'**épuiser les quotas Let's Encrypt** (production). Préserver le volume, ou basculer sur **LE staging** pour les tests intensifs.
+- Après création des **A records**, laisser **~1-2 min de propagation** avant de tester `https://getstalmail.com` (sinon `SSL_ERROR_INTERNAL_ERROR_ALERT` transitoire le temps que Caddy obtienne le cert).
+- Les erreurs au wizard ne sont pas toujours loguées sur stdout de l'app → diagnostiquer via probes JMAP (tâches `DnsManagement`/`AcmeRenewal`, `Domain/get`) et `openssl s_client`.
 
 ---
 
