@@ -76,7 +76,7 @@ export function ThreadList({
               folder={folder}
               selected={
                 selectedId != null &&
-                windowed.threadAt(item.index)?.id === selectedId
+                windowed.threadAt(item.index)?.threadId === selectedId
               }
               onOpen={onOpen}
             />
