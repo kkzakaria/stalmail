@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.23](https://github.com/kkzakaria/stalmail/compare/v0.1.22...v0.1.23) (2026-06-25)
+
+
+### Bug Fixes
+
+* **mail:** ouvrir un fil par threadId, pas par id email (fils-réponse) ([#75](https://github.com/kkzakaria/stalmail/issues/75)) ([5c88efb](https://github.com/kkzakaria/stalmail/commit/5c88efbc2bba2b5bf9fe454195ce687c1bb65b08))
+
 ## [0.1.22](https://github.com/kkzakaria/stalmail/compare/v0.1.21...v0.1.22) (2026-06-25)
 
 
