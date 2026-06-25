@@ -16,7 +16,10 @@ export interface ComposerProps {
 export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<ComposerDraft>(initial)
-  const [showCc, setShowCc] = useState(initial.cc !== "" || initial.bcc !== "")
+  // Bascules INDÉPENDANTES pour Cc et Cci : un seul état affichait les deux champs
+  // à la fois alors qu'on peut ne vouloir que l'un.
+  const [showCc, setShowCc] = useState(initial.cc !== "")
+  const [showBcc, setShowBcc] = useState(initial.bcc !== "")
   const [mode, setMode] = useState<Mode>("normal")
   const [showFormat, setShowFormat] = useState(false)
   const set = (patch: Partial<ComposerDraft>) =>
@@ -76,36 +79,47 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
               <button
                 type="button"
                 className="icon-btn sm"
-                aria-label={t("mail.compose.ccToggle")}
-                title={t("mail.compose.ccToggle")}
+                aria-label={t("mail.compose.cc")}
+                title={t("mail.compose.cc")}
                 onClick={() => setShowCc(true)}
               >
-                {t("mail.compose.ccToggle")}
+                {t("mail.compose.cc")}
+              </button>
+            )}
+            {!showBcc && (
+              <button
+                type="button"
+                className="icon-btn sm"
+                aria-label={t("mail.compose.bcc")}
+                title={t("mail.compose.bcc")}
+                onClick={() => setShowBcc(true)}
+              >
+                {t("mail.compose.bcc")}
               </button>
             )}
           </div>
 
           {showCc && (
-            <>
-              <div className="composer-field">
-                <label htmlFor="cmp-cc">{t("mail.compose.cc")}</label>
-                <input
-                  id="cmp-cc"
-                  aria-label={t("mail.compose.cc")}
-                  value={draft.cc}
-                  onChange={(e) => set({ cc: e.target.value })}
-                />
-              </div>
-              <div className="composer-field">
-                <label htmlFor="cmp-bcc">{t("mail.compose.bcc")}</label>
-                <input
-                  id="cmp-bcc"
-                  aria-label={t("mail.compose.bcc")}
-                  value={draft.bcc}
-                  onChange={(e) => set({ bcc: e.target.value })}
-                />
-              </div>
-            </>
+            <div className="composer-field">
+              <label htmlFor="cmp-cc">{t("mail.compose.cc")}</label>
+              <input
+                id="cmp-cc"
+                aria-label={t("mail.compose.cc")}
+                value={draft.cc}
+                onChange={(e) => set({ cc: e.target.value })}
+              />
+            </div>
+          )}
+          {showBcc && (
+            <div className="composer-field">
+              <label htmlFor="cmp-bcc">{t("mail.compose.bcc")}</label>
+              <input
+                id="cmp-bcc"
+                aria-label={t("mail.compose.bcc")}
+                value={draft.bcc}
+                onChange={(e) => set({ bcc: e.target.value })}
+              />
+            </div>
           )}
 
           <div className="composer-field">
