@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.21](https://github.com/kkzakaria/stalmail/compare/v0.1.20...v0.1.21) (2026-06-25)
+
+
+### Bug Fixes
+
+* **mail:** déclarer la capability submission pour Identity/get (envoi) ([#65](https://github.com/kkzakaria/stalmail/issues/65)) ([070b022](https://github.com/kkzakaria/stalmail/commit/070b02227392f84adb1cec4c926d608cb4a9106a))
+
 ## [0.1.20](https://github.com/kkzakaria/stalmail/compare/v0.1.19...v0.1.20) (2026-06-24)
 
 
