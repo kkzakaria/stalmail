@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.24](https://github.com/kkzakaria/stalmail/compare/v0.1.23...v0.1.24) (2026-06-25)
+
+
+### Bug Fixes
+
+* **mail:** Cc et Cci en bascules indépendantes dans le composer ([#82](https://github.com/kkzakaria/stalmail/issues/82)) ([b3f242c](https://github.com/kkzakaria/stalmail/commit/b3f242ca9aee9135c91a6b1553b1721e8ff480db))
+* **mail:** réinitialiser la réponse rapide après un envoi réussi ([#81](https://github.com/kkzakaria/stalmail/issues/81)) ([bd14375](https://github.com/kkzakaria/stalmail/commit/bd143756e7092c014a74d69ab40fa51efcec687c))
+
 ## [0.1.23](https://github.com/kkzakaria/stalmail/compare/v0.1.22...v0.1.23) (2026-06-25)
 
 
