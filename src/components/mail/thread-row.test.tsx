@@ -107,6 +107,9 @@ describe("ThreadRow", () => {
     fireEvent.keyDown(row, { key: "Enter" })
     fireEvent.keyDown(row, { key: " " })
     expect(onOpen).toHaveBeenCalledTimes(2)
+    // Le chemin clavier doit aussi passer le threadId (même régression que le clic).
+    expect(onOpen).toHaveBeenNthCalledWith(1, "t1")
+    expect(onOpen).toHaveBeenNthCalledWith(2, "t1")
   })
 
   it("applique la classe sel si selected", () => {
