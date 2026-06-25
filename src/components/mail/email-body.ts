@@ -11,6 +11,11 @@ function frameCsp(showImages: boolean): string {
   return `default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'`
 }
 
+// Préfère le HTML (rendu riche dans l'iframe sandbox + blocage d'images) au text/plain,
+// comme tout client mail standard. Les emails réels (Gmail/Outlook…) sont en
+// multipart/alternative (texte ET html) : préférer le texte affichait une version
+// dégradée (liens/images en URL brute, pas d'iframe ni de bandeau images) — donnant
+// l'impression d'un corps quasi vide. Fallback sur le texte si pas de HTML exploitable.
 export function pickBody(msg: {
   textBody: string | null
   htmlBody: string | null
@@ -18,10 +23,10 @@ export function pickBody(msg: {
   kind: "text" | "html"
   content: string
 } {
-  if (msg.textBody && msg.textBody.trim() !== "")
-    return { kind: "text", content: msg.textBody }
   if (msg.htmlBody && msg.htmlBody.trim() !== "")
     return { kind: "html", content: msg.htmlBody }
+  if (msg.textBody && msg.textBody.trim() !== "")
+    return { kind: "text", content: msg.textBody }
   return { kind: "text", content: "" }
 }
 

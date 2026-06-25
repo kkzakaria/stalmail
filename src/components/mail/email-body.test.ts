@@ -8,14 +8,26 @@ import {
 } from "./email-body"
 
 describe("pickBody", () => {
-  it("préfère le texte quand présent", () => {
+  it("préfère le HTML quand présent (multipart/alternative)", () => {
     expect(pickBody({ textBody: "salut", htmlBody: "<b>hi</b>" })).toEqual({
+      kind: "html",
+      content: "<b>hi</b>",
+    })
+  })
+  it("repli sur le texte si html vide/espaces", () => {
+    expect(pickBody({ textBody: "salut", htmlBody: "   " })).toEqual({
       kind: "text",
       content: "salut",
     })
   })
-  it("repli sur html si texte vide/espaces", () => {
-    expect(pickBody({ textBody: "   ", htmlBody: "<b>hi</b>" })).toEqual({
+  it("rend le texte quand il n'y a pas de HTML", () => {
+    expect(pickBody({ textBody: "salut", htmlBody: null })).toEqual({
+      kind: "text",
+      content: "salut",
+    })
+  })
+  it("rend le HTML quand il n'y a pas de texte", () => {
+    expect(pickBody({ textBody: null, htmlBody: "<b>hi</b>" })).toEqual({
       kind: "html",
       content: "<b>hi</b>",
     })
