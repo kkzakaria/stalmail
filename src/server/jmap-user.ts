@@ -38,7 +38,7 @@ export function capabilitiesForBatch(
 ): string[] {
   return methodCalls.some(([name]) => SUBMISSION_METHOD.test(name))
     ? [...base, "urn:ietf:params:jmap:submission"]
-    : base
+    : [...base] // copie : ne jamais exposer la constante MAIL_CAPABILITIES partagée
 }
 
 // Appel JMAP batch avec le token Bearer de l'utilisateur. Session expirée → redirect /login.
