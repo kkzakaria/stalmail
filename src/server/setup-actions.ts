@@ -258,10 +258,30 @@ export const setDnsManagementManualFn = createServerFn({
 }).handler(setDnsManagementManualHandler)
 
 export const getStep = createServerFn({ method: "GET" }).handler(getStepHandler)
+export const setupContextFn = createServerFn({ method: "GET" }).handler(
+  setupContextHandler
+)
 
 export const submitBootstrapFn = createServerFn({ method: "POST" })
   .validator((d: BootstrapInput) => domainSchema.parse(d))
   .handler(submitBootstrapHandler)
+
+// Pur : hostname public du serveur. Source autoritaire = STALMAIL_PUBLIC_URL (comme
+// auth-actions) ; à défaut, le nom de domaine. Sert à ré-hydrater l'affichage du wizard
+// sur reload (#19) et à résoudre le SAN ACME. Aucun secret (hostname/domaine publics).
+export function resolveServerHostname(
+  publicUrl: string | undefined,
+  domainName: string
+): string {
+  if (publicUrl) {
+    try {
+      return new URL(publicUrl).hostname
+    } catch {
+      // env malformé → repli sur le domaine
+    }
+  }
+  return domainName
+}
 
 // Derive the SSL SAN hostname from the fixed public base URL (server-authoritative,
 // like auth-actions), falling back to a client-collected value then the domain name.
@@ -270,15 +290,33 @@ function resolveAcmeHostname(
   clientHostname: string,
   domainName: string
 ): string {
-  const publicUrl = process.env.STALMAIL_PUBLIC_URL
-  if (publicUrl) {
-    try {
-      return new URL(publicUrl).hostname
-    } catch {
-      // malformed env → fall through to client/domain
-    }
+  return resolveServerHostname(
+    process.env.STALMAIL_PUBLIC_URL,
+    clientHostname || domainName
+  )
+}
+
+// Ré-dérive les valeurs d'affichage du wizard (hostname serveur + domaine) côté serveur,
+// pour ré-hydrater le contexte client perdu au reload / à l'entrée directe en phase
+// monitoring (#19). Aucun secret exposé. En phase 'collect' (pré-bootstrap), x:Domain/query
+// est interdit → on renvoie des valeurs vides (le client les collectera via DomainStep).
+export async function setupContextHandler(): Promise<{
+  serverHostname: string
+  defaultDomain: string
+}> {
+  const { deriveSetupStep } = await import("./setup-state")
+  if ((await deriveSetupStep()) === "collect")
+    return { serverHostname: "", defaultDomain: "" }
+  const { getPrimaryDomain } = await import("./stalwart-domain")
+  const domain = await getPrimaryDomain()
+  const defaultDomain = domain?.name ?? ""
+  return {
+    serverHostname: resolveServerHostname(
+      process.env.STALMAIL_PUBLIC_URL,
+      defaultDomain
+    ),
+    defaultDomain,
   }
-  return clientHostname || domainName
 }
 
 export async function configureAcmeHandler({

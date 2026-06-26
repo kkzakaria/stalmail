@@ -15,6 +15,7 @@ import {
   markSslConfiguredFn,
   unlockSetupFn,
   setupAuthStatusFn,
+  setupContextFn,
 } from "@/server/setup-actions"
 import { getServerTheme } from "@/server/setup-theme"
 import { SetupWizard } from "@/components/setup/SetupWizard"
@@ -25,23 +26,25 @@ export const Route = createFileRoute("/setup/")({
     if (configured) throw redirect({ to: "/login" })
   },
   loader: async () => {
-    const [{ step, dnsManual }, { theme }] = await Promise.all([
+    const [{ step, dnsManual }, { theme }, context] = await Promise.all([
       getStep(),
       getServerTheme(),
+      setupContextFn(),
     ])
-    return { step, dnsManual, theme }
+    return { step, dnsManual, theme, context }
   },
   component: SetupPage,
   errorComponent: SetupError,
 })
 
 function SetupPage() {
-  const { step, dnsManual, theme } = Route.useLoaderData()
+  const { step, dnsManual, theme, context } = Route.useLoaderData()
   return (
     <SetupWizard
       initialStep={step}
       initialDnsManual={dnsManual}
       initialTheme={theme}
+      initialContext={context}
       unlock={(token) => unlockSetupFn({ data: { token } })}
       authStatus={() => setupAuthStatusFn()}
       submitBootstrap={(data) =>
