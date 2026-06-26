@@ -94,9 +94,11 @@ DnsStep (montage)
 **`setup-actions.ts` (étendu) — deux server functions**
 - `discoverServerIpFn()` : enveloppe `discoverServerIp()`. Retourne `{ ipv4, ipv6 }` ; écho KO
   → `{ null, null }` (pas de code d'erreur setup, pas de blocage).
-- `hostAddressStatusFn({ ipv4?, ipv6? })` : Zod valide des IP syntaxiquement correctes
-  (`z.string().ip()`), construit les records attendus via `buildHostRecords`, renvoie leur
-  statut live via `dns-resolve`. Appelée par le polling client en parallèle de `gridStatus`.
+- `hostAddressStatusFn({ ipv4?, ipv6? })` : le schéma Zod borne la taille (`z.string().max(45)`,
+  optionnel) ; les IPs sont ensuite re-validées côté serveur via `isIpv4`/`isIpv6` (valeur
+  invalide → ignorée, traitée comme absente). Construit les records attendus via
+  `buildHostRecords`, renvoie leur statut live via `dns-resolve`. Appelée par le polling client
+  en parallèle de `gridStatus`.
 
 > L'IP attendue circule client → serveur pour la vérification (issue de l'écho ou de la
 > saisie). Ce n'est pas un secret ; elle est re-validée comme IP valide côté serveur. Pas de

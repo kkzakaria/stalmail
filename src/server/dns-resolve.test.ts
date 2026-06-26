@@ -331,4 +331,14 @@ describe("resolveRecordStatus", () => {
     })
     expect(s).toBe("mismatch")
   })
+
+  it('AAAA: "verified" quand le resolver retourne la forme étendue et le record est compressé', async () => {
+    resolve6.mockResolvedValue(["2001:0db8:0000:0000:0000:0000:0000:0001"])
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "AAAA",
+      value: "2001:db8::1",
+    })
+    expect(s).toBe("verified")
+  })
 })
