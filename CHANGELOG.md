@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.25](https://github.com/kkzakaria/stalmail/compare/v0.1.24...v0.1.25) (2026-06-26)
+
+
+### Bug Fixes
+
+* **mail:** provisionner le mailbox archive à la volée au 1er archivage ([#73](https://github.com/kkzakaria/stalmail/issues/73)) ([5503616](https://github.com/kkzakaria/stalmail/commit/550361661ec26b850acc00e08264e25ce7b343ed))
+* **mail:** rollback optimiste par re-sync au lieu de snapshot complet ([#38](https://github.com/kkzakaria/stalmail/issues/38)) ([a0ca415](https://github.com/kkzakaria/stalmail/commit/a0ca4154bed256c1dddf57e0953ae9a252861bc4))
+* **setup:** ré-hydrater le contexte du wizard sur reload via le serveur ([#19](https://github.com/kkzakaria/stalmail/issues/19)) ([1211aff](https://github.com/kkzakaria/stalmail/commit/1211aff882eb79e6d8a768b3ea62167165ffb5e1))
+
 ## [0.1.24](https://github.com/kkzakaria/stalmail/compare/v0.1.23...v0.1.24) (2026-06-25)
 
 
