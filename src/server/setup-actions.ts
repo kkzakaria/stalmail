@@ -4,6 +4,7 @@ import type { BootstrapInput } from "./stalwart-bootstrap"
 import type { DnsProvider } from "./stalwart-dns"
 import type { AcmeStatus } from "./stalwart-acme"
 import { DNS_AUTO_PROVIDERS } from "@/lib/dns-providers"
+import { isIpv4, isIpv6 } from "@/lib/ip"
 import { domainSchema } from "@/components/setup/schemas"
 import type { SetupStep } from "./setup-state"
 
@@ -230,6 +231,69 @@ export const setDnsManagementFn = createServerFn({ method: "POST" })
 export const dnsGridStatusFn = createServerFn({ method: "GET" }).handler(
   dnsGridStatusHandler
 )
+
+export async function discoverServerIpHandler(): Promise<{
+  ipv4: string | null
+  ipv6: string | null
+}> {
+  const { discoverServerIp } = await import("./server-ip")
+  try {
+    return await discoverServerIp()
+  } catch {
+    return { ipv4: null, ipv6: null }
+  }
+}
+
+export async function hostAddressStatusHandler({
+  data,
+}: {
+  data: { ipv4?: string; ipv6?: string }
+}): Promise<{ records: DnsGridRecord[] }> {
+  const { getPrimaryDomain } = await import("./stalwart-domain")
+  const { buildHostRecords } = await import("./dns-host-records")
+  const { resolveRecordStatus } = await import("./dns-resolve")
+  const domain = await getPrimaryDomain()
+  if (!domain) return { records: [] }
+  const ipv4 = data.ipv4 && isIpv4(data.ipv4) ? data.ipv4 : null
+  const ipv6 = data.ipv6 && isIpv6(data.ipv6) ? data.ipv6 : null
+  const hostname = resolveServerHostname(
+    process.env.STALMAIL_PUBLIC_URL,
+    domain.name
+  )
+  const expected = buildHostRecords({
+    hostname,
+    domain: domain.name,
+    ipv4,
+    ipv6,
+  })
+  const records = await Promise.all(
+    expected.map(async (r) => {
+      const raw = await resolveRecordStatus(r)
+      const status: DnsGridRecord["status"] =
+        raw === "verified"
+          ? "verified"
+          : raw === "mismatch"
+            ? "error"
+            : "pending"
+      return { name: r.name, type: r.type, value: r.value, status }
+    })
+  )
+  return { records }
+}
+
+export const hostAddressInputSchema = z.object({
+  ipv4: z.string().max(45).optional(),
+  ipv6: z.string().max(45).optional(),
+})
+
+export const discoverServerIpFn = createServerFn({ method: "GET" }).handler(
+  discoverServerIpHandler
+)
+export const hostAddressStatusFn = createServerFn({ method: "POST" })
+  .validator((d: { ipv4?: string; ipv6?: string }) =>
+    hostAddressInputSchema.parse(d)
+  )
+  .handler(hostAddressStatusHandler)
 
 export async function setDnsManagementManualHandler(): Promise<{ ok: true }> {
   await requireSetupAuthGuard()
