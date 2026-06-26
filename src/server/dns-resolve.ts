@@ -76,9 +76,9 @@ export async function resolveRecordStatus(
       const want = record.value.trim().toLowerCase()
       const addrs =
         record.type === "A" ? await resolve4(host) : await resolve6(host)
-      const norm = addrs.map((a) => a.trim().toLowerCase())
-      if (norm.includes(want)) return "verified"
-      return norm.length ? "mismatch" : "missing"
+      const resolved = addrs.map((a) => a.trim().toLowerCase())
+      if (resolved.includes(want)) return "verified"
+      return resolved.length ? "mismatch" : "missing"
     }
     return "unsupported"
   } catch (e) {
