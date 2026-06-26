@@ -10,6 +10,10 @@ import {
   buildMovePatch,
   parseEmailMailboxes,
   resolveTargetMailbox,
+  provisionableRole,
+  buildMailboxRolesCall,
+  buildCreateMailboxCall,
+  parseCreatedMailboxId,
   sendMailSchema,
 } from "./mail-actions"
 import type { JmapMethodResponse } from "./jmap"
@@ -641,6 +645,71 @@ describe("resolveTargetMailbox", () => {
   it("role absent → undefined", () => {
     expect(
       resolveTargetMailbox("trash", [{ id: "mi", role: "inbox" }])
+    ).toBeUndefined()
+  })
+})
+
+// Task — provisioning à la volée du mailbox archive (#73)
+describe("provisionableRole", () => {
+  it("'archive' est provisionnable (Stalwart ne le crée pas par défaut)", () => {
+    expect(provisionableRole("archive")).toEqual({
+      role: "archive",
+      name: "Archive",
+    })
+  })
+  it("'spam' → role junk, non provisionnable (fourni par Stalwart)", () => {
+    expect(provisionableRole("spam")).toBeUndefined()
+  })
+  it("trash/junk/inbox non provisionnables", () => {
+    expect(provisionableRole("trash")).toBeUndefined()
+    expect(provisionableRole("junk")).toBeUndefined()
+    expect(provisionableRole("inbox")).toBeUndefined()
+  })
+})
+
+describe("buildMailboxRolesCall", () => {
+  it("Mailbox/get de tous les {id, role}", () => {
+    expect(buildMailboxRolesCall("acc")).toEqual([
+      "Mailbox/get",
+      { accountId: "acc", ids: null, properties: ["id", "role"] },
+      "0",
+    ])
+  })
+})
+
+describe("buildCreateMailboxCall", () => {
+  it("crée un Mailbox/set top-level avec name + role", () => {
+    expect(buildCreateMailboxCall("acc", "archive", "Archive", "nb")).toEqual([
+      "Mailbox/set",
+      {
+        accountId: "acc",
+        create: { nb: { name: "Archive", role: "archive", parentId: null } },
+      },
+      "0",
+    ])
+  })
+})
+
+describe("parseCreatedMailboxId", () => {
+  it("extrait l'id créé depuis Mailbox/set.created", () => {
+    const responses: JmapMethodResponse[] = [
+      ["Mailbox/set", { created: { nb: { id: "mnew" } } }, "0"],
+    ]
+    expect(parseCreatedMailboxId(responses, "nb")).toBe("mnew")
+  })
+  it("creationId absent (rejet → notCreated) → undefined", () => {
+    const responses: JmapMethodResponse[] = [
+      [
+        "Mailbox/set",
+        { notCreated: { nb: { type: "invalidProperties" } } },
+        "0",
+      ],
+    ]
+    expect(parseCreatedMailboxId(responses, "nb")).toBeUndefined()
+  })
+  it("réponse sans Mailbox/set → undefined", () => {
+    expect(
+      parseCreatedMailboxId([["Email/get", { list: [] }, "0"]], "nb")
     ).toBeUndefined()
   })
 })

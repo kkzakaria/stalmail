@@ -499,6 +499,65 @@ export function resolveTargetMailbox(
   return mailboxIdByRole(mailboxes, role)
 }
 
+// Rôle JMAP que l'UI attend mais que Stalwart **ne provisionne pas** par défaut (#73) :
+// on le crée à la volée au 1er usage. Inbox/Sent/Drafts/Junk/Trash sont déjà fournis par
+// les defaultFolders intégrés de Stalwart — seul 'archive' manque. Enum fermé : aucune
+// valeur influençable par le client n'atteint le Mailbox/set create.
+type ProvisionableRole = "archive"
+// Le name n'est pas directement visible (la sidebar affiche un libellé i18n keyé par
+// dossier), mais on reste cohérent avec les noms anglais des dossiers par défaut de Stalwart.
+const PROVISIONABLE_ROLES: ReadonlyMap<ProvisionableRole, string> = new Map([
+  ["archive", "Archive"],
+])
+
+// Pur : target (UI) → {role, name} si ce rôle est provisionnable à la volée, sinon undefined.
+export function provisionableRole(
+  target: MoveTarget | "spam"
+): { role: ProvisionableRole; name: string } | undefined {
+  const role = target === "spam" ? "junk" : target
+  // .get n'accepte qu'une ProvisionableRole ; un role hors enum ne matche jamais.
+  if (role !== "archive") return undefined
+  const name = PROVISIONABLE_ROLES.get(role)
+  return name === undefined ? undefined : { role, name }
+}
+
+// Pur : Mailbox/get des {id, role} de tous les mailboxes (résolution de cible).
+export function buildMailboxRolesCall(accountId: string): JmapMethodCall {
+  return [
+    "Mailbox/get",
+    { accountId, ids: null, properties: ["id", "role"] },
+    "0",
+  ]
+}
+
+// Pur : Mailbox/set créant un dossier système top-level (role posé à la création).
+// role est borné à l'enum fermé ProvisionableRole (cf. provisionableRole).
+export function buildCreateMailboxCall(
+  accountId: string,
+  role: ProvisionableRole,
+  name: string,
+  creationId: string
+): JmapMethodCall {
+  return [
+    "Mailbox/set",
+    { accountId, create: { [creationId]: { name, role, parentId: null } } },
+    "0",
+  ]
+}
+
+// Pur : id du mailbox fraîchement créé (Mailbox/set.created[creationId].id), ou undefined
+// si la création a été rejetée (notCreated) ou absente.
+export function parseCreatedMailboxId(
+  responses: JmapMethodResponse[],
+  creationId: string
+): string | undefined {
+  const set = responses.find(([name]) => name === "Mailbox/set")
+  const created = set?.[1].created as
+    | Record<string, { id?: string }>
+    | undefined
+  return created?.[creationId]?.id
+}
+
 // Pur : extrait {id, mailboxIds[]} depuis les réponses Email/get.
 export function parseEmailMailboxes(
   responses: JmapMethodResponse[]
@@ -556,11 +615,7 @@ export const moveThreadFn = createServerFn({ method: "POST" })
       const { sid, accountId } = await requireSession()
       // 1er aller-retour (2 reads batchés) : rôles des mailboxes + mailboxIds actuels des emails.
       const reads = await jmapUserCall(sid, [
-        [
-          "Mailbox/get",
-          { accountId, ids: null, properties: ["id", "role"] },
-          "0",
-        ],
+        buildMailboxRolesCall(accountId),
         [
           "Email/get",
           {
@@ -572,9 +627,30 @@ export const moveThreadFn = createServerFn({ method: "POST" })
         ],
       ])
       const refs = mailboxRefs(reads)
-      const targetId = resolveTargetMailbox(data.to, refs)
-      if (targetId === undefined)
-        throw new Error("move: target mailbox unavailable") // message générique (F4)
+      let targetId = resolveTargetMailbox(data.to, refs)
+      if (targetId === undefined) {
+        // Provisioning à la volée (#73) : Stalwart ne crée pas de dossier 'archive'.
+        // On le crée au 1er archivage (vaut pour comptes neufs et existants).
+        const prov = provisionableRole(data.to)
+        if (prov === undefined)
+          throw new Error("move: target mailbox unavailable") // message générique (F4)
+        const created = await jmapUserCall(sid, [
+          buildCreateMailboxCall(accountId, prov.role, prov.name, "newbox"),
+        ])
+        targetId = parseCreatedMailboxId(created, "newbox")
+        if (targetId === undefined) {
+          // Create rejeté : course concurrente probable — un autre archivage a déjà
+          // créé le dossier, et l'unicité de rôle (RFC 8621 §2 : un seul mailbox par
+          // rôle) fait rejeter ce 2e create. On re-lit les mailboxes et on re-résout
+          // avant d'abandonner.
+          const reread = await jmapUserCall(sid, [
+            buildMailboxRolesCall(accountId),
+          ])
+          targetId = resolveTargetMailbox(data.to, mailboxRefs(reread))
+          if (targetId === undefined)
+            throw new Error("move: target mailbox unavailable")
+        }
+      }
       const emails = parseEmailMailboxes(reads)
       await jmapUserCall(sid, buildMovePatch(accountId, emails, refs, targetId))
       return { ok: true }
