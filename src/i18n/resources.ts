@@ -135,6 +135,19 @@ export const fr = {
           },
         },
       },
+      hostAddress: {
+        title: "Adresse du serveur",
+        hint: "Ces enregistrements font pointer votre domaine vers l'IP du serveur. Stalwart ne peut pas les publier — créez-les chez votre fournisseur DNS.",
+        discovering: "Détection de l'adresse IP du serveur…",
+        echoFailed:
+          "Impossible de détecter automatiquement l'IP du serveur. Saisissez-la ci-dessous.",
+        manualLabel: "Adresse IP du serveur",
+        manualHelp: "IPv4 ou IPv6 publique de ce serveur.",
+        manualInvalid: "Adresse IP invalide.",
+        manualSubmit: "Valider",
+        apexNote:
+          "{{name}} est hors de la zone {{domain}} — créez cet enregistrement chez le gestionnaire de cette zone.",
+      },
     },
     account: {
       title: "Compte administrateur",
@@ -463,6 +476,19 @@ export const en: DeepRecord<typeof fr> = {
             d: "Alias used for automatic client setup.",
           },
         },
+      },
+      hostAddress: {
+        title: "Server address",
+        hint: "These records point your domain at the server's IP. Stalwart cannot publish them — create them at your DNS provider.",
+        discovering: "Detecting the server's IP address…",
+        echoFailed:
+          "Could not detect the server IP automatically. Enter it below.",
+        manualLabel: "Server IP address",
+        manualHelp: "Public IPv4 or IPv6 of this server.",
+        manualInvalid: "Invalid IP address.",
+        manualSubmit: "Confirm",
+        apexNote:
+          "{{name}} is outside the {{domain}} zone — create this record at that zone's manager.",
       },
     },
     account: {
