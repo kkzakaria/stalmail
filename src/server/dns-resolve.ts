@@ -4,6 +4,8 @@ import {
   resolveSrv,
   resolveCaa,
   resolveCname,
+  resolve4,
+  resolve6,
 } from "node:dns/promises"
 import type { ZoneRecord } from "./dns-zone"
 
@@ -68,6 +70,15 @@ export async function resolveRecordStatus(
         (r) => (r as unknown as Record<string, unknown>)[tag] === value
       )
       return found ? "verified" : caa.length ? "mismatch" : "missing"
+    }
+    if (record.type === "A" || record.type === "AAAA") {
+      // Valeur attendue = l'IP fournie par l'écho (pas issue du dnsZoneFile).
+      const want = record.value.trim().toLowerCase()
+      const addrs =
+        record.type === "A" ? await resolve4(host) : await resolve6(host)
+      const norm = addrs.map((a) => a.trim().toLowerCase())
+      if (norm.includes(want)) return "verified"
+      return norm.length ? "mismatch" : "missing"
     }
     return "unsupported"
   } catch (e) {
