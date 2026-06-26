@@ -9,7 +9,6 @@ import { useTranslation } from "react-i18next"
 import { DNS_PROVIDERS } from "@/lib/dns-providers"
 import type { DnsProvider } from "@/lib/dns-providers"
 import type { DnsGridRecord } from "@/server/setup-actions"
-import { isExternalHost } from "../host-utils"
 import { isIpv4, isIpv6 } from "@/lib/ip"
 import { HostAddressSection } from "./HostAddressSection"
 import type { DnsProviderValues } from "../schemas"
@@ -246,7 +245,10 @@ export function DnsStep({
   const copiedLabel = t("wizard.common.copied")
 
   // Task badge derivation.
-  const statuses = [...records, ...hostRecords].map((r) => r.status)
+  const statuses = [
+    ...records.filter((r) => r.type !== "A" && r.type !== "AAAA"),
+    ...hostRecords,
+  ].map((r) => r.status)
   const allVerified =
     statuses.length > 0 && statuses.every((s) => s === "verified")
   const anyError = statuses.some((s) => s === "error")
@@ -393,14 +395,18 @@ export function DnsStep({
 
       {phase === "grid" ? (
         <>
-          {serverIp !== null || ipDiscovery === "failed" ? (
-            <HostAddressSection
-              records={hostRecords}
-              status={ipDiscovery === "failed" ? "failed" : "ready"}
-              domain={domain}
-              onManualIp={onManualIp}
-            />
-          ) : null}
+          <HostAddressSection
+            records={hostRecords}
+            status={
+              ipDiscovery === "failed"
+                ? "failed"
+                : ipDiscovery === "ready"
+                  ? "ready"
+                  : "loading"
+            }
+            domain={domain}
+            onManualIp={onManualIp}
+          />
           {isManual ? (
             <div className="dns-manual">
               <div className="dns-table-wrap">
@@ -435,9 +441,6 @@ export function DnsStep({
                             </td>
                           </tr>
                           {recs.map((r, i) => {
-                            const ext =
-                              r.type === "A" &&
-                              isExternalHost(r.name.replace(/\.$/, ""), domain)
                             return (
                               <tr
                                 key={g.type + "-" + i}
@@ -458,11 +461,6 @@ export function DnsStep({
                                     >
                                       {r.name}
                                     </span>
-                                    {ext ? (
-                                      <span className="rec-tag">
-                                        {t("wizard.dns.records.extTag")}
-                                      </span>
-                                    ) : null}
                                   </span>
                                 </td>
                                 <td className="rec-value-cell">

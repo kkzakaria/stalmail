@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "@/i18n/i18n"
 import type { DnsGridRecord } from "@/server/setup-actions"
@@ -172,9 +172,11 @@ describe("DnsStep", () => {
 
     expect(await screen.findByText("Adresse du serveur")).toBeInTheDocument()
     expect(props.discoverServerIp).toHaveBeenCalled()
-    expect(props.hostAddressStatus).toHaveBeenCalledWith({
-      ipv4: "203.0.113.4",
-      ipv6: undefined,
+    await waitFor(() => {
+      expect(props.hostAddressStatus).toHaveBeenCalledWith({
+        ipv4: "203.0.113.4",
+        ipv6: undefined,
+      })
     })
   })
 })
