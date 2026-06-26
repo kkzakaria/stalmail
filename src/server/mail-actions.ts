@@ -499,18 +499,24 @@ export function resolveTargetMailbox(
   return mailboxIdByRole(mailboxes, role)
 }
 
-// Rôles attendus par l'UI que Stalwart **ne provisionne pas** par défaut (#73) : on les
-// crée à la volée au 1er usage. Inbox/Sent/Drafts/Junk/Trash sont déjà fournis par les
-// defaultFolders intégrés de Stalwart — seul 'archive' manque. Le name n'est pas
-// directement visible (la sidebar affiche un libellé i18n keyé par dossier), mais on
-// reste cohérent avec les noms anglais des dossiers par défaut de Stalwart.
-const PROVISIONABLE_ROLES = new Map<string, string>([["archive", "Archive"]])
+// Rôle JMAP que l'UI attend mais que Stalwart **ne provisionne pas** par défaut (#73) :
+// on le crée à la volée au 1er usage. Inbox/Sent/Drafts/Junk/Trash sont déjà fournis par
+// les defaultFolders intégrés de Stalwart — seul 'archive' manque. Enum fermé : aucune
+// valeur influençable par le client n'atteint le Mailbox/set create.
+type ProvisionableRole = "archive"
+// Le name n'est pas directement visible (la sidebar affiche un libellé i18n keyé par
+// dossier), mais on reste cohérent avec les noms anglais des dossiers par défaut de Stalwart.
+const PROVISIONABLE_ROLES: ReadonlyMap<ProvisionableRole, string> = new Map([
+  ["archive", "Archive"],
+])
 
 // Pur : target (UI) → {role, name} si ce rôle est provisionnable à la volée, sinon undefined.
 export function provisionableRole(
   target: MoveTarget | "spam"
-): { role: string; name: string } | undefined {
-  const role: string = target === "spam" ? "junk" : target
+): { role: ProvisionableRole; name: string } | undefined {
+  const role = target === "spam" ? "junk" : target
+  // .get n'accepte qu'une ProvisionableRole ; un role hors enum ne matche jamais.
+  if (role !== "archive") return undefined
   const name = PROVISIONABLE_ROLES.get(role)
   return name === undefined ? undefined : { role, name }
 }
@@ -525,9 +531,10 @@ export function buildMailboxRolesCall(accountId: string): JmapMethodCall {
 }
 
 // Pur : Mailbox/set créant un dossier système top-level (role posé à la création).
+// role est borné à l'enum fermé ProvisionableRole (cf. provisionableRole).
 export function buildCreateMailboxCall(
   accountId: string,
-  role: string,
+  role: ProvisionableRole,
   name: string,
   creationId: string
 ): JmapMethodCall {
