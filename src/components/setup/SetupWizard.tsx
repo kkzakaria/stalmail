@@ -37,6 +37,9 @@ interface Props {
   initialStep: string
   initialDnsManual?: boolean
   initialTheme: Theme
+  // Contexte ré-dérivé côté serveur (hostname + domaine) pour ré-hydrater l'affichage
+  // sur reload / entrée directe en phase monitoring (#19). Vide en phase 'collect'.
+  initialContext?: { serverHostname: string; defaultDomain: string }
   unlock: (token: string) => Promise<{ ok: true }>
   authStatus: () => Promise<{ authed: boolean }>
   submitBootstrap: (input: DomainValues) => Promise<void>
@@ -74,6 +77,7 @@ export function SetupWizard({
   initialStep,
   initialDnsManual = false,
   initialTheme,
+  initialContext,
   unlock,
   authStatus,
   submitBootstrap,
@@ -163,13 +167,19 @@ export function SetupWizard({
     startsCollect ? "welcome" : "server"
   )
 
-  // Session-collected values (not persisted server-side). Empty on a pure resume,
-  // which matches the previous behavior — the steps still function.
+  // Valeurs collectées en session. Sur un reload / entrée directe en phase monitoring,
+  // elles sont ré-hydratées depuis le serveur (initialContext, ré-dérivé via Stalwart :
+  // hostname + domaine) plutôt que de repartir vides (#19). adminEmail n'est pas
+  // ré-dérivable mais retombe sur `admin@${defaultDomain}` côté SslStep/DoneStep.
   const [collected, setCollected] = useState<{
     serverHostname: string
     defaultDomain: string
     adminEmail: string
-  }>({ serverHostname: "", defaultDomain: "", adminEmail: "" })
+  }>({
+    serverHostname: initialContext?.serverHostname ?? "",
+    defaultDomain: initialContext?.defaultDomain ?? "",
+    adminEmail: "",
+  })
   const [sslStatus, setSslStatus] = useState<AcmeStatus>("pending")
   // Set when a re-derivation (pollStep) fails so the wizard surfaces a retryable
   // error instead of silently going stale / emitting an unhandled rejection.

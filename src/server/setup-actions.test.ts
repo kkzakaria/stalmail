@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { submitBootstrap } from "./stalwart-bootstrap"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { submitBootstrap, isBootstrapMode } from "./stalwart-bootstrap"
 import { requestStalwartRestart } from "./stalwart-restart"
 import {
   getStepHandler,
@@ -16,6 +16,8 @@ import {
   markSslConfiguredHandler,
   unlockSetupHandler,
   setupAuthStatusHandler,
+  setupContextHandler,
+  resolveServerHostname,
 } from "./setup-actions"
 import type * as StalwartAccountModule from "./stalwart-account"
 import type * as StalwartDomainModule from "./stalwart-domain"
@@ -38,6 +40,7 @@ vi.mock("./setup-state", () => ({
   isDnsManual: vi.fn(async () => false),
 }))
 vi.mock("./stalwart-bootstrap", () => ({
+  isBootstrapMode: vi.fn(async () => false),
   submitBootstrap: vi.fn(async () => ({
     username: "admin@exemple.fr",
     secret: "g",
@@ -170,6 +173,81 @@ describe("getStepHandler", () => {
   it("returns dnsManual true when isDnsManual resolves true", async () => {
     vi.mocked(isDnsManual).mockResolvedValueOnce(true)
     expect(await getStepHandler()).toEqual({ step: "collect", dnsManual: true })
+  })
+})
+
+describe("resolveServerHostname (pur)", () => {
+  it("STALMAIL_PUBLIC_URL valide → son hostname (source autoritaire)", () => {
+    expect(resolveServerHostname("https://mail.exemple.fr", "exemple.fr")).toBe(
+      "mail.exemple.fr"
+    )
+  })
+  it("env absente → repli sur le nom de domaine", () => {
+    expect(resolveServerHostname(undefined, "exemple.fr")).toBe("exemple.fr")
+  })
+  it("env malformée → repli sur le nom de domaine", () => {
+    expect(resolveServerHostname("pas une url", "exemple.fr")).toBe(
+      "exemple.fr"
+    )
+  })
+  it("env vide → repli sur le nom de domaine", () => {
+    expect(resolveServerHostname("", "exemple.fr")).toBe("exemple.fr")
+  })
+})
+
+describe("setupContextHandler (#19 — ré-hydratation)", () => {
+  const ENV_KEY = "STALMAIL_PUBLIC_URL"
+  const prevEnv = process.env[ENV_KEY]
+  afterEach(() => {
+    if (prevEnv === undefined) delete process.env[ENV_KEY]
+    else process.env[ENV_KEY] = prevEnv
+  })
+
+  it("mode bootstrap (pré-collect) → valeurs vides, sans requêter le domaine", async () => {
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(true)
+    expect(await setupContextHandler()).toEqual({
+      serverHostname: "",
+      defaultDomain: "",
+    })
+    expect(getPrimaryDomain).not.toHaveBeenCalled()
+  })
+
+  it("hors bootstrap, sans env → hostname = nom de domaine (Stalwart autoritatif)", async () => {
+    delete process.env[ENV_KEY]
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
+    expect(await setupContextHandler()).toEqual({
+      serverHostname: "exemple.fr",
+      defaultDomain: "exemple.fr",
+    })
+  })
+
+  it("hors bootstrap, avec env → hostname = hostname de STALMAIL_PUBLIC_URL", async () => {
+    process.env[ENV_KEY] = "https://mail.exemple.fr"
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
+    expect(await setupContextHandler()).toEqual({
+      serverHostname: "mail.exemple.fr",
+      defaultDomain: "exemple.fr",
+    })
+  })
+
+  it("hors bootstrap, domaine introuvable, sans env → valeurs vides", async () => {
+    delete process.env[ENV_KEY]
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
+    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+    expect(await setupContextHandler()).toEqual({
+      serverHostname: "",
+      defaultDomain: "",
+    })
+  })
+
+  it("hors bootstrap, domaine introuvable MAIS env présente → hostname URL, domaine vide (asymétrie voulue)", async () => {
+    process.env[ENV_KEY] = "https://mail.exemple.fr"
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
+    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+    expect(await setupContextHandler()).toEqual({
+      serverHostname: "mail.exemple.fr",
+      defaultDomain: "",
+    })
   })
 })
 

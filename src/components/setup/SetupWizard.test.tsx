@@ -227,6 +227,34 @@ describe("SetupWizard", () => {
       await screen.findByText("Votre serveur est prêt")
     ).toBeInTheDocument()
   })
+
+  it("resume on account: ré-hydrate le domaine depuis initialContext (#19)", async () => {
+    const poll = vi.fn().mockResolvedValue({ step: "done", dnsManual: false })
+    wrap(
+      <SetupWizard
+        initialStep="account"
+        initialTheme="light"
+        initialContext={{
+          serverHostname: "mail.exemple.fr",
+          defaultDomain: "exemple.fr",
+        }}
+        submitBootstrap={vi.fn()}
+        pollStep={poll}
+        {...authProps()}
+        {...serverProps()}
+      />
+    )
+    expect(await screen.findByText("Compte administrateur")).toBeInTheDocument()
+    fireEvent.change(await screen.findByLabelText("Nom d’utilisateur"), {
+      target: { value: "koffi" },
+    })
+    fireEvent.change(screen.getByLabelText("Mot de passe"), {
+      target: { value: "correct horse battery 9" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+    // Domaine ré-hydraté → l'email complet est affiché (et non « koffi@ » tronqué).
+    await screen.findByText(/Compte koffi@exemple\.fr/)
+  })
 })
 
 // --- Auth gate tests ---
