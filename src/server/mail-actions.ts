@@ -515,6 +515,15 @@ export function provisionableRole(
   return name === undefined ? undefined : { role, name }
 }
 
+// Pur : Mailbox/get des {id, role} de tous les mailboxes (résolution de cible).
+export function buildMailboxRolesCall(accountId: string): JmapMethodCall {
+  return [
+    "Mailbox/get",
+    { accountId, ids: null, properties: ["id", "role"] },
+    "0",
+  ]
+}
+
 // Pur : Mailbox/set créant un dossier système top-level (role posé à la création).
 export function buildCreateMailboxCall(
   accountId: string,
@@ -599,11 +608,7 @@ export const moveThreadFn = createServerFn({ method: "POST" })
       const { sid, accountId } = await requireSession()
       // 1er aller-retour (2 reads batchés) : rôles des mailboxes + mailboxIds actuels des emails.
       const reads = await jmapUserCall(sid, [
-        [
-          "Mailbox/get",
-          { accountId, ids: null, properties: ["id", "role"] },
-          "0",
-        ],
+        buildMailboxRolesCall(accountId),
         [
           "Email/get",
           {
@@ -626,8 +631,18 @@ export const moveThreadFn = createServerFn({ method: "POST" })
           buildCreateMailboxCall(accountId, prov.role, prov.name, "newbox"),
         ])
         targetId = parseCreatedMailboxId(created, "newbox")
-        if (targetId === undefined)
-          throw new Error("move: target mailbox unavailable")
+        if (targetId === undefined) {
+          // Create rejeté : course concurrente probable — un autre archivage a déjà
+          // créé le dossier, et l'unicité de rôle (RFC 8621 §2 : un seul mailbox par
+          // rôle) fait rejeter ce 2e create. On re-lit les mailboxes et on re-résout
+          // avant d'abandonner.
+          const reread = await jmapUserCall(sid, [
+            buildMailboxRolesCall(accountId),
+          ])
+          targetId = resolveTargetMailbox(data.to, mailboxRefs(reread))
+          if (targetId === undefined)
+            throw new Error("move: target mailbox unavailable")
+        }
       }
       const emails = parseEmailMailboxes(reads)
       await jmapUserCall(sid, buildMovePatch(accountId, emails, refs, targetId))

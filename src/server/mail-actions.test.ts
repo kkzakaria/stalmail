@@ -11,6 +11,7 @@ import {
   parseEmailMailboxes,
   resolveTargetMailbox,
   provisionableRole,
+  buildMailboxRolesCall,
   buildCreateMailboxCall,
   parseCreatedMailboxId,
   sendMailSchema,
@@ -663,6 +664,16 @@ describe("provisionableRole", () => {
     expect(provisionableRole("trash")).toBeUndefined()
     expect(provisionableRole("junk")).toBeUndefined()
     expect(provisionableRole("inbox")).toBeUndefined()
+  })
+})
+
+describe("buildMailboxRolesCall", () => {
+  it("Mailbox/get de tous les {id, role}", () => {
+    expect(buildMailboxRolesCall("acc")).toEqual([
+      "Mailbox/get",
+      { accountId: "acc", ids: null, properties: ["id", "role"] },
+      "0",
+    ])
   })
 })
 
