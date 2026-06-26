@@ -499,6 +499,49 @@ export function resolveTargetMailbox(
   return mailboxIdByRole(mailboxes, role)
 }
 
+// Rôles attendus par l'UI que Stalwart **ne provisionne pas** par défaut (#73) : on les
+// crée à la volée au 1er usage. Inbox/Sent/Drafts/Junk/Trash sont déjà fournis par les
+// defaultFolders intégrés de Stalwart — seul 'archive' manque. Le name n'est pas
+// directement visible (la sidebar affiche un libellé i18n keyé par dossier), mais on
+// reste cohérent avec les noms anglais des dossiers par défaut de Stalwart.
+const PROVISIONABLE_ROLES = new Map<string, string>([["archive", "Archive"]])
+
+// Pur : target (UI) → {role, name} si ce rôle est provisionnable à la volée, sinon undefined.
+export function provisionableRole(
+  target: MoveTarget | "spam"
+): { role: string; name: string } | undefined {
+  const role: string = target === "spam" ? "junk" : target
+  const name = PROVISIONABLE_ROLES.get(role)
+  return name === undefined ? undefined : { role, name }
+}
+
+// Pur : Mailbox/set créant un dossier système top-level (role posé à la création).
+export function buildCreateMailboxCall(
+  accountId: string,
+  role: string,
+  name: string,
+  creationId: string
+): JmapMethodCall {
+  return [
+    "Mailbox/set",
+    { accountId, create: { [creationId]: { name, role, parentId: null } } },
+    "0",
+  ]
+}
+
+// Pur : id du mailbox fraîchement créé (Mailbox/set.created[creationId].id), ou undefined
+// si la création a été rejetée (notCreated) ou absente.
+export function parseCreatedMailboxId(
+  responses: JmapMethodResponse[],
+  creationId: string
+): string | undefined {
+  const set = responses.find(([name]) => name === "Mailbox/set")
+  const created = set?.[1].created as
+    | Record<string, { id?: string }>
+    | undefined
+  return created?.[creationId]?.id
+}
+
 // Pur : extrait {id, mailboxIds[]} depuis les réponses Email/get.
 export function parseEmailMailboxes(
   responses: JmapMethodResponse[]
@@ -572,9 +615,20 @@ export const moveThreadFn = createServerFn({ method: "POST" })
         ],
       ])
       const refs = mailboxRefs(reads)
-      const targetId = resolveTargetMailbox(data.to, refs)
-      if (targetId === undefined)
-        throw new Error("move: target mailbox unavailable") // message générique (F4)
+      let targetId = resolveTargetMailbox(data.to, refs)
+      if (targetId === undefined) {
+        // Provisioning à la volée (#73) : Stalwart ne crée pas de dossier 'archive'.
+        // On le crée au 1er archivage (vaut pour comptes neufs et existants).
+        const prov = provisionableRole(data.to)
+        if (prov === undefined)
+          throw new Error("move: target mailbox unavailable") // message générique (F4)
+        const created = await jmapUserCall(sid, [
+          buildCreateMailboxCall(accountId, prov.role, prov.name, "newbox"),
+        ])
+        targetId = parseCreatedMailboxId(created, "newbox")
+        if (targetId === undefined)
+          throw new Error("move: target mailbox unavailable")
+      }
       const emails = parseEmailMailboxes(reads)
       await jmapUserCall(sid, buildMovePatch(accountId, emails, refs, targetId))
       return { ok: true }
