@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { submitBootstrap } from "./stalwart-bootstrap"
+import { submitBootstrap, isBootstrapMode } from "./stalwart-bootstrap"
 import { requestStalwartRestart } from "./stalwart-restart"
 import {
   getStepHandler,
@@ -40,6 +40,7 @@ vi.mock("./setup-state", () => ({
   isDnsManual: vi.fn(async () => false),
 }))
 vi.mock("./stalwart-bootstrap", () => ({
+  isBootstrapMode: vi.fn(async () => false),
   submitBootstrap: vi.fn(async () => ({
     username: "admin@exemple.fr",
     secret: "g",
@@ -202,8 +203,8 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     else process.env[ENV_KEY] = prevEnv
   })
 
-  it("phase 'collect' (pré-bootstrap) → valeurs vides, sans requêter le domaine", async () => {
-    vi.mocked(deriveSetupStep).mockResolvedValueOnce("collect")
+  it("mode bootstrap (pré-collect) → valeurs vides, sans requêter le domaine", async () => {
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(true)
     expect(await setupContextHandler()).toEqual({
       serverHostname: "",
       defaultDomain: "",
@@ -211,30 +212,40 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     expect(getPrimaryDomain).not.toHaveBeenCalled()
   })
 
-  it("hors collect, sans env → hostname = nom de domaine (Stalwart autoritatif)", async () => {
+  it("hors bootstrap, sans env → hostname = nom de domaine (Stalwart autoritatif)", async () => {
     delete process.env[ENV_KEY]
-    vi.mocked(deriveSetupStep).mockResolvedValueOnce("account")
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
     expect(await setupContextHandler()).toEqual({
       serverHostname: "exemple.fr",
       defaultDomain: "exemple.fr",
     })
   })
 
-  it("hors collect, avec env → hostname = hostname de STALMAIL_PUBLIC_URL", async () => {
+  it("hors bootstrap, avec env → hostname = hostname de STALMAIL_PUBLIC_URL", async () => {
     process.env[ENV_KEY] = "https://mail.exemple.fr"
-    vi.mocked(deriveSetupStep).mockResolvedValueOnce("dns")
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
     expect(await setupContextHandler()).toEqual({
       serverHostname: "mail.exemple.fr",
       defaultDomain: "exemple.fr",
     })
   })
 
-  it("hors collect, domaine introuvable → valeurs vides", async () => {
+  it("hors bootstrap, domaine introuvable, sans env → valeurs vides", async () => {
     delete process.env[ENV_KEY]
-    vi.mocked(deriveSetupStep).mockResolvedValueOnce("dns")
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
     expect(await setupContextHandler()).toEqual({
       serverHostname: "",
+      defaultDomain: "",
+    })
+  })
+
+  it("hors bootstrap, domaine introuvable MAIS env présente → hostname URL, domaine vide (asymétrie voulue)", async () => {
+    process.env[ENV_KEY] = "https://mail.exemple.fr"
+    vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
+    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+    expect(await setupContextHandler()).toEqual({
+      serverHostname: "mail.exemple.fr",
       defaultDomain: "",
     })
   })

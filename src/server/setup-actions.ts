@@ -304,9 +304,10 @@ export async function setupContextHandler(): Promise<{
   serverHostname: string
   defaultDomain: string
 }> {
-  const { deriveSetupStep } = await import("./setup-state")
-  if ((await deriveSetupStep()) === "collect")
-    return { serverHostname: "", defaultDomain: "" }
+  // On ne teste que le mode bootstrap (où x:Domain/query est interdit) : isBootstrapMode()
+  // suffit. deriveSetupStep() ferait en plus un getPrimaryDomain() redondant ici.
+  const { isBootstrapMode } = await import("./stalwart-bootstrap")
+  if (await isBootstrapMode()) return { serverHostname: "", defaultDomain: "" }
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const domain = await getPrimaryDomain()
   const defaultDomain = domain?.name ?? ""
