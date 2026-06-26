@@ -135,18 +135,19 @@ export function HostAddressSection({
               })}
             </tbody>
           </table>
-          {records.some((r) =>
-            isExternalHost(r.name.replace(/\.$/, ""), domain)
-          ) ? (
-            <Alert variant="info">
-              {t("wizard.dns.hostAddress.apexNote", {
-                name: records.find((r) =>
-                  isExternalHost(r.name.replace(/\.$/, ""), domain)
-                )?.name,
-                domain,
-              })}
-            </Alert>
-          ) : null}
+          {(() => {
+            const externalRecord = records.find((r) =>
+              isExternalHost(r.name.replace(/\.$/, ""), domain)
+            )
+            return externalRecord ? (
+              <Alert variant="info">
+                {t("wizard.dns.hostAddress.apexNote", {
+                  name: externalRecord.name,
+                  domain,
+                })}
+              </Alert>
+            ) : null
+          })()}
         </div>
       ) : null}
     </section>

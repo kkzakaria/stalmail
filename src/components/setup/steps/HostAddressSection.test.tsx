@@ -79,4 +79,23 @@ describe("HostAddressSection", () => {
     expect(onManualIp).not.toHaveBeenCalled()
     expect(screen.getByText("Adresse IP invalide.")).toBeInTheDocument()
   })
+
+  it("affiche apexNote quand un enregistrement est hors zone", () => {
+    wrap(
+      <HostAddressSection
+        records={[
+          {
+            name: "autre-domaine.fr.",
+            type: "A",
+            value: "203.0.113.4",
+            status: "pending",
+          },
+        ]}
+        status="ready"
+        domain="exemple.fr"
+        onManualIp={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/hors de la zone/)).toBeInTheDocument()
+  })
 })

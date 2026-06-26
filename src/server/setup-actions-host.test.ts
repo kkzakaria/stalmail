@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 import { hostAddressStatusHandler } from "./setup-actions"
 
+vi.mock("./session-cookie", () => ({ assertSameOriginStrict: vi.fn() }))
 vi.mock("./stalwart-domain", () => ({
   getPrimaryDomain: vi.fn(async () => ({ id: "d1", name: "exemple.fr" })),
 }))

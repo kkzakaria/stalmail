@@ -106,17 +106,10 @@ export const fr = {
         name: "Nom",
         value: "Valeur",
         status: "Statut",
-        extTag: "zone externe",
-        extNote:
-          "L'enregistrement A se trouve dans la zone {{zone}}, hors de la zone {{domain}} gérée via {{provider}} — créez-le manuellement chez le gestionnaire de cette zone.",
         background:
           "La vérification continue en arrière-plan — vous pouvez poursuivre.",
         allOk: "Tous les enregistrements sont vérifiés.",
         groups: {
-          a: {
-            t: "Adresse du serveur",
-            d: "Fait pointer {{host}} vers l'adresse IP du serveur.",
-          },
           mx: {
             t: "Routage du courrier",
             d: "Dirige le courrier de {{domain}} vers ce serveur.",
@@ -448,17 +441,10 @@ export const en: DeepRecord<typeof fr> = {
         name: "Name",
         value: "Value",
         status: "Status",
-        extTag: "external zone",
-        extNote:
-          "The A record lives in the {{zone}} zone, outside the {{domain}} zone managed via {{provider}} — create it manually at that zone's manager.",
         background:
           "Verification keeps running in the background — you can move on.",
         allOk: "All records are verified.",
         groups: {
-          a: {
-            t: "Server address",
-            d: "Points {{host}} to the server's IP address.",
-          },
           mx: {
             t: "Mail routing",
             d: "Routes mail for {{domain}} to this server.",

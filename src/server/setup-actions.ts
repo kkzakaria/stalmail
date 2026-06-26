@@ -236,6 +236,8 @@ export async function discoverServerIpHandler(): Promise<{
   ipv4: string | null
   ipv6: string | null
 }> {
+  const { assertSameOriginStrict } = await import("./session-cookie")
+  assertSameOriginStrict()
   const { discoverServerIp } = await import("./server-ip")
   try {
     return await discoverServerIp()
@@ -249,6 +251,8 @@ export async function hostAddressStatusHandler({
 }: {
   data: { ipv4?: string; ipv6?: string }
 }): Promise<{ records: DnsGridRecord[] }> {
+  const { assertSameOriginStrict } = await import("./session-cookie")
+  assertSameOriginStrict()
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const { buildHostRecords } = await import("./dns-host-records")
   const { resolveRecordStatus } = await import("./dns-resolve")
