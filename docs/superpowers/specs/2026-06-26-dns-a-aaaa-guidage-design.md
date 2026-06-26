@@ -138,8 +138,10 @@ DnsStep (montage)
 
 - `discoverServerIp` n'échoue jamais côté server function (catch → `{ null, null }`) : pas de
   code d'erreur setup, pas de blocage de l'étape.
-- `hostAddressStatusFn` : IP invalide en entrée → Zod rejette → le client retombe sur la saisie
-  manuelle. Échec de résolution DNS d'un record → `pending` (pas une erreur d'étape).
+- `hostAddressStatusFn` : le schéma Zod ne rejette que les charges non-string ou hors borne
+  (`z.string().max(45)`) ; une IP courte mais malformée passe Zod, puis la re-validation
+  `isIpv4`/`isIpv6` côté serveur l'ignore (traitée comme absente — pas de record produit pour
+  cette famille, pas d'erreur d'étape). Échec de résolution DNS d'un record → `pending`.
 - L'étape DNS reste franchissable même si A/AAAA ne sont pas encore `verified`.
 
 ## Non-régression
