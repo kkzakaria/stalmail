@@ -44,7 +44,11 @@ export function useThreadActions(
   const listKey = ["threads", folder] as const
   const detailKey = ["thread", threadId] as const
 
-  // Patch optimiste en place (liste + détail) avec snapshot pour rollback.
+  // Patch optimiste en place (liste + détail). En cas d'échec serveur, on resynchronise
+  // depuis Stalwart (autoritatif) via invalidateQueries plutôt que de restaurer un snapshot
+  // complet : un snapshot pris avant le patch d'une action concurrente l'écraserait au
+  // rollback (#38 — ex. « favori » qui échoue annulait un « marquer lu » déjà confirmé).
+  // Même approche que `move()` ci-dessous.
   // Renvoie true si l'écriture serveur a réussi (pour déclencher d'éventuels effets post-succès).
   async function optimisticFlag(
     flag: "$seen" | "$flagged",
@@ -55,8 +59,6 @@ export function useThreadActions(
     if (emailIds.length === 0) return false // F6 : pas d'action tant que le fil n'est pas chargé (évite un rejet Zod .min(1))
     await qc.cancelQueries({ queryKey: listKey })
     await qc.cancelQueries({ queryKey: detailKey })
-    const prevList = qc.getQueriesData<EmailListPage>({ queryKey: listKey })
-    const prevDetail = qc.getQueryData(detailKey)
     qc.setQueriesData<EmailListPage>({ queryKey: listKey }, (page) =>
       page ? patchThreadInPages(page, threadId, patch) : page
     )
@@ -68,8 +70,10 @@ export function useThreadActions(
       if (okMsg) notify(okMsg, "success")
       return true
     } catch {
-      for (const [key, data] of prevList) qc.setQueryData(key, data)
-      qc.setQueryData(detailKey, prevDetail)
+      // Re-sync ciblé depuis le serveur ; ne touche pas aux modifications confirmées
+      // par d'autres mutations concurrentes (cf. #38).
+      await qc.invalidateQueries({ queryKey: listKey })
+      await qc.invalidateQueries({ queryKey: detailKey })
       notify(t("mail.actions.error"), "error")
       return false
     }

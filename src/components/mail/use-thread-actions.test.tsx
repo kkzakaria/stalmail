@@ -144,3 +144,69 @@ describe("useThreadActions.markRead(false) — intégration cache", () => {
     expect(invalidate).toHaveBeenCalled()
   })
 })
+
+describe("useThreadActions — rollback concurrent (#38)", () => {
+  // Deux actions optimistes se chevauchent ; l'une échoue. Le rollback de l'action
+  // échouée ne doit pas écraser la modification déjà confirmée de l'autre action.
+  function setup() {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    qc.setQueryData<EmailListPage>(["threads", "inbox", 0], {
+      threads: [
+        thread({ id: "e1", threadId: "t1", unread: true, starred: false }),
+      ],
+      total: 1,
+      position: 0,
+    })
+    // Le hook patche ET invalide aussi le cache détail (clé ["thread", threadId]) :
+    // on le seede pour vérifier qu'il est protégé au même titre que la liste.
+    qc.setQueryData(["thread", "e1"], { unread: true, starred: false })
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children)
+    const { result } = renderHook(
+      () => useThreadActions("inbox", "e1", ["e1"]),
+      { wrapper }
+    )
+    return { qc, result }
+  }
+
+  it("un échec (star) ne revert pas la modif réussie d'une autre action (markRead)", async () => {
+    // star (`$flagged`) reste en attente puis échoue ; markRead (`$seen`) réussit immédiatement.
+    let rejectStar: (e: unknown) => void = () => {}
+    setFlags.mockImplementation((args: { data: { flag: string } }) => {
+      if (args.data.flag === "$flagged")
+        return new Promise((_, rej) => {
+          rejectStar = rej
+        })
+      return Promise.resolve({ ok: true })
+    })
+    try {
+      const { qc, result } = setup()
+      // 1) star part : patch optimiste starred:true, attend le serveur (pending).
+      const starP = result.current.star(true)
+      // 2) markRead réussit pendant que star est en vol : patch unread:false confirmé
+      //    sur la liste ET le détail.
+      await result.current.markRead(true)
+      expect(
+        qc.getQueryData<EmailListPage>(["threads", "inbox", 0])?.threads[0]
+          .unread
+      ).toBe(false)
+      expect(
+        (qc.getQueryData(["thread", "e1"]) as { unread: boolean }).unread
+      ).toBe(false)
+      // 3) star échoue : son rollback ne doit pas remettre unread:true (snapshot périmé),
+      //    ni dans la liste ni dans le détail.
+      rejectStar(new Error("boom"))
+      await starP
+      const page = qc.getQueryData<EmailListPage>(["threads", "inbox", 0])
+      expect(page?.threads[0].unread).toBe(false)
+      expect(
+        (qc.getQueryData(["thread", "e1"]) as { unread: boolean }).unread
+      ).toBe(false)
+    } finally {
+      setFlags.mockReset()
+      setFlags.mockResolvedValue({ ok: true })
+    }
+  })
+})
