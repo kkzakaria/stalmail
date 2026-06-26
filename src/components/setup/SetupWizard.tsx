@@ -55,6 +55,11 @@ interface Props {
   setDnsManagement: (input: { dnsServerId: string }) => Promise<{ ok: true }>
   setDnsManagementManual: () => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
+  discoverServerIp: () => Promise<{ ipv4: string | null; ipv6: string | null }>
+  hostAddressStatus: (ip: {
+    ipv4?: string
+    ipv6?: string
+  }) => Promise<{ records: DnsGridRecord[] }>
   configureAcme: (input: {
     hostname: string
     contactEmail: string
@@ -87,6 +92,8 @@ export function SetupWizard({
   setDnsManagement,
   setDnsManagementManual,
   gridStatus,
+  discoverServerIp,
+  hostAddressStatus,
   configureAcme,
   acmeStatus,
   acknowledgeManualSsl,
@@ -484,6 +491,8 @@ export function SetupWizard({
         setDnsManagement={stableSetDnsManagement}
         setDnsManagementManual={stableSetDnsManagementManual}
         gridStatus={gridStatus}
+        discoverServerIp={discoverServerIp}
+        hostAddressStatus={hostAddressStatus}
         onNext={(manual) => {
           setDnsManual(manual)
           stableRefetchStep()

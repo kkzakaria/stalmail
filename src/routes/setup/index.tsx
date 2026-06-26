@@ -8,6 +8,8 @@ import {
   setDnsManagementFn,
   setDnsManagementManualFn,
   dnsGridStatusFn,
+  discoverServerIpFn,
+  hostAddressStatusFn,
   configureAcmeFn,
   acmeStatusFn,
   finishSetupFn,
@@ -56,6 +58,8 @@ function SetupPage() {
       setDnsManagement={(input) => setDnsManagementFn({ data: input })}
       setDnsManagementManual={() => setDnsManagementManualFn()}
       gridStatus={() => dnsGridStatusFn()}
+      discoverServerIp={() => discoverServerIpFn()}
+      hostAddressStatus={(ip) => hostAddressStatusFn({ data: ip })}
       configureAcme={(input) => configureAcmeFn({ data: input })}
       acmeStatus={() => acmeStatusFn()}
       acknowledgeManualSsl={() => markSslConfiguredFn()}

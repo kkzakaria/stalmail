@@ -27,6 +27,21 @@ const baseProps = () => ({
   gridStatus: vi.fn(() =>
     Promise.resolve({ origin: "exemple.fr", records: autoRecords })
   ),
+  discoverServerIp: vi.fn(() =>
+    Promise.resolve({ ipv4: "203.0.113.4", ipv6: null })
+  ),
+  hostAddressStatus: vi.fn(() =>
+    Promise.resolve({
+      records: [
+        {
+          name: "mail.exemple.fr.",
+          type: "A",
+          value: "203.0.113.4",
+          status: "pending",
+        },
+      ] as DnsGridRecord[],
+    })
+  ),
   onNext: vi.fn(),
 })
 
@@ -143,5 +158,23 @@ describe("DnsStep", () => {
       await screen.findByText("SETUP-DNS-MANAGEMENT-REJECTED")
     ).toBeInTheDocument()
     expect(props.onNext).not.toHaveBeenCalled()
+  })
+
+  it("affiche la section Adresse du serveur en mode auto via l'écho IP", async () => {
+    const props = baseProps()
+    wrap(<DnsStep {...props} />)
+    fireEvent.click(screen.getByRole("button", { expanded: false }))
+    fireEvent.click(screen.getByText("Cloudflare"))
+    fireEvent.change(await screen.findByLabelText("Clé API"), {
+      target: { value: "tok" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+
+    expect(await screen.findByText("Adresse du serveur")).toBeInTheDocument()
+    expect(props.discoverServerIp).toHaveBeenCalled()
+    expect(props.hostAddressStatus).toHaveBeenCalledWith({
+      ipv4: "203.0.113.4",
+      ipv6: undefined,
+    })
   })
 })
