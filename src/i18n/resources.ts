@@ -130,7 +130,7 @@ export const fr = {
       },
       hostAddress: {
         title: "Adresse du serveur",
-        hint: "Ces enregistrements font pointer votre domaine vers l'IP du serveur. Stalwart ne peut pas les publier — créez-les chez votre fournisseur DNS.",
+        hint: "Ces enregistrements font pointer votre domaine vers l'IP du serveur. Ils ne peuvent pas être créés automatiquement — vous devez les ajouter vous-même chez votre fournisseur DNS.",
         discovering: "Détection de l'adresse IP du serveur…",
         echoFailed:
           "Impossible de détecter automatiquement l'IP du serveur. Saisissez-la ci-dessous.",
@@ -465,7 +465,7 @@ export const en: DeepRecord<typeof fr> = {
       },
       hostAddress: {
         title: "Server address",
-        hint: "These records point your domain at the server's IP. Stalwart cannot publish them — create them at your DNS provider.",
+        hint: "These records point your domain at the server's IP. They can't be created automatically — you must add them yourself at your DNS provider.",
         discovering: "Detecting the server's IP address…",
         echoFailed:
           "Could not detect the server IP automatically. Enter it below.",
