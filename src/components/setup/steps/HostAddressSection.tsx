@@ -51,10 +51,8 @@ export function HostAddressSection({
         <span className="dns-sect-title">
           {t("wizard.dns.hostAddress.title")}
         </span>
-        <span className="dns-sect-desc">
-          {t("wizard.dns.hostAddress.hint")}
-        </span>
       </div>
+      <Alert variant="warning">{t("wizard.dns.hostAddress.hint")}</Alert>
 
       {status === "loading" ? (
         <p className="inline-status">
