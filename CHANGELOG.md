@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.26](https://github.com/kkzakaria/stalmail/compare/v0.1.25...v0.1.26) (2026-06-27)
+
+
+### Features
+
+* **setup:** guidage A/AAAA dans l'étape DNS du wizard ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#90](https://github.com/kkzakaria/stalmail/issues/90)) ([934aec1](https://github.com/kkzakaria/stalmail/commit/934aec1d825910964067f98a138ac1b9820e2ddf))
+
 ## [0.1.25](https://github.com/kkzakaria/stalmail/compare/v0.1.24...v0.1.25) (2026-06-26)
 
 
