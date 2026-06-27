@@ -6,12 +6,16 @@ const resolveMx = vi.fn()
 const resolveSrv = vi.fn()
 const resolveCaa = vi.fn()
 const resolveCname = vi.fn()
+const resolve4 = vi.fn()
+const resolve6 = vi.fn()
 vi.mock("node:dns/promises", () => ({
   resolveTxt: (...a: unknown[]) => resolveTxt(...a),
   resolveMx: (...a: unknown[]) => resolveMx(...a),
   resolveSrv: (...a: unknown[]) => resolveSrv(...a),
   resolveCaa: (...a: unknown[]) => resolveCaa(...a),
   resolveCname: (...a: unknown[]) => resolveCname(...a),
+  resolve4: (...a: unknown[]) => resolve4(...a),
+  resolve6: (...a: unknown[]) => resolve6(...a),
 }))
 
 beforeEach(() => vi.clearAllMocks())
@@ -122,11 +126,11 @@ describe("resolveRecordStatus", () => {
     expect(s).toBe("missing")
   })
 
-  it('returns "unsupported" for record types other than TXT/MX', async () => {
+  it('returns "unsupported" for record types other than the handled ones', async () => {
     const s = await resolveRecordStatus({
       name: "exemple.fr.",
-      type: "A",
-      value: "203.0.113.1",
+      type: "NS",
+      value: "ns1.exemple.fr.",
     })
     expect(s).toBe("unsupported")
   })
@@ -264,5 +268,77 @@ describe("resolveRecordStatus", () => {
       value: "mail.exemple.fr.",
     })
     expect(s).toBe("missing")
+  })
+
+  it('A: "verified" quand l\'IPv4 résolue correspond', async () => {
+    resolve4.mockResolvedValue(["203.0.113.4"])
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "A",
+      value: "203.0.113.4",
+    })
+    expect(s).toBe("verified")
+  })
+
+  it('A: "mismatch" quand l\'IPv4 résolue diffère', async () => {
+    resolve4.mockResolvedValue(["198.51.100.9"])
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "A",
+      value: "203.0.113.4",
+    })
+    expect(s).toBe("mismatch")
+  })
+
+  it('A: "missing" quand aucune IPv4 ne résout', async () => {
+    resolve4.mockResolvedValue([])
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "A",
+      value: "203.0.113.4",
+    })
+    expect(s).toBe("missing")
+  })
+
+  it('A: "missing" sur ENOTFOUND', async () => {
+    resolve4.mockRejectedValue(
+      Object.assign(new Error("nf"), { code: "ENOTFOUND" })
+    )
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "A",
+      value: "203.0.113.4",
+    })
+    expect(s).toBe("missing")
+  })
+
+  it('AAAA: "verified" en comparant insensible à la casse', async () => {
+    resolve6.mockResolvedValue(["2001:db8::1"])
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "AAAA",
+      value: "2001:DB8::1",
+    })
+    expect(s).toBe("verified")
+  })
+
+  it('AAAA: "mismatch" quand l\'IPv6 diffère', async () => {
+    resolve6.mockResolvedValue(["2001:db8::2"])
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "AAAA",
+      value: "2001:db8::1",
+    })
+    expect(s).toBe("mismatch")
+  })
+
+  it('AAAA: "verified" quand le resolver retourne la forme étendue et le record est compressé', async () => {
+    resolve6.mockResolvedValue(["2001:0db8:0000:0000:0000:0000:0000:0001"])
+    const s = await resolveRecordStatus({
+      name: "mail.exemple.fr.",
+      type: "AAAA",
+      value: "2001:db8::1",
+    })
+    expect(s).toBe("verified")
   })
 })

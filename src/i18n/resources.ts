@@ -106,17 +106,10 @@ export const fr = {
         name: "Nom",
         value: "Valeur",
         status: "Statut",
-        extTag: "zone externe",
-        extNote:
-          "L'enregistrement A se trouve dans la zone {{zone}}, hors de la zone {{domain}} gérée via {{provider}} — créez-le manuellement chez le gestionnaire de cette zone.",
         background:
           "La vérification continue en arrière-plan — vous pouvez poursuivre.",
         allOk: "Tous les enregistrements sont vérifiés.",
         groups: {
-          a: {
-            t: "Adresse du serveur",
-            d: "Fait pointer {{host}} vers l'adresse IP du serveur.",
-          },
           mx: {
             t: "Routage du courrier",
             d: "Dirige le courrier de {{domain}} vers ce serveur.",
@@ -134,6 +127,19 @@ export const fr = {
             d: "Alias utilisé pour la configuration automatique des clients.",
           },
         },
+      },
+      hostAddress: {
+        title: "Adresse du serveur",
+        hint: "Ces enregistrements font pointer votre domaine vers l'IP du serveur. Stalwart ne peut pas les publier — créez-les chez votre fournisseur DNS.",
+        discovering: "Détection de l'adresse IP du serveur…",
+        echoFailed:
+          "Impossible de détecter automatiquement l'IP du serveur. Saisissez-la ci-dessous.",
+        manualLabel: "Adresse IP du serveur",
+        manualHelp: "IPv4 ou IPv6 publique de ce serveur.",
+        manualInvalid: "Adresse IP invalide.",
+        manualSubmit: "Valider",
+        apexNote:
+          "{{name}} est hors de la zone {{domain}} — créez cet enregistrement chez le gestionnaire de cette zone.",
       },
     },
     account: {
@@ -435,17 +441,10 @@ export const en: DeepRecord<typeof fr> = {
         name: "Name",
         value: "Value",
         status: "Status",
-        extTag: "external zone",
-        extNote:
-          "The A record lives in the {{zone}} zone, outside the {{domain}} zone managed via {{provider}} — create it manually at that zone's manager.",
         background:
           "Verification keeps running in the background — you can move on.",
         allOk: "All records are verified.",
         groups: {
-          a: {
-            t: "Server address",
-            d: "Points {{host}} to the server's IP address.",
-          },
           mx: {
             t: "Mail routing",
             d: "Routes mail for {{domain}} to this server.",
@@ -463,6 +462,19 @@ export const en: DeepRecord<typeof fr> = {
             d: "Alias used for automatic client setup.",
           },
         },
+      },
+      hostAddress: {
+        title: "Server address",
+        hint: "These records point your domain at the server's IP. Stalwart cannot publish them — create them at your DNS provider.",
+        discovering: "Detecting the server's IP address…",
+        echoFailed:
+          "Could not detect the server IP automatically. Enter it below.",
+        manualLabel: "Server IP address",
+        manualHelp: "Public IPv4 or IPv6 of this server.",
+        manualInvalid: "Invalid IP address.",
+        manualSubmit: "Confirm",
+        apexNote:
+          "{{name}} is outside the {{domain}} zone — create this record at that zone's manager.",
       },
     },
     account: {

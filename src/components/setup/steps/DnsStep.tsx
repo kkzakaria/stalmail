@@ -9,7 +9,8 @@ import { useTranslation } from "react-i18next"
 import { DNS_PROVIDERS } from "@/lib/dns-providers"
 import type { DnsProvider } from "@/lib/dns-providers"
 import type { DnsGridRecord } from "@/server/setup-actions"
-import { isExternalHost, hostZone } from "../host-utils"
+import { isIpv4, isIpv6 } from "@/lib/ip"
+import { HostAddressSection } from "./HostAddressSection"
 import type { DnsProviderValues } from "../schemas"
 import { dnsProviderSchema } from "../schemas"
 import {
@@ -41,7 +42,6 @@ function zoneFileText(records: DnsGridRecord[]) {
 
 // Groups by type for the manual sectioned view (title/desc keys: groups.<key>.t/.d).
 const DNS_GROUP_DEFS = [
-  { type: "A", key: "a" },
   { type: "MX", key: "mx" },
   { type: "TXT", key: "txt" },
   { type: "SRV", key: "srv" },
@@ -62,6 +62,11 @@ interface Props {
   setDnsManagement: (i: { dnsServerId: string }) => Promise<{ ok: true }>
   setDnsManagementManual: () => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
+  discoverServerIp: () => Promise<{ ipv4: string | null; ipv6: string | null }>
+  hostAddressStatus: (ip: {
+    ipv4?: string
+    ipv6?: string
+  }) => Promise<{ records: DnsGridRecord[] }>
   onNext: (manual: boolean) => void
 }
 
@@ -72,6 +77,8 @@ export function DnsStep({
   setDnsManagement,
   setDnsManagementManual,
   gridStatus,
+  discoverServerIp,
+  hostAddressStatus,
   onNext,
 }: Props) {
   const { t } = useTranslation()
@@ -79,6 +86,14 @@ export function DnsStep({
   const [provider, setProvider] = useState("Manual")
   const [records, setRecords] = useState<DnsGridRecord[]>([])
   const [errorCode, setErrorCode] = useState("")
+  const [serverIp, setServerIp] = useState<{
+    ipv4: string | null
+    ipv6: string | null
+  } | null>(null)
+  const [ipDiscovery, setIpDiscovery] = useState<
+    "idle" | "loading" | "ready" | "failed"
+  >("idle")
+  const [hostRecords, setHostRecords] = useState<DnsGridRecord[]>([])
 
   const isManual = provider === "Manual"
 
@@ -175,6 +190,52 @@ export function DnsStep({
     }
   }, [phase])
 
+  // À l'entrée de la grille : découvrir l'IP du serveur une fois (écho sortant).
+  useEffect(() => {
+    if (phase !== "grid") return
+    setIpDiscovery("loading")
+    discoverServerIp()
+      .then((ip) => {
+        if (!mountedRef.current) return
+        if (ip.ipv4 || ip.ipv6) {
+          setServerIp(ip)
+          setIpDiscovery("ready")
+        } else {
+          setIpDiscovery("failed")
+        }
+      })
+      .catch(() => {
+        if (mountedRef.current) setIpDiscovery("failed")
+      })
+  }, [phase])
+
+  // Poll du statut des A/AAAA dès qu'une IP est connue (écho ou saisie manuelle).
+  useEffect(() => {
+    if (phase !== "grid" || !serverIp) return
+    const ip = {
+      ipv4: serverIp.ipv4 ?? undefined,
+      ipv6: serverIp.ipv6 ?? undefined,
+    }
+    const fetchHost = () => {
+      hostAddressStatus(ip)
+        .then((res) => {
+          if (mountedRef.current) setHostRecords(res.records)
+        })
+        .catch(() => {})
+    }
+    fetchHost()
+    const id = setInterval(fetchHost, 5000)
+    return () => clearInterval(id)
+  }, [phase, serverIp])
+
+  const onManualIp = (value: string) => {
+    setServerIp({
+      ipv4: isIpv4(value) ? value : null,
+      ipv6: isIpv6(value) ? value : null,
+    })
+    setIpDiscovery("ready")
+  }
+
   const recordStatusLabels = {
     verified: t("wizard.recordStatus.verified"),
     pending: t("wizard.recordStatus.pending"),
@@ -184,7 +245,10 @@ export function DnsStep({
   const copiedLabel = t("wizard.common.copied")
 
   // Task badge derivation.
-  const statuses = records.map((r) => r.status)
+  const statuses = [
+    ...records.filter((r) => r.type !== "A" && r.type !== "AAAA"),
+    ...hostRecords,
+  ].map((r) => r.status)
   const allVerified =
     statuses.length > 0 && statuses.every((s) => s === "verified")
   const anyError = statuses.some((s) => s === "error")
@@ -203,10 +267,6 @@ export function DnsStep({
       : taskKey === "partial"
         ? "destructive"
         : "pending"
-
-  const hasExternalA = records.some(
-    (r) => r.type === "A" && isExternalHost(r.name.replace(/\.$/, ""), domain)
-  )
 
   const zoneText = zoneFileText(records)
 
@@ -335,6 +395,18 @@ export function DnsStep({
 
       {phase === "grid" ? (
         <>
+          <HostAddressSection
+            records={hostRecords}
+            status={
+              ipDiscovery === "failed"
+                ? "failed"
+                : ipDiscovery === "ready"
+                  ? "ready"
+                  : "loading"
+            }
+            domain={domain}
+            onManualIp={onManualIp}
+          />
           {isManual ? (
             <div className="dns-manual">
               <div className="dns-table-wrap">
@@ -369,9 +441,6 @@ export function DnsStep({
                             </td>
                           </tr>
                           {recs.map((r, i) => {
-                            const ext =
-                              r.type === "A" &&
-                              isExternalHost(r.name.replace(/\.$/, ""), domain)
                             return (
                               <tr
                                 key={g.type + "-" + i}
@@ -392,11 +461,6 @@ export function DnsStep({
                                     >
                                       {r.name}
                                     </span>
-                                    {ext ? (
-                                      <span className="rec-tag">
-                                        {t("wizard.dns.records.extTag")}
-                                      </span>
-                                    ) : null}
                                   </span>
                                 </td>
                                 <td className="rec-value-cell">
@@ -465,11 +529,9 @@ export function DnsStep({
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((r, i) => {
-                    const ext =
-                      r.type === "A" &&
-                      isExternalHost(r.name.replace(/\.$/, ""), domain)
-                    return (
+                  {records
+                    .filter((r) => r.type !== "A" && r.type !== "AAAA")
+                    .map((r, i) => (
                       <tr
                         key={r.type + "-" + i}
                         className={r.status === "error" ? "row-error" : ""}
@@ -479,11 +541,6 @@ export function DnsStep({
                         </td>
                         <td className="mono rec-name" title={r.name}>
                           {r.name}
-                          {ext ? (
-                            <span className="rec-tag">
-                              {t("wizard.dns.records.extTag")}
-                            </span>
-                          ) : null}
                         </td>
                         <td className="mono rec-value" title={r.value}>
                           {r.value}
@@ -495,22 +552,11 @@ export function DnsStep({
                           />
                         </td>
                       </tr>
-                    )
-                  })}
+                    ))}
                 </tbody>
               </table>
             </div>
           )}
-
-          {!isManual && hasExternalA ? (
-            <Alert variant="warning" title={"A · " + hostname}>
-              {t("wizard.dns.records.extNote", {
-                zone: hostZone(hostname),
-                domain,
-                provider,
-              })}
-            </Alert>
-          ) : null}
 
           <div className="task-line">
             <span className="task-label">{t("wizard.dns.records.task")}</span>

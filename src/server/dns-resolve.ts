@@ -4,6 +4,8 @@ import {
   resolveSrv,
   resolveCaa,
   resolveCname,
+  resolve4,
+  resolve6,
 } from "node:dns/promises"
 import type { ZoneRecord } from "./dns-zone"
 
@@ -15,6 +17,16 @@ export type RecordStatus = "verified" | "mismatch" | "missing" | "unsupported"
 // ici, donc la normalisation reste cohérente.
 const stripDot = (s: string) => s.replace(/\.$/, "").toLowerCase()
 const norm = (s: string) => s.trim().replace(/\s+/g, " ")
+
+// Canonicalise une IPv6 (compressée/étendue) pour comparaison ; laisse les autres
+// chaînes intactes (IPv4 passe par la même fonction sans changement).
+function canonIp(ip: string): string {
+  try {
+    return new URL(`http://[${ip}]`).hostname.replace(/^\[|\]$/g, "")
+  } catch {
+    return ip.toLowerCase()
+  }
+}
 
 export async function resolveRecordStatus(
   record: ZoneRecord
@@ -68,6 +80,16 @@ export async function resolveRecordStatus(
         (r) => (r as unknown as Record<string, unknown>)[tag] === value
       )
       return found ? "verified" : caa.length ? "mismatch" : "missing"
+    }
+    if (record.type === "A" || record.type === "AAAA") {
+      // Valeur attendue = l'IP fournie par l'écho (pas issue du dnsZoneFile).
+      // canonIp normalise les formes compressées/étendues d'IPv6 pour comparaison juste.
+      const want = canonIp(record.value.trim())
+      const addrs =
+        record.type === "A" ? await resolve4(host) : await resolve6(host)
+      const resolved = addrs.map((a) => canonIp(a.trim()))
+      if (resolved.includes(want)) return "verified"
+      return resolved.length ? "mismatch" : "missing"
     }
     return "unsupported"
   } catch (e) {
