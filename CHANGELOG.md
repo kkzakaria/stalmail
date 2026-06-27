@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.27](https://github.com/kkzakaria/stalmail/compare/v0.1.26...v0.1.27) (2026-06-27)
+
+
+### Bug Fixes
+
+* **setup:** encart d'avertissement + libellé générique pour l'adresse du serveur ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#92](https://github.com/kkzakaria/stalmail/issues/92)) ([7ae8b15](https://github.com/kkzakaria/stalmail/commit/7ae8b1519e8609bfdecba5fa0285c33a5739f819))
+
 ## [0.1.26](https://github.com/kkzakaria/stalmail/compare/v0.1.25...v0.1.26) (2026-06-27)
 
 
