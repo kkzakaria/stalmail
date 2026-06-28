@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.33](https://github.com/kkzakaria/stalmail/compare/v0.1.32...v0.1.33) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** entête sticky + défilement de page, retrait de la légende d'étape ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#104](https://github.com/kkzakaria/stalmail/issues/104)) ([9b26bc1](https://github.com/kkzakaria/stalmail/commit/9b26bc1f0eec869c047eb607222a608a16c89677))
+
 ## [0.1.32](https://github.com/kkzakaria/stalmail/compare/v0.1.31...v0.1.32) (2026-06-28)
 
 
