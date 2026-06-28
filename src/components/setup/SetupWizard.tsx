@@ -371,11 +371,16 @@ export function SetupWizard({
             <div className="shell-card-top">
               <Brand size={24} />
             </div>
-            <div className="card shell-card-main">
-              <div className="step-anim">
-                <p role="status" className="text-center text-muted-foreground">
-                  {t("wizard.unlock.unlocking")}
-                </p>
+            <div className="shell-card-scroll">
+              <div className="card shell-card-main">
+                <div className="step-anim">
+                  <p
+                    role="status"
+                    className="text-center text-muted-foreground"
+                  >
+                    {t("wizard.unlock.unlocking")}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -397,18 +402,20 @@ export function SetupWizard({
                 <ThemeToggle theme={theme} onChange={setTheme} />
               </div>
             </div>
-            <div className="card shell-card-main">
-              <div className="step-anim">
-                <h1 className="text-lg font-semibold">
-                  {isExpired
-                    ? t("wizard.unlock.expiredTitle")
-                    : t("wizard.unlock.requiredTitle")}
-                </h1>
-                <p className="mt-2 text-muted-foreground">
-                  {isExpired
-                    ? t("wizard.unlock.expiredDesc")
-                    : t("wizard.unlock.requiredDesc")}
-                </p>
+            <div className="shell-card-scroll">
+              <div className="card shell-card-main">
+                <div className="step-anim">
+                  <h1 className="text-lg font-semibold">
+                    {isExpired
+                      ? t("wizard.unlock.expiredTitle")
+                      : t("wizard.unlock.requiredTitle")}
+                  </h1>
+                  <p className="mt-2 text-muted-foreground">
+                    {isExpired
+                      ? t("wizard.unlock.expiredDesc")
+                      : t("wizard.unlock.requiredDesc")}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -431,27 +438,34 @@ export function SetupWizard({
                 <ThemeToggle theme={theme} onChange={setTheme} />
               </div>
             </div>
-            <div className="card shell-card-main">
-              <div className="step-anim">
-                <SetupErrorBox
-                  code={code}
-                  messageKey={messageKeyForCode(code)}
-                  onRetry={() => {
-                    const token = tokenRef.current
-                    if (token) {
-                      setAuthState("unlocking")
-                      doUnlock(token)
-                        .then(() => doAuthStatus())
-                        .then(({ authed }) => {
-                          setAuthState(authed ? "authed" : "unauthed-no-token")
-                        })
-                        .catch((e: unknown) => {
-                          const newCode = codeFromError(e)
-                          setAuthState({ kind: "unlock-failed", code: newCode })
-                        })
-                    }
-                  }}
-                />
+            <div className="shell-card-scroll">
+              <div className="card shell-card-main">
+                <div className="step-anim">
+                  <SetupErrorBox
+                    code={code}
+                    messageKey={messageKeyForCode(code)}
+                    onRetry={() => {
+                      const token = tokenRef.current
+                      if (token) {
+                        setAuthState("unlocking")
+                        doUnlock(token)
+                          .then(() => doAuthStatus())
+                          .then(({ authed }) => {
+                            setAuthState(
+                              authed ? "authed" : "unauthed-no-token"
+                            )
+                          })
+                          .catch((e: unknown) => {
+                            const newCode = codeFromError(e)
+                            setAuthState({
+                              kind: "unlock-failed",
+                              code: newCode,
+                            })
+                          })
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
