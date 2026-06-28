@@ -96,13 +96,23 @@ export function Combobox({
   }, [open])
 
   // Reposition le panneau portalé tant qu'il est ouvert (scroll de la carte, resize).
+  // Le scroll en phase capture se déclenche pour chaque ancêtre scrollable ; on coalesce
+  // les recalculs via requestAnimationFrame pour éviter un re-render par tick.
   useEffect(() => {
     if (!open) return
     computePos()
-    const onMove = () => computePos()
+    let raf = 0
+    const onMove = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        computePos()
+      })
+    }
     window.addEventListener("scroll", onMove, true)
     window.addEventListener("resize", onMove)
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       window.removeEventListener("scroll", onMove, true)
       window.removeEventListener("resize", onMove)
     }
