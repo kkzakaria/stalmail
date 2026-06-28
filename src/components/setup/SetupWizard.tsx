@@ -546,9 +546,11 @@ export function SetupWizard({
             </div>
           </div>
           <StepperH steps={steps} current={current} />
-          <div className="card shell-card-main">
-            <div key={`${phase}-${serverStep}`} className="step-anim">
-              {content}
+          <div className="shell-card-scroll">
+            <div className="card shell-card-main">
+              <div key={`${phase}-${serverStep}`} className="step-anim">
+                {content}
+              </div>
             </div>
           </div>
           <p className="shell-caption">
