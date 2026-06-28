@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.29](https://github.com/kkzakaria/stalmail/compare/v0.1.28...v0.1.29) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** titre + cadre scrollable pour les DNS auto, pied compact ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#96](https://github.com/kkzakaria/stalmail/issues/96)) ([7a83e2e](https://github.com/kkzakaria/stalmail/commit/7a83e2e238e541f44357d5a256a48cd2fa9fc187))
+
 ## [0.1.28](https://github.com/kkzakaria/stalmail/compare/v0.1.27...v0.1.28) (2026-06-28)
 
 
