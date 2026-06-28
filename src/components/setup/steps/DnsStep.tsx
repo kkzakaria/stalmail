@@ -516,64 +516,69 @@ export function DnsStep({
               </div>
             </div>
           ) : (
-            <div className="dns-table-wrap">
-              <table className="dns-table">
-                <thead>
-                  <tr>
-                    <th>{t("wizard.dns.records.type")}</th>
-                    <th>{t("wizard.dns.records.name")}</th>
-                    <th>{t("wizard.dns.records.value")}</th>
-                    <th style={{ textAlign: "right" }}>
-                      {t("wizard.dns.records.status")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records
-                    .filter((r) => r.type !== "A" && r.type !== "AAAA")
-                    .map((r, i) => (
-                      <tr
-                        key={r.type + "-" + i}
-                        className={r.status === "error" ? "row-error" : ""}
-                      >
-                        <td>
-                          <span className="rec-type mono">{r.type}</span>
-                        </td>
-                        <td className="mono rec-name" title={r.name}>
-                          {r.name}
-                        </td>
-                        <td className="mono rec-value" title={r.value}>
-                          {r.value}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <StatusBadge
-                            status={r.status}
-                            labels={recordStatusLabels}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+            <div className="dns-auto">
+              <div className="dns-sect-line">
+                <span className="dns-sect-title">
+                  {t("wizard.dns.records.autoTitle")}
+                </span>
+              </div>
+              <div className="dns-table-wrap dns-table-scroll">
+                <table className="dns-table">
+                  <thead>
+                    <tr>
+                      <th>{t("wizard.dns.records.type")}</th>
+                      <th>{t("wizard.dns.records.name")}</th>
+                      <th>{t("wizard.dns.records.value")}</th>
+                      <th style={{ textAlign: "right" }}>
+                        {t("wizard.dns.records.status")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {records
+                      .filter((r) => r.type !== "A" && r.type !== "AAAA")
+                      .map((r, i) => (
+                        <tr
+                          key={r.type + "-" + i}
+                          className={r.status === "error" ? "row-error" : ""}
+                        >
+                          <td>
+                            <span className="rec-type mono">{r.type}</span>
+                          </td>
+                          <td className="mono rec-name" title={r.name}>
+                            {r.name}
+                          </td>
+                          <td className="mono rec-value" title={r.value}>
+                            {r.value}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <StatusBadge
+                              status={r.status}
+                              labels={recordStatusLabels}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
-          <div className="task-line">
-            <span className="task-label">{t("wizard.dns.records.task")}</span>
-            <Badge variant={taskVariant} pulse={taskInProgress}>
-              {t("wizard.taskStatus." + taskKey)}
-            </Badge>
+          <div className="dns-foot">
+            <span className="task-line">
+              <span className="task-label">{t("wizard.dns.records.task")}</span>
+              <Badge variant={taskVariant} pulse={taskInProgress}>
+                {t("wizard.taskStatus." + taskKey)}
+              </Badge>
+            </span>
+            <span className="dns-foot-note">
+              {allVerified ? <IconCheck size={14} /> : <IconInfo size={14} />}
+              {allVerified
+                ? t("wizard.dns.records.allOk")
+                : t("wizard.dns.records.background")}
+            </span>
           </div>
-
-          <p
-            className="help"
-            style={{ display: "flex", alignItems: "center", gap: 6 }}
-          >
-            {allVerified ? <IconCheck size={14} /> : <IconInfo size={14} />}
-            {allVerified
-              ? t("wizard.dns.records.allOk")
-              : t("wizard.dns.records.background")}
-          </p>
 
           <StepNav
             onNext={() => onNext(isManual)}

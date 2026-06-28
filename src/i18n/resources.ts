@@ -93,6 +93,7 @@ export const fr = {
       required: "Choisissez un fournisseur ou le mode manuel.",
       records: {
         title: "Enregistrements DNS",
+        autoTitle: "Enregistrements gérés automatiquement",
         subAuto:
           "Publication automatique via {{provider}}, puis vérification de chaque enregistrement.",
         subManual:
@@ -428,6 +429,7 @@ export const en: DeepRecord<typeof fr> = {
       required: "Choose a provider or manual mode.",
       records: {
         title: "DNS records",
+        autoTitle: "Automatically managed records",
         subAuto:
           "Automatic publication via {{provider}}, then verification of each record.",
         subManual:
