@@ -6,6 +6,7 @@ export const fr = {
       retry: "Réessayer",
       copy: "Copier",
       copied: "Copié",
+      stepOf: "Étape {{n}} sur 6",
     },
     steps: {
       welcome: "Bienvenue",
@@ -346,6 +347,7 @@ export const en: DeepRecord<typeof fr> = {
       retry: "Retry",
       copy: "Copy",
       copied: "Copied",
+      stepOf: "Step {{n}} of 6",
     },
     steps: {
       welcome: "Welcome",

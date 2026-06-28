@@ -547,6 +547,10 @@ export function SetupWizard({
               </div>
             </div>
             <StepperH steps={steps} current={current} />
+            {/* Progression visible via le stepper ; annoncée aux lecteurs d'écran ici. */}
+            <p className="sr-only" aria-live="polite">
+              {t("wizard.common.stepOf", { n: current })}
+            </p>
           </div>
           <div className="card shell-card-main">
             <div key={`${phase}-${serverStep}`} className="step-anim">
