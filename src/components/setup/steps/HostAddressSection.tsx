@@ -91,6 +91,16 @@ export function HostAddressSection({
       {records.length > 0 ? (
         <div className="dns-table-wrap">
           <table className="dns-table">
+            <thead>
+              <tr>
+                <th>{t("wizard.dns.records.type")}</th>
+                <th>{t("wizard.dns.records.name")}</th>
+                <th>{t("wizard.dns.records.value")}</th>
+                <th style={{ textAlign: "right" }}>
+                  {t("wizard.dns.records.status")}
+                </th>
+              </tr>
+            </thead>
             <tbody>
               {records.map((r, i) => {
                 return (
