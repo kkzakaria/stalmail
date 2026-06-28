@@ -404,6 +404,12 @@
 .stalmail-wizard .dns-table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 /* Espace l'avertissement de la table dans la section « Adresse du serveur ». */
 .stalmail-wizard .host-address .dns-table-wrap { margin-top: 14px; }
+/* Section « gérés automatiquement » : titre + table groupés. */
+.stalmail-wizard .dns-auto { display: flex; flex-direction: column; gap: 8px; }
+/* Cadre à scroll interne pour la liste auto (longue) : le pied reste visible.
+   S'adapte à une fenêtre réduite (clamp) ; l'entête reste collée pendant le scroll. */
+.stalmail-wizard .dns-table-wrap.dns-table-scroll { overflow: hidden auto; max-height: clamp(160px, 34vh, 340px); }
+.stalmail-wizard .dns-table-scroll thead th { position: sticky; top: 0; z-index: 1; }
 .stalmail-wizard .dns-table { width: 100%; border-collapse: collapse; background: var(--card); table-layout: fixed; }
 .stalmail-wizard .dns-table th {
   text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
@@ -429,6 +435,9 @@
 .stalmail-wizard .dns-table .row-error td { background: color-mix(in oklab, var(--destructive) 5%, var(--card)); }
 .stalmail-wizard .task-line { display: flex; align-items: center; gap: 10px; }
 .stalmail-wizard .task-label { font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
+/* Pied compact : badge de tâche et note de vérification sur une seule ligne (wrap si étroit). */
+.stalmail-wizard .dns-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap; }
+.stalmail-wizard .dns-foot-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted-foreground); }
 
 .stalmail-wizard .zonefile-head { display: flex; align-items: center; justify-content: space-between; }
 
