@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.32](https://github.com/kkzakaria/stalmail/compare/v0.1.31...v0.1.32) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** faire défiler la carte entière, pas son contenu ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#102](https://github.com/kkzakaria/stalmail/issues/102)) ([9f03518](https://github.com/kkzakaria/stalmail/commit/9f035187d5a095bf6b5597fe039a67a7c52153bb))
+
 ## [0.1.31](https://github.com/kkzakaria/stalmail/compare/v0.1.30...v0.1.31) (2026-06-28)
 
 
