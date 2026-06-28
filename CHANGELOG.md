@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.31](https://github.com/kkzakaria/stalmail/compare/v0.1.30...v0.1.31) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** portaler le panneau du Combobox hors de la carte scrollable ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#100](https://github.com/kkzakaria/stalmail/issues/100)) ([26be7e4](https://github.com/kkzakaria/stalmail/commit/26be7e436c7c948e26886fd17fe82045a3eae741))
+
 ## [0.1.30](https://github.com/kkzakaria/stalmail/compare/v0.1.29...v0.1.30) (2026-06-28)
 
 
