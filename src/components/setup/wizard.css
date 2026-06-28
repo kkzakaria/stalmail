@@ -355,10 +355,14 @@
 
 /* — Carte centrée — */
 .stalmail-wizard .shell-card { display: flex; justify-content: center; align-items: flex-start; padding: 36px 20px 48px; }
+/* Quand l'entête est un bandeau sticky, on retire le padding-haut du shell (l'espace passe
+   DANS le bandeau) : il est alors épinglé dès le scroll 0, sans phase de défilement. */
+.stalmail-wizard .shell-card:has(.shell-head) { padding-top: 0; }
 .stalmail-wizard .shell-card-col { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 640px; }
 /* Bandeau d'entête fixe : logo + langue/thème + stepper restent en haut pendant que la
-   page défile. Fond = couleur de page (masque le contenu qui glisse dessous). */
-.stalmail-wizard .shell-head { position: sticky; top: 0; z-index: 30; display: flex; flex-direction: column; gap: 22px; background: var(--background); padding-bottom: 4px; }
+   page défile. padding-top = marge sous le bord de la fenêtre (n'est jamais bord à bord) ;
+   fond = couleur de page (masque le contenu qui glisse dessous). */
+.stalmail-wizard .shell-head { position: sticky; top: 0; z-index: 30; display: flex; flex-direction: column; gap: 22px; background: var(--background); padding: 36px 0 12px; }
 .stalmail-wizard .shell-card-top { display: flex; align-items: center; justify-content: space-between; }
 .stalmail-wizard .shell-card-main { padding: 30px 32px 26px; }
 
