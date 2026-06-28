@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.35](https://github.com/kkzakaria/stalmail/compare/v0.1.34...v0.1.35) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** élargir le fond de l'entête pour masquer l'ombre latérale de la carte ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#108](https://github.com/kkzakaria/stalmail/issues/108)) ([0357165](https://github.com/kkzakaria/stalmail/commit/03571653ecb3990734796cfd6b327fa68536b6a9))
+
 ## [0.1.34](https://github.com/kkzakaria/stalmail/compare/v0.1.33...v0.1.34) (2026-06-28)
 
 
