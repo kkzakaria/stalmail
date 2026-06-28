@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.34](https://github.com/kkzakaria/stalmail/compare/v0.1.33...v0.1.34) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** épingler l'entête dès le scroll 0, avec marge haute ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#106](https://github.com/kkzakaria/stalmail/issues/106)) ([eab586b](https://github.com/kkzakaria/stalmail/commit/eab586bc93d33cce9da2341cc708cb77d8fa9fc3))
+
 ## [0.1.33](https://github.com/kkzakaria/stalmail/compare/v0.1.32...v0.1.33) (2026-06-28)
 
 
