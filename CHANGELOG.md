@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.30](https://github.com/kkzakaria/stalmail/compare/v0.1.29...v0.1.30) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** entête et stepper fixes, contenu scrollable en interne ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#98](https://github.com/kkzakaria/stalmail/issues/98)) ([406aaf0](https://github.com/kkzakaria/stalmail/commit/406aaf035c6d75004898ac5ed7582f628675797b))
+
 ## [0.1.29](https://github.com/kkzakaria/stalmail/compare/v0.1.28...v0.1.29) (2026-06-28)
 
 
