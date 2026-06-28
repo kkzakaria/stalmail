@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.28](https://github.com/kkzakaria/stalmail/compare/v0.1.27...v0.1.28) (2026-06-28)
+
+
+### Bug Fixes
+
+* **setup:** entête + largeur colonne + espacement table adresse du serveur ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#94](https://github.com/kkzakaria/stalmail/issues/94)) ([797f2e3](https://github.com/kkzakaria/stalmail/commit/797f2e3c03573d00e288161bb76ad9e4cadc00cb))
+
 ## [0.1.27](https://github.com/kkzakaria/stalmail/compare/v0.1.26...v0.1.27) (2026-06-27)
 
 
