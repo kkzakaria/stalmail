@@ -156,6 +156,9 @@
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.13), 0 2px 6px rgba(0, 0, 0, 0.06);
   overflow: hidden;
 }
+/* Panneau portalé hors de la carte scrollable : fixed sous le déclencheur (top/left/width
+   inline). Évite le rognage et le scroll interne du cadre introduits par overflow auto. */
+.stalmail-wizard .combobox-pop-fixed { position: fixed; right: auto; z-index: 60; }
 .stalmail-wizard .combobox-search {
   display: flex; align-items: center; gap: 8px; padding: 0 11px;
   border-bottom: 1px solid var(--border); color: var(--muted-foreground);
