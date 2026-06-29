@@ -1,27 +1,71 @@
-// Construit les A/AAAA attendus (hostname + apex) à partir de l'IP découverte. Pur, testé.
-// La valeur de ces enregistrements ne vient PAS de Stalwart (qui ne publie jamais A/AAAA)
-// mais de l'écho IP — d'où ce module dédié, parallèle à parseZoneFile.
+// Construit les A/AAAA attendus à partir de la ZONE publiée par Stalwart (cibles MX/SRV
+// = serveur mail) + apex + hostname public, étiquetés par rôle. Pur, testé. La valeur
+// (l'IP) vient de l'écho, pas de Stalwart (qui ne publie jamais A/AAAA) — d'où ce module.
 import type { ZoneRecord } from "./dns-zone"
+
+export type HostRole = "mail" | "apex" | "webmail"
+export interface HostRecord {
+  name: string
+  type: string
+  value: string
+  role: HostRole
+}
 
 const normName = (h: string) => h.trim().toLowerCase().replace(/\.$/, "")
 
+// Hôtes que la zone désigne comme serveur mail (cibles MX/SRV). En pratique
+// l'hôte unique du serveur mail. Dédupliqué, normalisé.
+// Les CNAMEs sont des alias pointant vers ce même hôte — ils ne sont pas une source
+// authoritative de l'hôte mail et sont donc ignorés.
+export function collectHostTargets(zoneRecords: ZoneRecord[]): string[] {
+  const seen = new Set<string>()
+  for (const r of zoneRecords) {
+    let target = ""
+    if (r.type === "MX" || r.type === "SRV") {
+      const parts = r.value.trim().split(/\s+/)
+      target = parts[parts.length - 1] ?? ""
+    } else {
+      continue
+    }
+    const n = normName(target)
+    // Valid hostname must contain at least one dot (FQDN)
+    if (n && n.includes(".")) seen.add(n)
+  }
+  return Array.from(seen)
+}
+
 export function buildHostRecords(input: {
+  zoneRecords: ZoneRecord[]
   hostname: string
   domain: string
   ipv4: string | null
   ipv6: string | null
-}): ZoneRecord[] {
-  const { ipv4, ipv6 } = input
-  const host = normName(input.hostname)
-  const base = normName(input.domain)
-  const names: string[] = []
-  if (host) names.push(host)
-  if (base && base !== host) names.push(base)
+}): HostRecord[] {
+  const { ipv4, ipv6, zoneRecords } = input
+  const seen = new Set<string>()
+  const named: { name: string; role: HostRole }[] = []
+  const add = (raw: string, role: HostRole) => {
+    const n = normName(raw)
+    if (!n || seen.has(n)) return
+    seen.add(n)
+    named.push({ name: n, role })
+  }
 
-  const records: ZoneRecord[] = []
-  for (const n of names) {
-    if (ipv4) records.push({ name: n + ".", type: "A", value: ipv4 })
-    if (ipv6) records.push({ name: n + ".", type: "AAAA", value: ipv6 })
+  // La zone Stalwart est générée : MX/SRV pointent l'hôte du serveur mail ; les CNAMEs
+  // sont des alias et ne constituent pas une source authoritative.
+  // 1) Serveur mail : les hôtes que la zone désigne via MX/SRV.
+  for (const t of collectHostTargets(zoneRecords)) add(t, "mail")
+  // Repli (zone non encore générée) : pas de cible MX → apex + hostname public uniquement.
+  // 2) Apex (accès web), s'il n'est pas déjà un hôte mail.
+  add(input.domain, "apex")
+  // 3) Webmail (hôte de PUBLIC_URL), s'il est distinct.
+  add(input.hostname, "webmail")
+
+  const records: HostRecord[] = []
+  for (const { name, role } of named) {
+    if (ipv4) records.push({ name: name + ".", type: "A", value: ipv4, role })
+    if (ipv6)
+      records.push({ name: name + ".", type: "AAAA", value: ipv6, role })
   }
   return records
 }

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "@/i18n/i18n"
-import type { DnsGridRecord } from "@/server/setup-actions"
+import type { DnsGridRecord, HostAddressRecord } from "@/server/setup-actions"
 import { DnsStep } from "./DnsStep"
 
 const wrap = (ui: React.ReactNode) =>
@@ -37,9 +37,10 @@ const baseProps = () => ({
           name: "mail.exemple.fr.",
           type: "A",
           value: "203.0.113.4",
+          role: "mail",
           status: "pending",
         },
-      ] as DnsGridRecord[],
+      ] as HostAddressRecord[],
     })
   ),
   onNext: vi.fn(),

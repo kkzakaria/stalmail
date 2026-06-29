@@ -7,6 +7,7 @@ import { DNS_AUTO_PROVIDERS } from "@/lib/dns-providers"
 import { isIpv4, isIpv6 } from "@/lib/ip"
 import { domainSchema } from "@/components/setup/schemas"
 import type { SetupStep } from "./setup-state"
+import type { HostRole } from "./dns-host-records"
 
 // The setup-state / stalwart-bootstrap / stalwart-restart modules reach `node:fs`
 // (and the JMAP transport) at module scope. This file is pulled into the client
@@ -246,14 +247,23 @@ export async function discoverServerIpHandler(): Promise<{
   }
 }
 
+export interface HostAddressRecord {
+  name: string
+  type: string
+  value: string
+  role: HostRole
+  status: "verified" | "pending" | "error"
+}
+
 export async function hostAddressStatusHandler({
   data,
 }: {
   data: { ipv4?: string; ipv6?: string }
-}): Promise<{ records: DnsGridRecord[] }> {
+}): Promise<{ records: HostAddressRecord[] }> {
   const { assertSameOriginStrict } = await import("./session-cookie")
   assertSameOriginStrict()
   const { getPrimaryDomain } = await import("./stalwart-domain")
+  const { parseZoneFile } = await import("./dns-zone")
   const { buildHostRecords } = await import("./dns-host-records")
   const { resolveRecordStatus } = await import("./dns-resolve")
   const domain = await getPrimaryDomain()
@@ -264,7 +274,12 @@ export async function hostAddressStatusHandler({
     process.env.STALMAIL_PUBLIC_URL,
     domain.name
   )
+  // Absence de dnsZoneFile (possible uniquement en tout début de setup) → repli apex + webmail.
+  const zoneRecords = domain.dnsZoneFile
+    ? parseZoneFile(domain.dnsZoneFile)
+    : []
   const expected = buildHostRecords({
+    zoneRecords,
     hostname,
     domain: domain.name,
     ipv4,
@@ -273,13 +288,19 @@ export async function hostAddressStatusHandler({
   const records = await Promise.all(
     expected.map(async (r) => {
       const raw = await resolveRecordStatus(r)
-      const status: DnsGridRecord["status"] =
+      const status: HostAddressRecord["status"] =
         raw === "verified"
           ? "verified"
           : raw === "mismatch"
             ? "error"
             : "pending"
-      return { name: r.name, type: r.type, value: r.value, status }
+      return {
+        name: r.name,
+        type: r.type,
+        value: r.value,
+        role: r.role,
+        status,
+      }
     })
   )
   return { records }

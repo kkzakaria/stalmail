@@ -3,24 +3,38 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "@/i18n/i18n"
-import type { DnsGridRecord } from "@/server/setup-actions"
+import type { HostAddressRecord } from "@/server/setup-actions"
 import { HostAddressSection } from "./HostAddressSection"
 
 const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n("fr")}>{ui}</I18nextProvider>)
 
-const recs: DnsGridRecord[] = [
+const recs: HostAddressRecord[] = [
   {
     name: "mail.exemple.fr.",
     type: "A",
     value: "203.0.113.4",
+    role: "mail",
     status: "pending",
   },
-  { name: "exemple.fr.", type: "A", value: "203.0.113.4", status: "verified" },
+  {
+    name: "exemple.fr.",
+    type: "A",
+    value: "203.0.113.4",
+    role: "apex",
+    status: "verified",
+  },
+  {
+    name: "webmail.exemple.fr.",
+    type: "A",
+    value: "203.0.113.4",
+    role: "webmail",
+    status: "pending",
+  },
 ]
 
 describe("HostAddressSection", () => {
-  it("affiche le titre et les enregistrements A en mode ready", () => {
+  it("affiche le titre et les enregistrements en mode ready", () => {
     wrap(
       <HostAddressSection
         records={recs}
@@ -31,6 +45,20 @@ describe("HostAddressSection", () => {
     )
     expect(screen.getByText("Adresse du serveur")).toBeInTheDocument()
     expect(screen.getAllByText("203.0.113.4").length).toBeGreaterThan(0)
+  })
+
+  it("regroupe par rôle avec les libellés (serveur mail requis, apex optionnel)", () => {
+    wrap(
+      <HostAddressSection
+        records={recs}
+        status="ready"
+        domain="exemple.fr"
+        onManualIp={vi.fn()}
+      />
+    )
+    expect(screen.getByText("Serveur mail (requis)")).toBeInTheDocument()
+    expect(screen.getByText("Apex — accès web (optionnel)")).toBeInTheDocument()
+    expect(screen.getByText("Webmail")).toBeInTheDocument()
   })
 
   it("affiche un spinner pendant la détection (loading)", () => {
@@ -45,7 +73,7 @@ describe("HostAddressSection", () => {
     expect(screen.getByText(/Détection de l'adresse IP/)).toBeInTheDocument()
   })
 
-  it("en échec : saisir une IP valide appelle onManualIp", () => {
+  it("en échec : IP valide → onManualIp ; IP invalide → erreur", () => {
     const onManualIp = vi.fn()
     wrap(
       <HostAddressSection
@@ -60,24 +88,13 @@ describe("HostAddressSection", () => {
     })
     fireEvent.click(screen.getByRole("button", { name: "Valider" }))
     expect(onManualIp).toHaveBeenCalledWith("203.0.113.4")
-  })
 
-  it("en échec : une IP invalide affiche une erreur et n'appelle pas onManualIp", () => {
-    const onManualIp = vi.fn()
-    wrap(
-      <HostAddressSection
-        records={[]}
-        status="failed"
-        domain="exemple.fr"
-        onManualIp={onManualIp}
-      />
-    )
     fireEvent.change(screen.getByLabelText("Adresse IP du serveur"), {
       target: { value: "nope" },
     })
     fireEvent.click(screen.getByRole("button", { name: "Valider" }))
-    expect(onManualIp).not.toHaveBeenCalled()
     expect(screen.getByText("Adresse IP invalide.")).toBeInTheDocument()
+    expect(onManualIp).toHaveBeenCalledTimes(1)
   })
 
   it("affiche apexNote quand un enregistrement est hors zone", () => {
@@ -88,6 +105,7 @@ describe("HostAddressSection", () => {
             name: "autre-domaine.fr.",
             type: "A",
             value: "203.0.113.4",
+            role: "apex",
             status: "pending",
           },
         ]}
