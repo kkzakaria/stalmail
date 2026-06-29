@@ -10,6 +10,8 @@ import { isExternalHost } from "../host-utils"
 import { Alert, Field, Spinner, TextInput } from "../ui/primitives"
 import { StatusBadge, CopyIconBtn } from "../ui/monitor-primitives"
 
+const ROLES = ["mail", "apex", "webmail"] as const
+
 interface HostAddressSectionProps {
   records: HostAddressRecord[]
   status: "loading" | "ready" | "failed"
@@ -45,7 +47,6 @@ export function HostAddressSection({
     }
   }
 
-  const ROLES = ["mail", "apex", "webmail"] as const
   const roleLabel = {
     mail: t("wizard.dns.hostAddress.role.mail"),
     apex: t("wizard.dns.hostAddress.role.apex"),
