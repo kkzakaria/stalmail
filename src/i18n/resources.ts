@@ -141,6 +141,11 @@ export const fr = {
         manualSubmit: "Valider",
         apexNote:
           "{{name}} est hors de la zone {{domain}} — créez cet enregistrement chez le gestionnaire de cette zone.",
+        role: {
+          mail: "Serveur mail (requis)",
+          apex: "Apex — accès web (optionnel)",
+          webmail: "Webmail",
+        },
       },
     },
     account: {
@@ -477,6 +482,11 @@ export const en: DeepRecord<typeof fr> = {
         manualSubmit: "Confirm",
         apexNote:
           "{{name}} is outside the {{domain}} zone — create this record at that zone's manager.",
+        role: {
+          mail: "Mail server (required)",
+          apex: "Apex — web access (optional)",
+          webmail: "Webmail",
+        },
       },
     },
     account: {
