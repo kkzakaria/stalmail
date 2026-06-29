@@ -12,13 +12,24 @@ describe("collectHostTargets", () => {
     ).toEqual(["mail.exemple.fr"])
   })
 
-  it("déduplique MX + SRV + CNAME pointant le même hôte", () => {
+  it("déduplique MX + SRV (CNAME ignoré)", () => {
     expect(
       collectHostTargets(
         zone([
           ["exemple.fr.", "MX", "10 mail.exemple.fr."],
           ["_imaps._tcp.exemple.fr.", "SRV", "0 1 993 mail.exemple.fr."],
           ["autoconfig.exemple.fr.", "CNAME", "mail.exemple.fr."],
+        ])
+      )
+    ).toEqual(["mail.exemple.fr"])
+  })
+
+  it("ignore un CNAME non lié (n'introduit pas d'hôte mail)", () => {
+    expect(
+      collectHostTargets(
+        zone([
+          ["exemple.fr.", "MX", "10 mail.exemple.fr."],
+          ["www.exemple.fr.", "CNAME", "site.hosting.tld."],
         ])
       )
     ).toEqual(["mail.exemple.fr"])
@@ -39,7 +50,7 @@ describe("collectHostTargets", () => {
     expect(collectHostTargets(zone([["exemple.fr.", "MX", "10"]]))).toEqual([])
   })
 
-  it("collapse une vraie zone (MX + CNAME autoconfig/autodiscover + SRV) vers l'hôte unique", () => {
+  it("collapse une vraie zone (MX + SRV + CNAMEs ignorés) vers l'hôte unique", () => {
     expect(
       collectHostTargets(
         zone([

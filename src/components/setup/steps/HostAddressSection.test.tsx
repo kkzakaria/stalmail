@@ -24,6 +24,13 @@ const recs: HostAddressRecord[] = [
     role: "apex",
     status: "verified",
   },
+  {
+    name: "webmail.exemple.fr.",
+    type: "A",
+    value: "203.0.113.4",
+    role: "webmail",
+    status: "pending",
+  },
 ]
 
 describe("HostAddressSection", () => {
@@ -51,6 +58,7 @@ describe("HostAddressSection", () => {
     )
     expect(screen.getByText("Serveur mail (requis)")).toBeInTheDocument()
     expect(screen.getByText("Apex — accès web (optionnel)")).toBeInTheDocument()
+    expect(screen.getByText("Webmail")).toBeInTheDocument()
   })
 
   it("affiche un spinner pendant la détection (loading)", () => {

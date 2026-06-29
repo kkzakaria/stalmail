@@ -1,5 +1,5 @@
-// Construit les A/AAAA attendus à partir de la ZONE publiée par Stalwart (cibles MX/SRV/
-// CNAME = serveur mail) + apex + hostname public, étiquetés par rôle. Pur, testé. La valeur
+// Construit les A/AAAA attendus à partir de la ZONE publiée par Stalwart (cibles MX/SRV
+// = serveur mail) + apex + hostname public, étiquetés par rôle. Pur, testé. La valeur
 // (l'IP) vient de l'écho, pas de Stalwart (qui ne publie jamais A/AAAA) — d'où ce module.
 import type { ZoneRecord } from "./dns-zone"
 
@@ -13,8 +13,10 @@ export interface HostRecord {
 
 const normName = (h: string) => h.trim().toLowerCase().replace(/\.$/, "")
 
-// Hôtes que la zone fait pointer vers le serveur (cibles MX/SRV/CNAME). En pratique
+// Hôtes que la zone désigne comme serveur mail (cibles MX/SRV). En pratique
 // l'hôte unique du serveur mail. Dédupliqué, normalisé.
+// Les CNAMEs sont des alias pointant vers ce même hôte — ils ne sont pas une source
+// authoritative de l'hôte mail et sont donc ignorés.
 export function collectHostTargets(zoneRecords: ZoneRecord[]): string[] {
   const seen = new Set<string>()
   for (const r of zoneRecords) {
@@ -22,8 +24,6 @@ export function collectHostTargets(zoneRecords: ZoneRecord[]): string[] {
     if (r.type === "MX" || r.type === "SRV") {
       const parts = r.value.trim().split(/\s+/)
       target = parts[parts.length - 1] ?? ""
-    } else if (r.type === "CNAME") {
-      target = r.value
     } else {
       continue
     }
@@ -51,8 +51,9 @@ export function buildHostRecords(input: {
     named.push({ name: n, role })
   }
 
-  // La zone Stalwart est générée : MX/SRV/CNAME pointent tous l'hôte du serveur mail.
-  // 1) Serveur mail : les hôtes que la zone pointe déjà (cible MX, confirmée par SRV/CNAME).
+  // La zone Stalwart est générée : MX/SRV pointent l'hôte du serveur mail ; les CNAMEs
+  // sont des alias et ne constituent pas une source authoritative.
+  // 1) Serveur mail : les hôtes que la zone désigne via MX/SRV.
   for (const t of collectHostTargets(zoneRecords)) add(t, "mail")
   // Repli (zone non encore générée) : pas de cible MX → apex + hostname public uniquement.
   // 2) Apex (accès web), s'il n'est pas déjà un hôte mail.
