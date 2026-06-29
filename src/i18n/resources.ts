@@ -141,6 +141,8 @@ export const fr = {
         manualSubmit: "Valider",
         apexNote:
           "{{name}} est hors de la zone {{domain}} — créez cet enregistrement chez le gestionnaire de cette zone.",
+        webmailCnameNote:
+          "Le webmail est un alias (CNAME) vers l'hôte mail : une seule adresse IP à maintenir.",
         role: {
           mail: "Serveur mail (requis)",
           apex: "Apex — accès web (optionnel)",
@@ -482,6 +484,8 @@ export const en: DeepRecord<typeof fr> = {
         manualSubmit: "Confirm",
         apexNote:
           "{{name}} is outside the {{domain}} zone — create this record at that zone's manager.",
+        webmailCnameNote:
+          "The webmail is an alias (CNAME) to the mail host: a single IP address to maintain.",
         role: {
           mail: "Mail server (required)",
           apex: "Apex — web access (optional)",
