@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.36](https://github.com/kkzakaria/stalmail/compare/v0.1.35...v0.1.36) (2026-06-29)
+
+
+### Features
+
+* **setup:** A/AAAA dérivés de la zone publiée, étiquetés par rôle ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#110](https://github.com/kkzakaria/stalmail/issues/110)) ([1cab380](https://github.com/kkzakaria/stalmail/commit/1cab38004a85201743b641f096f1fc3683f3d4e8))
+
 ## [0.1.35](https://github.com/kkzakaria/stalmail/compare/v0.1.34...v0.1.35) (2026-06-28)
 
 
