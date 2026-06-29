@@ -51,8 +51,10 @@ export function buildHostRecords(input: {
     named.push({ name: n, role })
   }
 
+  // La zone Stalwart est générée : MX/SRV/CNAME pointent tous l'hôte du serveur mail.
   // 1) Serveur mail : les hôtes que la zone pointe déjà (cible MX, confirmée par SRV/CNAME).
   for (const t of collectHostTargets(zoneRecords)) add(t, "mail")
+  // Repli (zone non encore générée) : pas de cible MX → apex + hostname public uniquement.
   // 2) Apex (accès web), s'il n'est pas déjà un hôte mail.
   add(input.domain, "apex")
   // 3) Webmail (hôte de PUBLIC_URL), s'il est distinct.

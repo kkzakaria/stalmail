@@ -38,6 +38,21 @@ describe("collectHostTargets", () => {
   it("ignore une valeur MX sans cible valide (priorité seule)", () => {
     expect(collectHostTargets(zone([["exemple.fr.", "MX", "10"]]))).toEqual([])
   })
+
+  it("collapse une vraie zone (MX + CNAME autoconfig/autodiscover + SRV) vers l'hôte unique", () => {
+    expect(
+      collectHostTargets(
+        zone([
+          ["exemple.fr.", "MX", "10 mail.exemple.fr."],
+          ["autoconfig.exemple.fr.", "CNAME", "mail.exemple.fr."],
+          ["autodiscover.exemple.fr.", "CNAME", "mail.exemple.fr."],
+          ["_imaps._tcp.exemple.fr.", "SRV", "0 1 993 mail.exemple.fr."],
+          ["_submissions._tcp.exemple.fr.", "SRV", "0 1 465 mail.exemple.fr."],
+          ["exemple.fr.", "TXT", "v=spf1 mx -all"],
+        ])
+      )
+    ).toEqual(["mail.exemple.fr"])
+  })
 })
 
 describe("buildHostRecords", () => {

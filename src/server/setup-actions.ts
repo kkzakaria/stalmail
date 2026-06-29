@@ -274,6 +274,7 @@ export async function hostAddressStatusHandler({
     process.env.STALMAIL_PUBLIC_URL,
     domain.name
   )
+  // Absence de dnsZoneFile (possible uniquement en tout début de setup) → repli apex + webmail.
   const zoneRecords = domain.dnsZoneFile
     ? parseZoneFile(domain.dnsZoneFile)
     : []
