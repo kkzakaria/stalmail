@@ -265,6 +265,7 @@ export async function hostAddressStatusHandler({
     domain.name
   )
   const expected = buildHostRecords({
+    zoneRecords: [],
     hostname,
     domain: domain.name,
     ipv4,

@@ -16,7 +16,7 @@ const normName = (h: string) => h.trim().toLowerCase().replace(/\.$/, "")
 // Hôtes que la zone fait pointer vers le serveur (cibles MX/SRV/CNAME). En pratique
 // l'hôte unique du serveur mail. Dédupliqué, normalisé.
 export function collectHostTargets(zoneRecords: ZoneRecord[]): string[] {
-  const out: string[] = []
+  const seen = new Set<string>()
   for (const r of zoneRecords) {
     let target = ""
     if (r.type === "MX" || r.type === "SRV") {
@@ -29,20 +29,19 @@ export function collectHostTargets(zoneRecords: ZoneRecord[]): string[] {
     }
     const n = normName(target)
     // Valid hostname must contain at least one dot (FQDN)
-    if (n && n.includes(".") && !out.includes(n)) out.push(n)
+    if (n && n.includes(".")) seen.add(n)
   }
-  return out
+  return Array.from(seen)
 }
 
 export function buildHostRecords(input: {
-  zoneRecords?: ZoneRecord[]
+  zoneRecords: ZoneRecord[]
   hostname: string
   domain: string
   ipv4: string | null
   ipv6: string | null
 }): HostRecord[] {
-  const { ipv4, ipv6 } = input
-  const zoneRecords = input.zoneRecords ?? []
+  const { ipv4, ipv6, zoneRecords } = input
   const seen = new Set<string>()
   const named: { name: string; role: HostRole }[] = []
   const add = (raw: string, role: HostRole) => {

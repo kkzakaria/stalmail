@@ -35,7 +35,7 @@ describe("collectHostTargets", () => {
     ).toEqual([])
   })
 
-  it("ignore une valeur MX malformée (cible vide)", () => {
+  it("ignore une valeur MX sans cible valide (priorité seule)", () => {
     expect(collectHostTargets(zone([["exemple.fr.", "MX", "10"]]))).toEqual([])
   })
 })
@@ -110,6 +110,62 @@ describe("buildHostRecords", () => {
         value: "203.0.113.4",
         role: "webmail",
       },
+    ])
+  })
+
+  it("webmail distinct avec ipv6 → reçoit A et AAAA avec rôle webmail", () => {
+    expect(
+      buildHostRecords({
+        ...base,
+        hostname: "webmail.exemple.fr",
+        ipv6: "2001:db8::1",
+        zoneRecords: zone([["exemple.fr.", "MX", "10 mail.exemple.fr."]]),
+      })
+    ).toEqual([
+      {
+        name: "mail.exemple.fr.",
+        type: "A",
+        value: "203.0.113.4",
+        role: "mail",
+      },
+      {
+        name: "mail.exemple.fr.",
+        type: "AAAA",
+        value: "2001:db8::1",
+        role: "mail",
+      },
+      { name: "exemple.fr.", type: "A", value: "203.0.113.4", role: "apex" },
+      { name: "exemple.fr.", type: "AAAA", value: "2001:db8::1", role: "apex" },
+      {
+        name: "webmail.exemple.fr.",
+        type: "A",
+        value: "203.0.113.4",
+        role: "webmail",
+      },
+      {
+        name: "webmail.exemple.fr.",
+        type: "AAAA",
+        value: "2001:db8::1",
+        role: "webmail",
+      },
+    ])
+  })
+
+  it("hostname vide → ignoré (seuls apex et hôtes mail restent)", () => {
+    expect(
+      buildHostRecords({
+        ...base,
+        hostname: "",
+        zoneRecords: zone([["exemple.fr.", "MX", "10 mail.exemple.fr."]]),
+      })
+    ).toEqual([
+      {
+        name: "mail.exemple.fr.",
+        type: "A",
+        value: "203.0.113.4",
+        role: "mail",
+      },
+      { name: "exemple.fr.", type: "A", value: "203.0.113.4", role: "apex" },
     ])
   })
 
