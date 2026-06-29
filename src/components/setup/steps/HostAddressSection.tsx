@@ -2,16 +2,16 @@
 // Section "Adresse du serveur" du wizard DNS : guide la création des A/AAAA (hostname +
 // apex → IP du serveur), que Stalwart ne publie jamais. Présentationnel, props injectées.
 // Affichée dans les deux modes (manuel/auto). En échec de l'écho IP : champ de saisie.
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { isIpv4, isIpv6 } from "@/lib/ip"
-import type { DnsGridRecord } from "@/server/setup-actions"
+import type { HostAddressRecord } from "@/server/setup-actions"
 import { isExternalHost } from "../host-utils"
 import { Alert, Field, Spinner, TextInput } from "../ui/primitives"
 import { StatusBadge, CopyIconBtn } from "../ui/monitor-primitives"
 
 interface HostAddressSectionProps {
-  records: DnsGridRecord[]
+  records: HostAddressRecord[]
   status: "loading" | "ready" | "failed"
   domain: string
   onManualIp: (ip: string) => void
@@ -43,6 +43,13 @@ export function HostAddressSection({
     } else {
       setInvalid(true)
     }
+  }
+
+  const ROLES = ["mail", "apex", "webmail"] as const
+  const roleLabel = {
+    mail: t("wizard.dns.hostAddress.role.mail"),
+    apex: t("wizard.dns.hostAddress.role.apex"),
+    webmail: t("wizard.dns.hostAddress.role.webmail"),
   }
 
   return (
@@ -102,43 +109,61 @@ export function HostAddressSection({
               </tr>
             </thead>
             <tbody>
-              {records.map((r, i) => {
+              {ROLES.map((role) => {
+                const group = records.filter((r) => r.role === role)
+                if (group.length === 0) return null
                 return (
-                  <tr
-                    key={r.type + "-" + i}
-                    className={r.status === "error" ? "row-error" : ""}
-                  >
-                    <td>
-                      <span className="rec-type mono">{r.type}</span>
-                    </td>
-                    <td className="rec-name-cell">
-                      <span className="cell-copy">
-                        <CopyIconBtn
-                          text={r.name}
-                          copyLabel={copyLabel}
-                          copiedLabel={copiedLabel}
-                        />
-                        <span className="mono cell-text" title={r.name}>
-                          {r.name}
+                  <Fragment key={role}>
+                    <tr className="dns-sect">
+                      <td colSpan={4}>
+                        <span className="dns-sect-line">
+                          <span className="dns-sect-title">
+                            {roleLabel[role]}
+                          </span>
                         </span>
-                      </span>
-                    </td>
-                    <td className="rec-value-cell">
-                      <span className="cell-copy">
-                        <CopyIconBtn
-                          text={r.value}
-                          copyLabel={copyLabel}
-                          copiedLabel={copiedLabel}
-                        />
-                        <span className="mono cell-text" title={r.value}>
-                          {r.value}
-                        </span>
-                      </span>
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <StatusBadge status={r.status} labels={statusLabels} />
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                    {group.map((r, i) => (
+                      <tr
+                        key={role + "-" + i}
+                        className={r.status === "error" ? "row-error" : ""}
+                      >
+                        <td>
+                          <span className="rec-type mono">{r.type}</span>
+                        </td>
+                        <td className="rec-name-cell">
+                          <span className="cell-copy">
+                            <CopyIconBtn
+                              text={r.name}
+                              copyLabel={copyLabel}
+                              copiedLabel={copiedLabel}
+                            />
+                            <span className="mono cell-text" title={r.name}>
+                              {r.name}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="rec-value-cell">
+                          <span className="cell-copy">
+                            <CopyIconBtn
+                              text={r.value}
+                              copyLabel={copyLabel}
+                              copiedLabel={copiedLabel}
+                            />
+                            <span className="mono cell-text" title={r.value}>
+                              {r.value}
+                            </span>
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <StatusBadge
+                            status={r.status}
+                            labels={statusLabels}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 )
               })}
             </tbody>

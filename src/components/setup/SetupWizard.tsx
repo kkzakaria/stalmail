@@ -15,7 +15,11 @@ import { SetupErrorBox } from "./ui/SetupErrorBox"
 import { codeFromError, messageKeyForCode } from "./error-code"
 import type { DomainValues } from "./schemas"
 import type { Theme } from "@/server/setup-theme"
-import type { CreateAccountResult, DnsGridRecord } from "@/server/setup-actions"
+import type {
+  CreateAccountResult,
+  DnsGridRecord,
+  HostAddressRecord,
+} from "@/server/setup-actions"
 import type { AcmeStatus } from "@/server/stalwart-acme"
 import "./wizard.css"
 
@@ -59,7 +63,7 @@ interface Props {
   hostAddressStatus: (ip: {
     ipv4?: string
     ipv6?: string
-  }) => Promise<{ records: DnsGridRecord[] }>
+  }) => Promise<{ records: HostAddressRecord[] }>
   configureAcme: (input: {
     hostname: string
     contactEmail: string

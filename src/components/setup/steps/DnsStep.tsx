@@ -8,7 +8,7 @@ import { useForm } from "@tanstack/react-form"
 import { useTranslation } from "react-i18next"
 import { DNS_PROVIDERS } from "@/lib/dns-providers"
 import type { DnsProvider } from "@/lib/dns-providers"
-import type { DnsGridRecord } from "@/server/setup-actions"
+import type { DnsGridRecord, HostAddressRecord } from "@/server/setup-actions"
 import { isIpv4, isIpv6 } from "@/lib/ip"
 import { HostAddressSection } from "./HostAddressSection"
 import type { DnsProviderValues } from "../schemas"
@@ -66,7 +66,7 @@ interface Props {
   hostAddressStatus: (ip: {
     ipv4?: string
     ipv6?: string
-  }) => Promise<{ records: DnsGridRecord[] }>
+  }) => Promise<{ records: HostAddressRecord[] }>
   onNext: (manual: boolean) => void
 }
 
@@ -93,7 +93,7 @@ export function DnsStep({
   const [ipDiscovery, setIpDiscovery] = useState<
     "idle" | "loading" | "ready" | "failed"
   >("idle")
-  const [hostRecords, setHostRecords] = useState<DnsGridRecord[]>([])
+  const [hostRecords, setHostRecords] = useState<HostAddressRecord[]>([])
 
   const isManual = provider === "Manual"
 
