@@ -30,6 +30,8 @@ export const fr = {
         "SETUP-DNS-REJECTED": "Le fournisseur DNS a refusé ces informations.",
         "SETUP-DNS-MANAGEMENT-REJECTED":
           "La gestion DNS automatique a été refusée.",
+        "SETUP-DNS-PUBLISH-FAILED":
+          "La publication DNS a échoué — vérifiez votre token API et réessayez.",
         "SETUP-ACCOUNT-WEAK":
           "Le mot de passe choisi n'est pas suffisamment robuste.",
         "SETUP-ACCOUNT-REJECTED":
@@ -100,6 +102,7 @@ export const fr = {
           "Créez ces enregistrements chez votre fournisseur DNS. La vérification se met à jour automatiquement.",
         connecting: "Connexion à {{provider}}…",
         publishing: "Publication des enregistrements…",
+        verifying: "Publication des enregistrements en cours… (jusqu'à 2 min)",
         task: "Tâche DnsManagement",
         zoneFull: "Fichier de zone complet",
         downloadTxt: "Télécharger (.txt)",
@@ -375,6 +378,8 @@ export const en: DeepRecord<typeof fr> = {
         "SETUP-DNS-REJECTED": "The DNS provider rejected these details.",
         "SETUP-DNS-MANAGEMENT-REJECTED":
           "Automatic DNS management was rejected.",
+        "SETUP-DNS-PUBLISH-FAILED":
+          "DNS publication failed — check your API token and try again.",
         "SETUP-ACCOUNT-WEAK": "The chosen password is not strong enough.",
         "SETUP-ACCOUNT-REJECTED": "Administrator account creation failed.",
         "SETUP-SSL-REJECTED": "Obtaining the SSL certificate failed.",
@@ -443,6 +448,7 @@ export const en: DeepRecord<typeof fr> = {
           "Create these records at your DNS provider. Verification updates automatically.",
         connecting: "Connecting to {{provider}}…",
         publishing: "Publishing records…",
+        verifying: "Publishing records… (up to 2 min)",
         task: "DnsManagement task",
         zoneFull: "Full zone file",
         downloadTxt: "Download (.txt)",
