@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.37](https://github.com/kkzakaria/stalmail/compare/v0.1.36...v0.1.37) (2026-06-30)
+
+
+### Features
+
+* **setup:** webmail proposé en CNAME vers l'hôte mail ([#61](https://github.com/kkzakaria/stalmail/issues/61)) ([#112](https://github.com/kkzakaria/stalmail/issues/112)) ([c3e3f4d](https://github.com/kkzakaria/stalmail/commit/c3e3f4debdb07d69d247e41188bf19a566d8e134))
+
 ## [0.1.36](https://github.com/kkzakaria/stalmail/compare/v0.1.35...v0.1.36) (2026-06-29)
 
 
