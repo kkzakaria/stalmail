@@ -250,6 +250,9 @@ describe("DnsStep", () => {
     expect(
       await screen.findByText(/Publication des enregistrements en cours/)
     ).toBeInTheDocument()
+    expect(
+      screen.queryByText("Enregistrements gérés automatiquement")
+    ).not.toBeInTheDocument()
     expect(props.dnsManagementStatus).toHaveBeenCalled()
   })
 

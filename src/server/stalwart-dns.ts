@@ -115,7 +115,6 @@ export type DnsManagementStatus = "pending" | "failed" | "published"
 export interface DnsManagementTask {
   "@type"?: string
   status?: { "@type"?: string }
-  due?: string
 }
 
 /**

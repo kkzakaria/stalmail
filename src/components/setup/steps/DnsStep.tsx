@@ -221,6 +221,10 @@ export function DnsStep({
   // de publication (un token invalide passait inaperçu via le cache DNS — #62).
   // Poll 5s jusqu'à la deadline ; failed → erreur (ressaisie token), published →
   // grille, pending au timeout → grille (non bloquant).
+  // Invariant (probe #62) : setDnsManagementAutomatic planifie la tâche
+  // DnsManagement de façon synchrone — elle est déjà présente (Pending) au
+  // premier sondage. Un classement "published" (tâche absente) ne survient donc
+  // qu'APRÈS exécution+nettoyage réussis, jamais avant création. Pas de course.
   useEffect(() => {
     if (phase !== "verifying") return
     const startedAt = Date.now()
