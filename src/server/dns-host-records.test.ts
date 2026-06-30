@@ -268,4 +268,35 @@ describe("buildHostRecords", () => {
       },
     ])
   })
+
+  it("zone vide + ipv6 → repli conserve A ET AAAA (apex + webmail)", () => {
+    expect(
+      buildHostRecords({
+        ...base,
+        hostname: "webmail.exemple.fr",
+        ipv6: "2001:db8::1",
+        zoneRecords: [],
+      })
+    ).toEqual([
+      { name: "exemple.fr.", type: "A", value: "203.0.113.4", role: "apex" },
+      {
+        name: "exemple.fr.",
+        type: "AAAA",
+        value: "2001:db8::1",
+        role: "apex",
+      },
+      {
+        name: "webmail.exemple.fr.",
+        type: "A",
+        value: "203.0.113.4",
+        role: "webmail",
+      },
+      {
+        name: "webmail.exemple.fr.",
+        type: "AAAA",
+        value: "2001:db8::1",
+        role: "webmail",
+      },
+    ])
+  })
 })
