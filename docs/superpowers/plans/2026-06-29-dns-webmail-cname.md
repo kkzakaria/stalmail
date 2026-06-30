@@ -355,6 +355,113 @@ Relire mentalement `dns-host-records.test.ts` : les cas `mail` (cible MX) et `ap
 
 ---
 
+## Task 4: Afficher le CNAME webmail même quand l'écho IP échoue
+
+**Files:**
+- Modify: `src/components/setup/steps/DnsStep.tsx:212-229` (effet de poll du statut d'adresse)
+- Test: `src/components/setup/steps/DnsStep.test.tsx`
+
+**Interfaces:**
+- Consumes: prop `hostAddressStatus(ip: { ipv4?: string; ipv6?: string }) => Promise<{ records: HostAddressRecord[] }>` (inchangée), états `phase`, `serverIp`, `ipDiscovery`.
+- Produces: rien de réutilisé en aval (câblage interne du composant).
+
+**Contexte :** le builder émet le CNAME webmail indépendamment de l'IP (Task 1). Mais aujourd'hui le poll `hostAddressStatus` sort tôt quand `!serverIp`, donc en cas d'échec d'écho IP le handler n'est jamais appelé → le CNAME webmail n'apparaît pas. Cette tâche débloque le poll dès que la découverte d'IP est **résolue** (succès OU échec), en passant des IP vides quand aucune n'est connue. `HostAddressSection` affiche déjà le tableau dès que `records.length > 0`, sous le formulaire de saisie manuelle du mode `failed` — aucun changement requis dans ce composant.
+
+- [ ] **Step 1: Écrire le test d'échec d'écho IP**
+
+Dans `src/components/setup/steps/DnsStep.test.tsx`, ajouter ce test dans le `describe("DnsStep", …)`. Il prend le chemin Manuel (un seul « Continuer » pour entrer en grille), simule un écho IP qui échoue, et vérifie que le poll est tout de même appelé avec `{}` et que le CNAME webmail s'affiche en même temps que l'avertissement d'échec :
+
+```ts
+  it("écho IP échoué → hostAddressStatus interrogé sans IP, CNAME webmail affiché", async () => {
+    const props = baseProps()
+    props.discoverServerIp = vi.fn(() =>
+      Promise.resolve({ ipv4: null, ipv6: null })
+    )
+    props.hostAddressStatus = vi.fn(() =>
+      Promise.resolve({
+        records: [
+          {
+            name: "webmail.exemple.fr.",
+            type: "CNAME",
+            value: "mail.exemple.fr.",
+            role: "webmail",
+            status: "pending",
+          },
+        ] as HostAddressRecord[],
+      })
+    )
+    wrap(<DnsStep {...props} />)
+    // Entrer en grille via le chemin Manuel (Manual sélectionné par défaut).
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+    // Écho échoué → le poll interroge tout de même le handler, sans IP.
+    await waitFor(() =>
+      expect(props.hostAddressStatus).toHaveBeenCalledWith({})
+    )
+    // L'avertissement d'échec ET le CNAME webmail coexistent.
+    expect(
+      await screen.findByText(/Impossible de détecter/)
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText("webmail.exemple.fr.")
+    ).toBeInTheDocument()
+  })
+```
+
+(Si `waitFor` n'est pas déjà importé depuis `@testing-library/react` dans ce fichier, l'ajouter à l'import existant.)
+
+- [ ] **Step 2: Lancer le test pour vérifier qu'il échoue**
+
+Run: `bunx vitest run src/components/setup/steps/DnsStep.test.tsx`
+Expected: ÉCHEC — `hostAddressStatus` n'est jamais appelé (le poll sort tôt sur `!serverIp`), donc `toHaveBeenCalledWith({})` échoue et le CNAME n'est pas rendu.
+
+- [ ] **Step 3: Débloquer le poll dans `DnsStep`**
+
+Dans `src/components/setup/steps/DnsStep.tsx`, remplacer l'effet existant (lignes 212-229, commentaire « Poll du statut des A/AAAA dès qu'une IP est connue… ») par :
+
+```ts
+  // Poll du statut des enregistrements d'adresse dès que la découverte d'IP est
+  // RÉSOLUE (succès ou échec). Sans IP (écho échoué), on interroge quand même :
+  // le handler renvoie alors les enregistrements indépendants de l'IP (CNAME
+  // webmail), affichés sous le formulaire de saisie manuelle.
+  useEffect(() => {
+    if (phase !== "grid") return
+    if (ipDiscovery !== "ready" && ipDiscovery !== "failed") return
+    const ip = serverIp
+      ? {
+          ipv4: serverIp.ipv4 ?? undefined,
+          ipv6: serverIp.ipv6 ?? undefined,
+        }
+      : {}
+    const fetchHost = () => {
+      hostAddressStatus(ip)
+        .then((res) => {
+          if (mountedRef.current) setHostRecords(res.records)
+        })
+        .catch(() => {})
+    }
+    fetchHost()
+    const id = setInterval(fetchHost, 5000)
+    return () => clearInterval(id)
+  }, [phase, serverIp, ipDiscovery])
+```
+
+- [ ] **Step 4: Lancer le test pour vérifier qu'il passe**
+
+Run: `bunx vitest run src/components/setup/steps/DnsStep.test.tsx`
+Expected: PASS — le poll est appelé avec `{}` sur écho échoué, le CNAME webmail s'affiche, et les tests existants (chemin auto avec IP `{ ipv4: "203.0.113.4" }`, etc.) restent verts.
+
+- [ ] **Step 5: Suite complète + commit**
+
+Run: `bun run lint && bun run typecheck && bun run test`
+Expected: tout vert.
+
+```bash
+git add src/components/setup/steps/DnsStep.tsx src/components/setup/steps/DnsStep.test.tsx
+git commit -m "feat(setup): afficher le CNAME webmail même sans IP détectée (#61)"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage :**
