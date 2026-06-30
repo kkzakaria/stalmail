@@ -11,6 +11,7 @@ import {
   dnsGridStatusHandler,
   configureAcmeHandler,
   acmeStatusHandler,
+  dnsManagementStatusHandler,
   finishSetupHandler,
   setupStatusHandler,
   markSslConfiguredHandler,
@@ -60,6 +61,7 @@ vi.mock("./stalwart-account", async (importActual) => ({
 vi.mock("./stalwart-dns", async (importActual) => ({
   ...(await importActual<typeof StalwartDnsModule>()),
   createDnsServer: vi.fn(async () => "srv-1"),
+  getDnsManagementStatus: vi.fn(async () => "failed"),
 }))
 vi.mock("./dns-zone", async (importActual) => ({
   ...(await importActual<typeof DnsZoneModule>()),
@@ -114,7 +116,7 @@ import {
 // eslint-disable-next-line import/first
 import { createAdminAccount, WeakPasswordError } from "./stalwart-account"
 // eslint-disable-next-line import/first
-import { createDnsServer } from "./stalwart-dns"
+import { createDnsServer, getDnsManagementStatus } from "./stalwart-dns"
 // eslint-disable-next-line import/first
 import { parseZoneFile } from "./dns-zone"
 // eslint-disable-next-line import/first
@@ -758,6 +760,18 @@ describe("acmeStatusHandler", () => {
     vi.mocked(getAcmeStatus).mockResolvedValueOnce("pending")
     const result = await acmeStatusHandler()
     expect(result).toEqual({ status: "pending" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// dnsManagementStatusHandler — read-only, no auth guard
+// ---------------------------------------------------------------------------
+
+describe("dnsManagementStatusHandler", () => {
+  it("returns {status} from getDnsManagementStatus", async () => {
+    vi.mocked(getDnsManagementStatus).mockResolvedValueOnce("failed")
+    const result = await dnsManagementStatusHandler()
+    expect(result).toEqual({ status: "failed" })
   })
 })
 
