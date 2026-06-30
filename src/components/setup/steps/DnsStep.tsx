@@ -209,13 +209,19 @@ export function DnsStep({
       })
   }, [phase])
 
-  // Poll du statut des A/AAAA dès qu'une IP est connue (écho ou saisie manuelle).
+  // Poll du statut des enregistrements d'adresse dès que la découverte d'IP est
+  // RÉSOLUE (succès ou échec). Sans IP (écho échoué), on interroge quand même :
+  // le handler renvoie alors les enregistrements indépendants de l'IP (CNAME
+  // webmail), affichés sous le formulaire de saisie manuelle.
   useEffect(() => {
-    if (phase !== "grid" || !serverIp) return
-    const ip = {
-      ipv4: serverIp.ipv4 ?? undefined,
-      ipv6: serverIp.ipv6 ?? undefined,
-    }
+    if (phase !== "grid") return
+    if (ipDiscovery !== "ready" && ipDiscovery !== "failed") return
+    const ip = serverIp
+      ? {
+          ipv4: serverIp.ipv4 ?? undefined,
+          ipv6: serverIp.ipv6 ?? undefined,
+        }
+      : {}
     const fetchHost = () => {
       hostAddressStatus(ip)
         .then((res) => {
@@ -226,7 +232,7 @@ export function DnsStep({
     fetchHost()
     const id = setInterval(fetchHost, 5000)
     return () => clearInterval(id)
-  }, [phase, serverIp])
+  }, [phase, serverIp, ipDiscovery])
 
   const onManualIp = (value: string) => {
     setServerIp({
