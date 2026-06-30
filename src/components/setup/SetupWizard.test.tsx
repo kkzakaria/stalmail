@@ -25,6 +25,9 @@ const serverProps = () => ({
   setDnsManagement: vi.fn().mockResolvedValue({ ok: true as const }),
   setDnsManagementManual: vi.fn().mockResolvedValue({ ok: true as const }),
   gridStatus: vi.fn().mockResolvedValue({ origin: "x", records: [] }),
+  dnsManagementStatus: vi
+    .fn()
+    .mockResolvedValue({ status: "published" as const }),
   discoverServerIp: vi.fn().mockResolvedValue({ ipv4: null, ipv6: null }),
   hostAddressStatus: vi.fn().mockResolvedValue({ records: [] }),
   configureAcme: vi.fn().mockResolvedValue({ ok: true as const }),

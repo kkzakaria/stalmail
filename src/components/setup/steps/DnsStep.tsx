@@ -32,6 +32,23 @@ import {
 import { IconCheck, IconInfo } from "../ui/icons"
 import { SetupErrorBox } from "../ui/SetupErrorBox"
 import { codeFromError, messageKeyForCode } from "../error-code"
+import type { DnsManagementStatus } from "@/server/stalwart-dns"
+
+// Décision de transition de la phase 'verifying' à partir du statut sondé et du
+// temps écoulé. Pure → testée isolément. La tâche DnsManagement met ~60-90s à
+// s'exécuter (probe #62) ; au-delà de la deadline on passe à la grille sans
+// bloquer (Stalwart continue de réessayer en tâche de fond).
+export function nextVerifyPhase(
+  status: DnsManagementStatus,
+  elapsedMs: number,
+  deadlineMs: number
+): "error" | "grid" | "wait" {
+  if (status === "failed") return "error"
+  if (status === "published") return "grid"
+  return elapsedMs >= deadlineMs ? "grid" : "wait"
+}
+
+const VERIFY_DEADLINE_MS = 120_000
 
 function zoneFileText(records: DnsGridRecord[]) {
   const pad = (s: string, n: number) => (s.length >= n ? s + " " : s.padEnd(n))
@@ -50,7 +67,13 @@ const DNS_GROUP_DEFS = [
 
 const PROVIDER_OPTIONS = DNS_PROVIDERS.filter((p) => p !== "Manual")
 
-type Phase = "form" | "connecting" | "publishing" | "grid" | "error"
+type Phase =
+  | "form"
+  | "connecting"
+  | "publishing"
+  | "verifying"
+  | "grid"
+  | "error"
 
 interface Props {
   hostname: string
@@ -62,6 +85,7 @@ interface Props {
   setDnsManagement: (i: { dnsServerId: string }) => Promise<{ ok: true }>
   setDnsManagementManual: () => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
+  dnsManagementStatus: () => Promise<{ status: DnsManagementStatus }>
   discoverServerIp: () => Promise<{ ipv4: string | null; ipv6: string | null }>
   hostAddressStatus: (ip: {
     ipv4?: string
@@ -77,6 +101,7 @@ export function DnsStep({
   setDnsManagement,
   setDnsManagementManual,
   gridStatus,
+  dnsManagementStatus,
   discoverServerIp,
   hostAddressStatus,
   onNext,
@@ -99,6 +124,8 @@ export function DnsStep({
 
   const mountedRef = useRef(true)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const dnsManagementStatusRef = useRef(dnsManagementStatus)
+  dnsManagementStatusRef.current = dnsManagementStatus
 
   useEffect(() => {
     mountedRef.current = true
@@ -132,7 +159,7 @@ export function DnsStep({
       })
       .then((res) => {
         if (!mountedRef.current || res === null) return
-        setPhase("grid")
+        setPhase("verifying")
       })
       .catch((e: unknown) => {
         if (!mountedRef.current) return
@@ -188,6 +215,46 @@ export function DnsStep({
       if (pollRef.current) clearInterval(pollRef.current)
       pollRef.current = null
     }
+  }, [phase])
+
+  // Phase 'verifying' : la tâche DnsManagement est la SOURCE DE VÉRITÉ du succès
+  // de publication (un token invalide passait inaperçu via le cache DNS — #62).
+  // Poll 5s jusqu'à la deadline ; failed → erreur (ressaisie token), published →
+  // grille, pending au timeout → grille (non bloquant).
+  useEffect(() => {
+    if (phase !== "verifying") return
+    const startedAt = Date.now()
+    const tick = () => {
+      dnsManagementStatusRef
+        .current()
+        .then(({ status }) => {
+          if (!mountedRef.current) return
+          const next = nextVerifyPhase(
+            status,
+            Date.now() - startedAt,
+            VERIFY_DEADLINE_MS
+          )
+          if (next === "error") {
+            setErrorCode("SETUP-DNS-PUBLISH-FAILED")
+            setPhase("error")
+          } else if (next === "grid") {
+            setPhase("grid")
+          }
+        })
+        .catch(() => {
+          // Erreurs transitoires ignorées ; le tick suivant réessaie. Au-delà de
+          // la deadline, on avance quand même vers la grille.
+          if (
+            mountedRef.current &&
+            Date.now() - startedAt >= VERIFY_DEADLINE_MS
+          ) {
+            setPhase("grid")
+          }
+        })
+    }
+    tick()
+    const id = setInterval(tick, 5000)
+    return () => clearInterval(id)
   }, [phase])
 
   // À l'entrée de la grille : découvrir l'IP du serveur une fois (écho sortant).
@@ -388,6 +455,13 @@ export function DnsStep({
         <p className="inline-status">
           <Spinner size={14} />
           {t("wizard.dns.records.publishing")}
+        </p>
+      ) : null}
+
+      {phase === "verifying" ? (
+        <p className="inline-status">
+          <Spinner size={14} />
+          {t("wizard.dns.records.verifying")}
         </p>
       ) : null}
 

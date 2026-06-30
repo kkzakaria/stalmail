@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "@/i18n/i18n"
 import type { DnsGridRecord, HostAddressRecord } from "@/server/setup-actions"
-import { DnsStep } from "./DnsStep"
+import { DnsStep, nextVerifyPhase } from "./DnsStep"
 
 const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n("fr")}>{ui}</I18nextProvider>)
@@ -27,6 +27,9 @@ const baseProps = () => ({
   gridStatus: vi.fn(() =>
     Promise.resolve({ origin: "exemple.fr", records: autoRecords })
   ),
+  dnsManagementStatus: vi.fn(() =>
+    Promise.resolve({ status: "published" as const })
+  ),
   discoverServerIp: vi.fn(() =>
     Promise.resolve({ ipv4: "203.0.113.4", ipv6: null })
   ),
@@ -44,6 +47,24 @@ const baseProps = () => ({
     })
   ),
   onNext: vi.fn(),
+})
+
+describe("nextVerifyPhase", () => {
+  const D = 120000
+  it("failed → error, quel que soit le temps écoulé", () => {
+    expect(nextVerifyPhase("failed", 0, D)).toBe("error")
+    expect(nextVerifyPhase("failed", D + 1, D)).toBe("error")
+  })
+  it("published → grid", () => {
+    expect(nextVerifyPhase("published", 0, D)).toBe("grid")
+  })
+  it("pending avant la deadline → wait", () => {
+    expect(nextVerifyPhase("pending", D - 1, D)).toBe("wait")
+  })
+  it("pending à/au-delà de la deadline → grid (non bloquant)", () => {
+    expect(nextVerifyPhase("pending", D, D)).toBe("grid")
+    expect(nextVerifyPhase("pending", D + 5000, D)).toBe("grid")
+  })
 })
 
 describe("DnsStep", () => {
@@ -179,6 +200,57 @@ describe("DnsStep", () => {
         ipv6: undefined,
       })
     })
+  })
+
+  it("auto path: DnsManagement Failed → error box + retry vide le token", async () => {
+    const props = {
+      ...baseProps(),
+      dnsManagementStatus: vi.fn(() =>
+        Promise.resolve({ status: "failed" as const })
+      ),
+    }
+    wrap(<DnsStep {...props} />)
+
+    fireEvent.click(screen.getByRole("button", { expanded: false }))
+    fireEvent.click(screen.getByText("Cloudflare"))
+    fireEvent.change(await screen.findByLabelText("Clé API"), {
+      target: { value: "bad-token" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+
+    // L'erreur de publication apparaît.
+    expect(
+      await screen.findByText("SETUP-DNS-PUBLISH-FAILED")
+    ).toBeInTheDocument()
+
+    // Retry → retour au formulaire, token vidé pour ressaisie.
+    fireEvent.click(screen.getByText("Réessayer"))
+    expect(await screen.findByText("Fournisseur DNS")).toBeInTheDocument()
+    const token: HTMLInputElement = await screen.findByLabelText("Clé API")
+    expect(token.value).toBe("")
+  })
+
+  it("auto path: pending affiche la phase de vérification, pas encore la grille", async () => {
+    const props = {
+      ...baseProps(),
+      dnsManagementStatus: vi.fn(() =>
+        Promise.resolve({ status: "pending" as const })
+      ),
+    }
+    wrap(<DnsStep {...props} />)
+
+    fireEvent.click(screen.getByRole("button", { expanded: false }))
+    fireEvent.click(screen.getByText("Cloudflare"))
+    fireEvent.change(await screen.findByLabelText("Clé API"), {
+      target: { value: "tok" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+
+    // Spinner de vérification visible ; la grille n'est pas encore atteinte.
+    expect(
+      await screen.findByText(/Publication des enregistrements en cours/)
+    ).toBeInTheDocument()
+    expect(props.dnsManagementStatus).toHaveBeenCalled()
   })
 
   it("écho IP échoué → hostAddressStatus interrogé sans IP, CNAME webmail affiché", async () => {

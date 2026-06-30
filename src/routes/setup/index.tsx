@@ -18,6 +18,7 @@ import {
   unlockSetupFn,
   setupAuthStatusFn,
   setupContextFn,
+  dnsManagementStatusFn,
 } from "@/server/setup-actions"
 import { getServerTheme } from "@/server/setup-theme"
 import { SetupWizard } from "@/components/setup/SetupWizard"
@@ -58,6 +59,7 @@ function SetupPage() {
       setDnsManagement={(input) => setDnsManagementFn({ data: input })}
       setDnsManagementManual={() => setDnsManagementManualFn()}
       gridStatus={() => dnsGridStatusFn()}
+      dnsManagementStatus={() => dnsManagementStatusFn()}
       discoverServerIp={() => discoverServerIpFn()}
       hostAddressStatus={(ip) => hostAddressStatusFn({ data: ip })}
       configureAcme={(input) => configureAcmeFn({ data: input })}
