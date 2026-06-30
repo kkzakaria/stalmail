@@ -109,3 +109,49 @@ export async function createDnsServer(input: DnsServerInput): Promise<string> {
     throw new JmapError("dns server creation rejected", result.notCreated)
   return created.id
 }
+
+export type DnsManagementStatus = "pending" | "failed" | "published"
+
+export interface DnsManagementTask {
+  "@type"?: string
+  status?: { "@type"?: string }
+  due?: string
+}
+
+/**
+ * Décide le statut de publication à partir de la tâche DnsManagement.
+ * Pure. Probe live (#62) : succès → la tâche disparaît ; échec → la tâche
+ * persiste en `Failed`. Pas de fenêtre temporelle (publication one-shot, pas
+ * de cycle de renouvellement comme AcmeRenewal).
+ *
+ *  - aucune tâche → published (publiée puis nettoyée)
+ *  - statut Failed → failed
+ *  - Pending / Retry / statut absent → pending (en cours)
+ */
+export function classifyDnsManagement(
+  task: DnsManagementTask | undefined
+): DnsManagementStatus {
+  if (!task) return "published"
+  if (task.status?.["@type"] === "Failed") return "failed"
+  return "pending"
+}
+
+/** Sonde la tâche DnsManagement. Voir classifyDnsManagement pour le mapping. */
+export async function getDnsManagementStatus(): Promise<DnsManagementStatus> {
+  const accountId = await resolveAccountId()
+  const responses = await jmapCall([
+    ["x:Task/query", { accountId }, "0"],
+    [
+      "x:Task/get",
+      {
+        accountId,
+        "#ids": { resultOf: "0", name: "x:Task/query", path: "/ids" },
+      },
+      "1",
+    ],
+  ])
+  const list =
+    (expectResult(responses, 1) as { list?: DnsManagementTask[] }).list ?? []
+  const task = list.find((t) => t["@type"] === "DnsManagement")
+  return classifyDnsManagement(task)
+}

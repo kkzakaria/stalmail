@@ -10,7 +10,13 @@ vi.mock("./jmap", async (importActual) => ({
 // eslint-disable-next-line import/first
 import { jmapCall } from "./jmap"
 // eslint-disable-next-line import/first
-import { createDnsServer, findDnsServerId, DNS_PROVIDERS } from "./stalwart-dns"
+import {
+  createDnsServer,
+  findDnsServerId,
+  DNS_PROVIDERS,
+  classifyDnsManagement,
+  getDnsManagementStatus,
+} from "./stalwart-dns"
 
 const mj = vi.mocked(jmapCall)
 beforeEach(() => vi.clearAllMocks())
@@ -149,5 +155,83 @@ describe("createDnsServer", () => {
     await expect(
       createDnsServer({ provider: "Cloudflare", secret: "x" })
     ).rejects.toThrow()
+  })
+})
+
+describe("classifyDnsManagement", () => {
+  it("returns 'published' when there is no task (completed and cleared)", () => {
+    expect(classifyDnsManagement(undefined)).toBe("published")
+  })
+  it("returns 'failed' when the task status is Failed", () => {
+    expect(classifyDnsManagement({ status: { "@type": "Failed" } })).toBe(
+      "failed"
+    )
+  })
+  it("returns 'pending' when the task status is Pending", () => {
+    expect(classifyDnsManagement({ status: { "@type": "Pending" } })).toBe(
+      "pending"
+    )
+  })
+  it("returns 'pending' when the task status is Retry", () => {
+    expect(classifyDnsManagement({ status: { "@type": "Retry" } })).toBe(
+      "pending"
+    )
+  })
+  it("returns 'pending' when the status envelope is missing", () => {
+    expect(classifyDnsManagement({})).toBe("pending")
+  })
+})
+
+describe("getDnsManagementStatus", () => {
+  it("returns 'failed' for a DnsManagement task in Failed", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: ["t1"] }, "0"],
+      [
+        "x:Task/get",
+        { list: [{ "@type": "DnsManagement", status: { "@type": "Failed" } }] },
+        "1",
+      ],
+    ])
+    await expect(getDnsManagementStatus()).resolves.toBe("failed")
+  })
+  it("returns 'pending' for a DnsManagement task in Pending", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: ["t1"] }, "0"],
+      [
+        "x:Task/get",
+        {
+          list: [{ "@type": "DnsManagement", status: { "@type": "Pending" } }],
+        },
+        "1",
+      ],
+    ])
+    await expect(getDnsManagementStatus()).resolves.toBe("pending")
+  })
+  it("returns 'published' when no DnsManagement task is present", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: ["t1"] }, "0"],
+      [
+        "x:Task/get",
+        { list: [{ "@type": "AcmeRenewal", status: { "@type": "Pending" } }] },
+        "1",
+      ],
+    ])
+    await expect(getDnsManagementStatus()).resolves.toBe("published")
+  })
+  it("ignores non-DnsManagement tasks and classifies the DnsManagement one", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: ["t1", "t2"] }, "0"],
+      [
+        "x:Task/get",
+        {
+          list: [
+            { "@type": "AcmeRenewal", status: { "@type": "Failed" } },
+            { "@type": "DnsManagement", status: { "@type": "Pending" } },
+          ],
+        },
+        "1",
+      ],
+    ])
+    await expect(getDnsManagementStatus()).resolves.toBe("pending")
   })
 })
