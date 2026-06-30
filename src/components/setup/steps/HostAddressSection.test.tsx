@@ -97,6 +97,39 @@ describe("HostAddressSection", () => {
     expect(onManualIp).toHaveBeenCalledTimes(1)
   })
 
+  it("affiche la note CNAME quand le webmail est un alias, sinon non", () => {
+    const { rerender } = wrap(
+      <HostAddressSection
+        records={recs}
+        status="ready"
+        domain="exemple.fr"
+        onManualIp={vi.fn()}
+      />
+    )
+    // recs a un webmail en A → pas de note CNAME
+    expect(screen.queryByText(/alias \(CNAME\)/)).not.toBeInTheDocument()
+
+    rerender(
+      <I18nextProvider i18n={createI18n("fr")}>
+        <HostAddressSection
+          records={[
+            {
+              name: "webmail.exemple.fr.",
+              type: "CNAME",
+              value: "mail.exemple.fr.",
+              role: "webmail",
+              status: "pending",
+            },
+          ]}
+          status="ready"
+          domain="exemple.fr"
+          onManualIp={vi.fn()}
+        />
+      </I18nextProvider>
+    )
+    expect(screen.getByText(/alias \(CNAME\)/)).toBeInTheDocument()
+  })
+
   it("affiche apexNote quand un enregistrement est hors zone", () => {
     wrap(
       <HostAddressSection

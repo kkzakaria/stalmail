@@ -116,7 +116,7 @@ describe("buildHostRecords", () => {
     ])
   })
 
-  it("hostname public distinct → rôle webmail", () => {
+  it("hostname public distinct → rôle webmail en CNAME vers l'hôte mail", () => {
     const recs = buildHostRecords({
       ...base,
       hostname: "webmail.exemple.fr",
@@ -132,14 +132,14 @@ describe("buildHostRecords", () => {
       { name: "exemple.fr.", type: "A", value: "203.0.113.4", role: "apex" },
       {
         name: "webmail.exemple.fr.",
-        type: "A",
-        value: "203.0.113.4",
+        type: "CNAME",
+        value: "mail.exemple.fr.",
         role: "webmail",
       },
     ])
   })
 
-  it("webmail distinct avec ipv6 → reçoit A et AAAA avec rôle webmail", () => {
+  it("webmail distinct avec ipv6 → mail/apex en A+AAAA, webmail reste un CNAME unique", () => {
     expect(
       buildHostRecords({
         ...base,
@@ -164,14 +164,8 @@ describe("buildHostRecords", () => {
       { name: "exemple.fr.", type: "AAAA", value: "2001:db8::1", role: "apex" },
       {
         name: "webmail.exemple.fr.",
-        type: "A",
-        value: "203.0.113.4",
-        role: "webmail",
-      },
-      {
-        name: "webmail.exemple.fr.",
-        type: "AAAA",
-        value: "2001:db8::1",
+        type: "CNAME",
+        value: "mail.exemple.fr.",
         role: "webmail",
       },
     ])
@@ -236,5 +230,73 @@ describe("buildHostRecords", () => {
         zoneRecords: zone([["exemple.fr.", "MX", "10 mail.exemple.fr."]]),
       })
     ).toEqual([])
+  })
+
+  it("webmail distinct sans IP → CNAME tout de même émis (mail/apex absents)", () => {
+    expect(
+      buildHostRecords({
+        ...base,
+        hostname: "webmail.exemple.fr",
+        ipv4: null,
+        ipv6: null,
+        zoneRecords: zone([["exemple.fr.", "MX", "10 mail.exemple.fr."]]),
+      })
+    ).toEqual([
+      {
+        name: "webmail.exemple.fr.",
+        type: "CNAME",
+        value: "mail.exemple.fr.",
+        role: "webmail",
+      },
+    ])
+  })
+
+  it("zone vide → webmail en repli A/AAAA (pas de cible CNAME)", () => {
+    expect(
+      buildHostRecords({
+        ...base,
+        hostname: "webmail.exemple.fr",
+        zoneRecords: [],
+      })
+    ).toEqual([
+      { name: "exemple.fr.", type: "A", value: "203.0.113.4", role: "apex" },
+      {
+        name: "webmail.exemple.fr.",
+        type: "A",
+        value: "203.0.113.4",
+        role: "webmail",
+      },
+    ])
+  })
+
+  it("zone vide + ipv6 → repli conserve A ET AAAA (apex + webmail)", () => {
+    expect(
+      buildHostRecords({
+        ...base,
+        hostname: "webmail.exemple.fr",
+        ipv6: "2001:db8::1",
+        zoneRecords: [],
+      })
+    ).toEqual([
+      { name: "exemple.fr.", type: "A", value: "203.0.113.4", role: "apex" },
+      {
+        name: "exemple.fr.",
+        type: "AAAA",
+        value: "2001:db8::1",
+        role: "apex",
+      },
+      {
+        name: "webmail.exemple.fr.",
+        type: "A",
+        value: "203.0.113.4",
+        role: "webmail",
+      },
+      {
+        name: "webmail.exemple.fr.",
+        type: "AAAA",
+        value: "2001:db8::1",
+        role: "webmail",
+      },
+    ])
   })
 })

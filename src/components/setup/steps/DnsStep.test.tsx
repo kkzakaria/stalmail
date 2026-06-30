@@ -180,4 +180,36 @@ describe("DnsStep", () => {
       })
     })
   })
+
+  it("écho IP échoué → hostAddressStatus interrogé sans IP, CNAME webmail affiché", async () => {
+    const props = baseProps()
+    props.discoverServerIp = vi.fn(() =>
+      Promise.resolve({ ipv4: null, ipv6: null })
+    ) as unknown as typeof props.discoverServerIp
+    props.hostAddressStatus = vi.fn(() =>
+      Promise.resolve({
+        records: [
+          {
+            name: "webmail.exemple.fr.",
+            type: "CNAME",
+            value: "mail.exemple.fr.",
+            role: "webmail",
+            status: "pending",
+          },
+        ] as HostAddressRecord[],
+      })
+    )
+    wrap(<DnsStep {...props} />)
+    // Entrer en grille via le chemin Manuel (Manual sélectionné par défaut).
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+    // Écho échoué → le poll interroge tout de même le handler, sans IP.
+    await waitFor(() =>
+      expect(props.hostAddressStatus).toHaveBeenCalledWith({})
+    )
+    // L'avertissement d'échec ET le CNAME webmail coexistent.
+    expect(
+      await screen.findByText(/Impossible de détecter/)
+    ).toBeInTheDocument()
+    expect(await screen.findByText("webmail.exemple.fr.")).toBeInTheDocument()
+  })
 })

@@ -42,6 +42,9 @@ export function buildHostRecords(input: {
   ipv6: string | null
 }): HostRecord[] {
   const { ipv4, ipv6, zoneRecords } = input
+  const mailTargets = collectHostTargets(zoneRecords)
+  // Cible du CNAME webmail : l'hôte mail (1ʳᵉ cible MX/SRV). Null si zone non générée.
+  const mailHost = mailTargets[0] ?? null
   const seen = new Set<string>()
   const named: { name: string; role: HostRole }[] = []
   const add = (raw: string, role: HostRole) => {
@@ -54,7 +57,7 @@ export function buildHostRecords(input: {
   // La zone Stalwart est générée : MX/SRV pointent l'hôte du serveur mail ; les CNAMEs
   // sont des alias et ne constituent pas une source authoritative.
   // 1) Serveur mail : les hôtes que la zone désigne via MX/SRV.
-  for (const t of collectHostTargets(zoneRecords)) add(t, "mail")
+  for (const t of mailTargets) add(t, "mail")
   // Repli (zone non encore générée) : pas de cible MX → apex + hostname public uniquement.
   // 2) Apex (accès web), s'il n'est pas déjà un hôte mail.
   add(input.domain, "apex")
@@ -63,6 +66,17 @@ export function buildHostRecords(input: {
 
   const records: HostRecord[] = []
   for (const { name, role } of named) {
+    // Webmail = sous-domaine distinct → CNAME vers l'hôte mail : une seule IP à
+    // maintenir (celle de la cible). Agnostique de l'IP → émis même sans écho IP.
+    if (role === "webmail" && mailHost && name !== mailHost) {
+      records.push({
+        name: name + ".",
+        type: "CNAME",
+        value: mailHost + ".",
+        role,
+      })
+      continue
+    }
     if (ipv4) records.push({ name: name + ".", type: "A", value: ipv4, role })
     if (ipv6)
       records.push({ name: name + ".", type: "AAAA", value: ipv6, role })

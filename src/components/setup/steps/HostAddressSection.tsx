@@ -182,6 +182,11 @@ export function HostAddressSection({
               </Alert>
             ) : null
           })()}
+          {records.some((r) => r.role === "webmail" && r.type === "CNAME") ? (
+            <Alert variant="info">
+              {t("wizard.dns.hostAddress.webmailCnameNote")}
+            </Alert>
+          ) : null}
         </div>
       ) : null}
     </section>
