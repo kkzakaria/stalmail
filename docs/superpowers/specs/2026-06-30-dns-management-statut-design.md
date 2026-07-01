@@ -115,8 +115,9 @@ déclare plus le succès à elle seule.
 
 ### Câblage & i18n
 
-- `SetupWizard.tsx` : prop `dnsManagementStatus: () => Promise<{ status: DnsManagementStatus }>`,
-  ref + wrapper stable `withReauth` (façon `acmeStatus`), passée à `DnsStep`.
+- `SetupWizard.tsx` : prop `dnsManagementStatus: () => Promise<{ status: DnsManagementStatus }>`
+  passée **directement** à `DnsStep`, comme `gridStatus`/`acmeStatus` (lecture GET, pas
+  de wrapper `withReauth`).
 - `routes/setup/index.tsx` : `dnsManagementStatus={() => dnsManagementStatusFn()}`.
 - `error-code.ts` : ajouter `"SETUP-DNS-PUBLISH-FAILED"` à `KNOWN_CODES`.
 - `i18n/resources.ts` (FR) : `wizard.error.codes.SETUP-DNS-PUBLISH-FAILED` = « La
@@ -132,10 +133,16 @@ déclare plus le succès à elle seule.
   `DnsManagement` est isolée et classifiée.
 
 **Composant** (`DnsStep.test.tsx`) :
+- `nextVerifyPhase` (pur) : failed→`error`, published→`grid`, pending<deadline→`wait`,
+  pending≥deadline→`timeout`.
 - auto + `dnsManagementStatus`→`failed` : affiche `SetupErrorBox` ; `retry` revient au
   formulaire avec secret vidé.
 - auto + `published` : affiche la grille.
-- auto + `pending` puis timeout (fake timers) : passe à la grille.
+- auto + `pending` avant deadline : spinner de vérification, pas encore la grille.
+- auto + `pending` au-delà de la deadline (fake timers) : état `timeout` (message +
+  bouton « Continuer quand même »), **pas** de grille auto ; clic → grille.
+- auto + réponse périmée après une erreur (fake timers) : n'écrase pas l'erreur (garde
+  `cancelled`/`terminal`).
 - chemin manuel inchangé.
 
 **Handler** (`setup-actions.test.ts`) : `dnsManagementStatusHandler` renvoie le statut

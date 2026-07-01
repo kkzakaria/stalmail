@@ -403,9 +403,9 @@ describe("nextVerifyPhase", () => {
   it("pending avant la deadline → wait", () => {
     expect(nextVerifyPhase("pending", D - 1, D)).toBe("wait")
   })
-  it("pending à/au-delà de la deadline → grid (non bloquant)", () => {
-    expect(nextVerifyPhase("pending", D, D)).toBe("grid")
-    expect(nextVerifyPhase("pending", D + 5000, D)).toBe("grid")
+  it("pending à/au-delà de la deadline → timeout (pas de succès auto)", () => {
+    expect(nextVerifyPhase("pending", D, D)).toBe("timeout")
+    expect(nextVerifyPhase("pending", D + 5000, D)).toBe("timeout")
   })
 })
 ```
@@ -427,23 +427,35 @@ import type { DnsManagementStatus } from "@/server/stalwart-dns"
 
 (b) Exporter le helper pur (haut du fichier, près de `zoneFileText`) :
 
+> **Note (revue PR #114)** — l'implémentation a évolué au-delà de cette transcription
+> initiale. Source de vérité = la spec + le code livré. Deltas : deadline **180s** (au
+> lieu de 120s) ; au timeout on renvoie **`"timeout"`** (état « continuer quand même »)
+> au lieu de basculer sur la grille ; gardes anti-race **`cancelled`** (cleanup) +
+> **`terminal`** (synchrone) dans le poll ; prop passée **directement** (pas de
+> `withReauth`). Les blocs ci-dessous intègrent ces deltas.
+
 ```ts
-// Décision de transition de la phase 'verifying' à partir du statut sondé et du
-// temps écoulé. Pure → testée isolément. La tâche DnsManagement met ~60-90s à
-// s'exécuter (probe #62) ; au-delà de la deadline on passe à la grille sans
-// bloquer (Stalwart continue de réessayer en tâche de fond).
+// Décision de transition de la phase 'verifying'. Pure → testée isolément.
+// La tâche DnsManagement met ~80-100s (probe #62, variable + rate-limit 429).
+// Au-delà de la deadline on NE déclare PAS le succès (timeout ≠ publication) :
+// on renvoie "timeout" → l'UI propose de continuer explicitement (le poll continue).
 export function nextVerifyPhase(
   status: DnsManagementStatus,
   elapsedMs: number,
   deadlineMs: number
-): "error" | "grid" | "wait" {
+): "error" | "grid" | "timeout" | "wait" {
   if (status === "failed") return "error"
   if (status === "published") return "grid"
-  return elapsedMs >= deadlineMs ? "grid" : "wait"
+  return elapsedMs >= deadlineMs ? "timeout" : "wait"
 }
 
 const VERIFY_DEADLINE_MS = 180_000
 ```
+
+Ajouter aussi l'état `const [verifyTimedOut, setVerifyTimedOut] = useState(false)` et,
+dans l'UI de la phase `verifying`, brancher : si `verifyTimedOut`, afficher un `Alert`
+(warning) + un `Button` « Continuer quand même » (`onClick` → `setPhase("grid")`) au
+lieu du spinner.
 
 (c) Étendre le type `Phase` :
 
@@ -488,40 +500,57 @@ par :
   dnsManagementStatusRef.current = dnsManagementStatus
 
   // Phase 'verifying' : la tâche DnsManagement est la SOURCE DE VÉRITÉ du succès
-  // de publication (un token invalide passait inaperçu via le cache DNS — #62).
-  // Poll 5s jusqu'à la deadline ; failed → erreur (ressaisie token), published →
-  // grille, pending au timeout → grille (non bloquant).
+  // (un token invalide passait inaperçu via le cache DNS — #62). Poll 5s ;
+  // failed → erreur (ressaisie token), published → grille, pending au-delà de la
+  // deadline → "timeout" (option « continuer quand même », poll poursuivi).
+  // Gardes anti-race : `cancelled` (posé au cleanup, couvre les re-entrées) et
+  // `terminal` (posé SYNCHRONEMENT à la transition error/grid, ferme la fenêtre
+  // avant que le cleanup ne s'exécute) — un callback périmé ne peut pas écraser
+  // une erreur déjà affichée.
   useEffect(() => {
     if (phase !== "verifying") return
+    setVerifyTimedOut(false)
     const startedAt = Date.now()
+    let cancelled = false
+    let terminal = false
     const tick = () => {
       dnsManagementStatusRef
         .current()
         .then(({ status }) => {
-          if (!mountedRef.current) return
+          if (!mountedRef.current || cancelled || terminal) return
           const next = nextVerifyPhase(
             status,
             Date.now() - startedAt,
             VERIFY_DEADLINE_MS
           )
           if (next === "error") {
+            terminal = true
             setErrorCode("SETUP-DNS-PUBLISH-FAILED")
             setPhase("error")
           } else if (next === "grid") {
+            terminal = true
             setPhase("grid")
+          } else if (next === "timeout") {
+            setVerifyTimedOut(true)
           }
         })
         .catch(() => {
-          // Erreurs transitoires ignorées ; le tick suivant réessaie. Au-delà de
-          // la deadline, on avance quand même vers la grille.
-          if (mountedRef.current && Date.now() - startedAt >= VERIFY_DEADLINE_MS) {
-            setPhase("grid")
+          if (
+            !cancelled &&
+            !terminal &&
+            mountedRef.current &&
+            Date.now() - startedAt >= VERIFY_DEADLINE_MS
+          ) {
+            setVerifyTimedOut(true)
           }
         })
     }
     tick()
     const id = setInterval(tick, 5000)
-    return () => clearInterval(id)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [phase])
 ```
 
@@ -714,7 +743,7 @@ Expected: PASS partout.
 - Helper pur `classifyDnsManagement` → Task 1 ✓
 - Lecture `getDnsManagementStatus` → Task 1 ✓
 - Server-fn `dnsManagementStatusFn` (GET, non gardée comme acmeStatus) → Task 2 ✓
-- Phase `verifying` bloquante, poll 5s, deadline 180s, failed/published/pending → Task 4 ✓
+- Phase `verifying` bloquante, poll 5s, deadline 180s, failed/published/pending, timeout au-delà de la deadline (« continuer quand même »), gardes anti-race → Task 4 ✓
 - Erreur explicite + ressaisie token (retry auto existant) → Task 4 (code Task 3) ✓
 - Résolution live conservée en complément (gridStatus inchangé) → aucune modif de `dnsGridStatusHandler` ✓
 - i18n FR + EN → Task 3 ✓
