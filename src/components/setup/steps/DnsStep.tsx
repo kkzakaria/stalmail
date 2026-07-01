@@ -35,9 +35,10 @@ import { codeFromError, messageKeyForCode } from "../error-code"
 import type { DnsManagementStatus } from "@/server/stalwart-dns"
 
 // Décision de transition de la phase 'verifying' à partir du statut sondé et du
-// temps écoulé. Pure → testée isolément. La tâche DnsManagement met ~60-90s à
-// s'exécuter (probe #62) ; au-delà de la deadline on passe à la grille sans
-// bloquer (Stalwart continue de réessayer en tâche de fond).
+// temps écoulé. Pure → testée isolément. La tâche DnsManagement met ~80-100s à
+// s'exécuter (probe #62, variable — un token invalide déclenche en plus un
+// rate-limit 429 côté provider qui rallonge l'échec) ; au-delà de la deadline on
+// passe à la grille sans bloquer (Stalwart continue de réessayer en tâche de fond).
 export function nextVerifyPhase(
   status: DnsManagementStatus,
   elapsedMs: number,
@@ -48,7 +49,9 @@ export function nextVerifyPhase(
   return elapsedMs >= deadlineMs ? "grid" : "wait"
 }
 
-const VERIFY_DEADLINE_MS = 120_000
+// 3 min : marge confortable au-dessus des ~80-100s d'exécution observés (incl.
+// rate-limit 429), pour capter un token invalide avant de tomber sur la grille.
+const VERIFY_DEADLINE_MS = 180_000
 
 function zoneFileText(records: DnsGridRecord[]) {
   const pad = (s: string, n: number) => (s.length >= n ? s + " " : s.padEnd(n))

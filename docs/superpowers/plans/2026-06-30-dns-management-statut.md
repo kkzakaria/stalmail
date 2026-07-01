@@ -4,7 +4,7 @@
 
 **Goal:** Faire de la tâche `DnsManagement` de Stalwart la source de vérité du succès de publication DNS dans le wizard, pour qu'un token API invalide ne passe plus inaperçu.
 
-**Architecture:** Calque exact du correctif ACME #59. Côté serveur : un helper pur `classifyDnsManagement` + une lecture `getDnsManagementStatus` + une server-fn GET. Côté client : `DnsStep` gagne une phase `verifying` bloquante qui sonde cette server-fn (poll 5s, deadline 120s) entre `setDnsManagement` et la grille ; `failed` → erreur explicite + ressaisie du token, `published` → grille, `pending` au timeout → grille (non bloquant).
+**Architecture:** Calque exact du correctif ACME #59. Côté serveur : un helper pur `classifyDnsManagement` + une lecture `getDnsManagementStatus` + une server-fn GET. Côté client : `DnsStep` gagne une phase `verifying` bloquante qui sonde cette server-fn (poll 5s, deadline 180s) entre `setDnsManagement` et la grille ; `failed` → erreur explicite + ressaisie du token, `published` → grille, `pending` au timeout → grille (non bloquant).
 
 **Tech Stack:** TypeScript, TanStack Start (server functions), React 19, react-i18next, Vitest, Testing Library. Gestionnaire de paquets **Bun**.
 
@@ -334,7 +334,7 @@ Sous `wizard.error.codes` (après `"SETUP-DNS-MANAGEMENT-REJECTED": "La gestion 
 Sous `wizard.dns.records` (après `publishing: "Publication des enregistrements…",`) ajouter :
 
 ```ts
-        verifying: "Publication des enregistrements en cours… (jusqu'à 2 min)",
+        verifying: "Publication des enregistrements en cours… (jusqu'à 3 min)",
 ```
 
 - [ ] **Step 3 : Ajouter les libellés EN**
@@ -351,7 +351,7 @@ Sous `wizard.error.codes` (après `"SETUP-DNS-MANAGEMENT-REJECTED": "Automatic D
 Sous `wizard.dns.records` (après `publishing: "Publishing records…",`) ajouter :
 
 ```ts
-        verifying: "Publishing records… (up to 2 min)",
+        verifying: "Publishing records… (up to 3 min)",
 ```
 
 - [ ] **Step 4 : Vérifier typecheck + tests i18n**
@@ -442,7 +442,7 @@ export function nextVerifyPhase(
   return elapsedMs >= deadlineMs ? "grid" : "wait"
 }
 
-const VERIFY_DEADLINE_MS = 120_000
+const VERIFY_DEADLINE_MS = 180_000
 ```
 
 (c) Étendre le type `Phase` :
@@ -714,7 +714,7 @@ Expected: PASS partout.
 - Helper pur `classifyDnsManagement` → Task 1 ✓
 - Lecture `getDnsManagementStatus` → Task 1 ✓
 - Server-fn `dnsManagementStatusFn` (GET, non gardée comme acmeStatus) → Task 2 ✓
-- Phase `verifying` bloquante, poll 5s, deadline 120s, failed/published/pending → Task 4 ✓
+- Phase `verifying` bloquante, poll 5s, deadline 180s, failed/published/pending → Task 4 ✓
 - Erreur explicite + ressaisie token (retry auto existant) → Task 4 (code Task 3) ✓
 - Résolution live conservée en complément (gridStatus inchangé) → aucune modif de `dnsGridStatusHandler` ✓
 - i18n FR + EN → Task 3 ✓

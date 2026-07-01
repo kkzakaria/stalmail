@@ -89,16 +89,17 @@ Nouvelle phase `"verifying"` insérée dans le chemin auto :
 `createDnsServer → setDnsManagement → verifying → grid | error`.
 
 Effet de poll keyé sur la phase `"verifying"` (calque `SslStep` monitor), intervalle
-5s, **deadline 120s** (latence worker ~60-90s + marge) :
+5s, **deadline 180s** (latence worker ~80-100s observée, variable + rate-limit 429 sur
+token invalide → marge) :
 
 - `failed`    → `setErrorCode("SETUP-DNS-PUBLISH-FAILED")` + phase `error`. Le `retry()`
   auto **existant** vide déjà le secret et renvoie au formulaire → ressaisie token.
 - `published` → phase `grid`.
-- `pending`   → continuer ; au timeout (120s) → phase `grid` (non bloquant : Stalwart
+- `pending`   → continuer ; au timeout (180s) → phase `grid` (non bloquant : Stalwart
   réessaie, l'opérateur peut avancer).
 
 UI phase `verifying` : `inline-status` spinner + libellé « Publication des
-enregistrements en cours… (jusqu'à 2 min) ».
+enregistrements en cours… (jusqu'à 3 min) ».
 
 La résolution live (`gridStatus`) **reste un complément** (propagation), elle ne
 déclare plus le succès à elle seule.
