@@ -246,20 +246,29 @@ export function DnsStep({
     // exactement l'échec masqué que #62 corrige. `cancelled` est posé au cleanup
     // (changement de phase / démontage), donc tout callback en vol est ignoré.
     let cancelled = false
+    // `terminal` est posé SYNCHRONEMENT dès qu'un tick décide une transition
+    // terminale (error/grid), avant de rendre la main à la boucle de microtâches.
+    // `cancelled` (posé au cleanup) ne suffit pas : le cleanup s'exécute APRÈS le
+    // commit React, laissant une fenêtre où un callback périmé résolu entre-temps
+    // rebasculerait sur la grille et écraserait l'erreur. `terminal` ferme cette
+    // fenêtre intra-run ; `cancelled` couvre les re-entrées (retry) inter-run.
+    let terminal = false
     const tick = () => {
       dnsManagementStatusRef
         .current()
         .then(({ status }) => {
-          if (!mountedRef.current || cancelled) return
+          if (!mountedRef.current || cancelled || terminal) return
           const next = nextVerifyPhase(
             status,
             Date.now() - startedAt,
             VERIFY_DEADLINE_MS
           )
           if (next === "error") {
+            terminal = true
             setErrorCode("SETUP-DNS-PUBLISH-FAILED")
             setPhase("error")
           } else if (next === "grid") {
+            terminal = true
             setPhase("grid")
           } else if (next === "timeout") {
             // Deadline dépassée en 'pending' : on NE déclare PAS le succès. On
@@ -273,6 +282,7 @@ export function DnsStep({
           // la deadline, on révèle l'option de continuer (jamais de grille auto).
           if (
             !cancelled &&
+            !terminal &&
             mountedRef.current &&
             Date.now() - startedAt >= VERIFY_DEADLINE_MS
           ) {
