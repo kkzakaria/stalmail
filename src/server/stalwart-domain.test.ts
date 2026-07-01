@@ -71,19 +71,37 @@ describe("getPrimaryDomain", () => {
 })
 
 describe("setDnsManagementAutomatic", () => {
-  it("updates the domain dnsManagement to Automatic with the dns server id", async () => {
-    mj.mockResolvedValue([["x:Domain/set", { updated: { b: null } }, "0"]])
+  // Sans tâche à purger : query+get (vide) → Domain/set Manual → Domain/set Automatic.
+  const mockNoStaleThenToggle = () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: [] }, "0"],
+      ["x:Task/get", { list: [] }, "1"],
+    ])
+    mj.mockResolvedValueOnce([["x:Domain/set", { updated: { b: null } }, "0"]]) // Manual
+    mj.mockResolvedValueOnce([["x:Domain/set", { updated: { b: null } }, "0"]]) // Automatic
+  }
+
+  it("toggles Manual→Automatic with the dns server id (no stale task)", async () => {
+    mockNoStaleThenToggle()
     await setDnsManagementAutomatic({
       domainId: "b",
       dnsServerId: "srv1",
       origin: "exemple.fr",
     })
-    const [[, args]] = mj.mock.calls[0][0] as [
-      [string, Record<string, unknown>, string],
-    ]
-    // publishRecords est volontairement absent : Stalwart applique son défaut
-    // (tout publier). L'envoyer comme tableau était rejeté en invalidPatch.
-    expect(args.update).toEqual({
+
+    // 3 appels : Task query+get, Domain/set Manual, Domain/set Automatic (pas de destroy).
+    expect(mj).toHaveBeenCalledTimes(3)
+    const manual = mj.mock.calls[1][0][0][1] as {
+      update: Record<string, unknown>
+    }
+    expect(manual.update).toEqual({
+      b: { dnsManagement: { "@type": "Manual" } },
+    })
+    // publishRecords est volontairement absent : Stalwart applique son défaut.
+    const auto = mj.mock.calls[2][0][0][1] as {
+      update: Record<string, unknown>
+    }
+    expect(auto.update).toEqual({
       b: {
         dnsManagement: {
           "@type": "Automatic",
@@ -94,10 +112,48 @@ describe("setDnsManagementAutomatic", () => {
     })
   })
 
-  it("throws when the update is rejected", async () => {
-    mj.mockResolvedValue([
-      ["x:Domain/set", { notUpdated: { b: { type: "forbidden" } } }, "0"],
+  it("purges a lingering Failed DnsManagement task before re-publishing", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: ["t1", "t2"] }, "0"],
+      [
+        "x:Task/get",
+        {
+          list: [
+            { "@type": "AcmeRenewal", id: "t2" },
+            {
+              "@type": "DnsManagement",
+              id: "t1",
+              status: { "@type": "Failed" },
+            },
+          ],
+        },
+        "1",
+      ],
     ])
+    mj.mockResolvedValueOnce([["x:Task/set", { destroyed: ["t1"] }, "0"]]) // destroy
+    mj.mockResolvedValueOnce([["x:Domain/set", { updated: { b: null } }, "0"]]) // Manual
+    mj.mockResolvedValueOnce([["x:Domain/set", { updated: { b: null } }, "0"]]) // Automatic
+    await setDnsManagementAutomatic({
+      domainId: "b",
+      dnsServerId: "srv1",
+      origin: "exemple.fr",
+    })
+
+    expect(mj).toHaveBeenCalledTimes(4)
+    // Seule la tâche DnsManagement est détruite, pas l'AcmeRenewal.
+    const destroy = mj.mock.calls[1][0][0][1] as { destroy: string[] }
+    expect(destroy.destroy).toEqual(["t1"])
+  })
+
+  it("throws when the Automatic update is rejected", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: [] }, "0"],
+      ["x:Task/get", { list: [] }, "1"],
+    ])
+    mj.mockResolvedValueOnce([["x:Domain/set", { updated: { b: null } }, "0"]]) // Manual
+    mj.mockResolvedValueOnce([
+      ["x:Domain/set", { notUpdated: { b: { type: "forbidden" } } }, "0"],
+    ]) // Automatic rejeté
     await expect(
       setDnsManagementAutomatic({
         domainId: "b",
