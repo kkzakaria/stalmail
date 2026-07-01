@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.39](https://github.com/kkzakaria/stalmail/compare/v0.1.38...v0.1.39) (2026-07-01)
+
+
+### Bug Fixes
+
+* **setup:** garder l'étape dns après un échec de publication DNS ([#62](https://github.com/kkzakaria/stalmail/issues/62)) ([0477ff3](https://github.com/kkzakaria/stalmail/commit/0477ff32ce5726adf6866ffc9fb390f41a64f9c3))
+
 ## [0.1.38](https://github.com/kkzakaria/stalmail/compare/v0.1.37...v0.1.38) (2026-07-01)
 
 
