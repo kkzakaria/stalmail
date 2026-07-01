@@ -16,6 +16,7 @@ import { dnsProviderSchema } from "../schemas"
 import {
   Alert,
   Badge,
+  Button,
   CopyButton,
   Field,
   Spinner,
@@ -37,20 +38,23 @@ import type { DnsManagementStatus } from "@/server/stalwart-dns"
 // Décision de transition de la phase 'verifying' à partir du statut sondé et du
 // temps écoulé. Pure → testée isolément. La tâche DnsManagement met ~80-100s à
 // s'exécuter (probe #62, variable — un token invalide déclenche en plus un
-// rate-limit 429 côté provider qui rallonge l'échec) ; au-delà de la deadline on
-// passe à la grille sans bloquer (Stalwart continue de réessayer en tâche de fond).
+// rate-limit 429 côté provider qui rallonge l'échec). Au-delà de la deadline on
+// NE déclare PAS le succès (un timeout n'est pas une publication) : on renvoie
+// "timeout" → l'UI propose de continuer explicitement, sans jamais afficher une
+// grille trompeuse (le poll continue en fond, la tâche reste source de vérité).
 export function nextVerifyPhase(
   status: DnsManagementStatus,
   elapsedMs: number,
   deadlineMs: number
-): "error" | "grid" | "wait" {
+): "error" | "grid" | "timeout" | "wait" {
   if (status === "failed") return "error"
   if (status === "published") return "grid"
-  return elapsedMs >= deadlineMs ? "grid" : "wait"
+  return elapsedMs >= deadlineMs ? "timeout" : "wait"
 }
 
 // 3 min : marge confortable au-dessus des ~80-100s d'exécution observés (incl.
-// rate-limit 429), pour capter un token invalide avant de tomber sur la grille.
+// rate-limit 429). Au-delà, on n'affirme pas le succès — on laisse l'opérateur
+// choisir de continuer (cf. nextVerifyPhase → "timeout").
 const VERIFY_DEADLINE_MS = 180_000
 
 function zoneFileText(records: DnsGridRecord[]) {
@@ -111,6 +115,9 @@ export function DnsStep({
 }: Props) {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>("form")
+  // Deadline de la phase 'verifying' dépassée en 'pending' : on n'affiche PAS la
+  // grille (pas de faux succès), l'UI propose de continuer explicitement.
+  const [verifyTimedOut, setVerifyTimedOut] = useState(false)
   const [provider, setProvider] = useState("Manual")
   const [records, setRecords] = useState<DnsGridRecord[]>([])
   const [errorCode, setErrorCode] = useState("")
@@ -230,6 +237,7 @@ export function DnsStep({
   // qu'APRÈS exécution+nettoyage réussis, jamais avant création. Pas de course.
   useEffect(() => {
     if (phase !== "verifying") return
+    setVerifyTimedOut(false)
     const startedAt = Date.now()
     // Flag d'annulation par exécution d'effet : une requête lente d'un tick (le
     // rate-limit 429 rallonge la latence) peut résoudre APRÈS qu'un tick plus
@@ -253,17 +261,22 @@ export function DnsStep({
             setPhase("error")
           } else if (next === "grid") {
             setPhase("grid")
+          } else if (next === "timeout") {
+            // Deadline dépassée en 'pending' : on NE déclare PAS le succès. On
+            // révèle l'option « continuer quand même » et on continue de sonder
+            // (la tâche peut encore basculer failed/published).
+            setVerifyTimedOut(true)
           }
         })
         .catch(() => {
           // Erreurs transitoires ignorées ; le tick suivant réessaie. Au-delà de
-          // la deadline, on avance quand même vers la grille.
+          // la deadline, on révèle l'option de continuer (jamais de grille auto).
           if (
             !cancelled &&
             mountedRef.current &&
             Date.now() - startedAt >= VERIFY_DEADLINE_MS
           ) {
-            setPhase("grid")
+            setVerifyTimedOut(true)
           }
         })
     }
@@ -477,10 +490,24 @@ export function DnsStep({
       ) : null}
 
       {phase === "verifying" ? (
-        <p className="inline-status">
-          <Spinner size={14} />
-          {t("wizard.dns.records.verifying")}
-        </p>
+        verifyTimedOut ? (
+          <div className="step-body">
+            <Alert
+              variant="warning"
+              title={t("wizard.dns.records.verifyTimeoutTitle")}
+            >
+              {t("wizard.dns.records.verifyTimeout")}
+            </Alert>
+            <Button variant="outline" onClick={() => setPhase("grid")}>
+              {t("wizard.dns.records.continueAnyway")}
+            </Button>
+          </div>
+        ) : (
+          <p className="inline-status">
+            <Spinner size={14} />
+            {t("wizard.dns.records.verifying")}
+          </p>
+        )
       ) : null}
 
       {phase === "error" ? (

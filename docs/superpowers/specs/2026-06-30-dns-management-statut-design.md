@@ -86,7 +86,7 @@ export const dnsManagementStatusFn = createServerFn({ method: "GET" }).handler(
 ### Côté client — `DnsStep`
 
 Nouvelle phase `"verifying"` insérée dans le chemin auto :
-`createDnsServer → setDnsManagement → verifying → grid | error`.
+`createDnsServer → setDnsManagement → verifying → grid | error | (timeout → continuer)`.
 
 Effet de poll keyé sur la phase `"verifying"` (calque `SslStep` monitor), intervalle
 5s, **deadline 180s** (latence worker ~80-100s observée, variable + rate-limit 429 sur
@@ -95,11 +95,20 @@ token invalide → marge) :
 - `failed`    → `setErrorCode("SETUP-DNS-PUBLISH-FAILED")` + phase `error`. Le `retry()`
   auto **existant** vide déjà le secret et renvoie au formulaire → ressaisie token.
 - `published` → phase `grid`.
-- `pending`   → continuer ; au timeout (180s) → phase `grid` (non bloquant : Stalwart
-  réessaie, l'opérateur peut avancer).
+- `pending` avant la deadline → continuer à sonder.
+- `pending` **au-delà de la deadline (180s)** → `timeout` : on **ne déclare PAS le
+  succès** (un timeout n'est pas une publication — sinon on recrée le faux-succès que
+  #62 corrige). On pose un état `verifyTimedOut` qui révèle un message « prend plus de
+  temps que prévu » + un bouton **« Continuer quand même »** (choix conscient de
+  l'opérateur), **et le poll continue** (la tâche reste la source de vérité : elle peut
+  encore basculer `failed`/`published`). Jamais de bascule automatique vers la grille.
 
-UI phase `verifying` : `inline-status` spinner + libellé « Publication des
-enregistrements en cours… (jusqu'à 3 min) ».
+Le helper pur `nextVerifyPhase` renvoie `"error" | "grid" | "timeout" | "wait"` en
+conséquence.
+
+UI phase `verifying` : avant timeout, `inline-status` spinner + « Publication des
+enregistrements en cours… (jusqu'à 3 min) » ; après timeout, `Alert` (warning) +
+`Button` « Continuer quand même » → `phase = grid`.
 
 La résolution live (`gridStatus`) **reste un complément** (propagation), elle ne
 déclare plus le succès à elle seule.

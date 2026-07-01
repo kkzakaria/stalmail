@@ -4,7 +4,7 @@
 
 **Goal:** Faire de la tâche `DnsManagement` de Stalwart la source de vérité du succès de publication DNS dans le wizard, pour qu'un token API invalide ne passe plus inaperçu.
 
-**Architecture:** Calque exact du correctif ACME #59. Côté serveur : un helper pur `classifyDnsManagement` + une lecture `getDnsManagementStatus` + une server-fn GET. Côté client : `DnsStep` gagne une phase `verifying` bloquante qui sonde cette server-fn (poll 5s, deadline 180s) entre `setDnsManagement` et la grille ; `failed` → erreur explicite + ressaisie du token, `published` → grille, `pending` au timeout → grille (non bloquant).
+**Architecture:** Calque exact du correctif ACME #59. Côté serveur : un helper pur `classifyDnsManagement` + une lecture `getDnsManagementStatus` + une server-fn GET. Côté client : `DnsStep` gagne une phase `verifying` bloquante qui sonde cette server-fn (poll 5s, deadline 180s) entre `setDnsManagement` et la grille ; `failed` → erreur explicite + ressaisie du token, `published` → grille, `pending` au-delà de la deadline → état `timeout` (message + bouton « Continuer quand même », le poll continue — jamais de bascule grille silencieuse).
 
 **Tech Stack:** TypeScript, TanStack Start (server functions), React 19, react-i18next, Vitest, Testing Library. Gestionnaire de paquets **Bun**.
 

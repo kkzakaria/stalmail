@@ -103,6 +103,10 @@ export const fr = {
         connecting: "Connexion à {{provider}}…",
         publishing: "Publication des enregistrements…",
         verifying: "Publication des enregistrements en cours… (jusqu'à 3 min)",
+        verifyTimeoutTitle: "La publication prend plus de temps que prévu",
+        verifyTimeout:
+          "La publication DNS n'est pas encore confirmée. Elle se poursuit en arrière-plan — patientez, ou continuez sans attendre (la vérification restera visible sur la grille).",
+        continueAnyway: "Continuer quand même",
         task: "Tâche DnsManagement",
         zoneFull: "Fichier de zone complet",
         downloadTxt: "Télécharger (.txt)",
@@ -449,6 +453,10 @@ export const en: DeepRecord<typeof fr> = {
         connecting: "Connecting to {{provider}}…",
         publishing: "Publishing records…",
         verifying: "Publishing records… (up to 3 min)",
+        verifyTimeoutTitle: "Publishing is taking longer than expected",
+        verifyTimeout:
+          "DNS publication isn't confirmed yet. It continues in the background — wait, or continue without waiting (verification stays visible on the grid).",
+        continueAnyway: "Continue anyway",
         task: "DnsManagement task",
         zoneFull: "Full zone file",
         downloadTxt: "Download (.txt)",

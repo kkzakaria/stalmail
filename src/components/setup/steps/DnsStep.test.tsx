@@ -61,9 +61,9 @@ describe("nextVerifyPhase", () => {
   it("pending avant la deadline → wait", () => {
     expect(nextVerifyPhase("pending", D - 1, D)).toBe("wait")
   })
-  it("pending à/au-delà de la deadline → grid (non bloquant)", () => {
-    expect(nextVerifyPhase("pending", D, D)).toBe("grid")
-    expect(nextVerifyPhase("pending", D + 5000, D)).toBe("grid")
+  it("pending à/au-delà de la deadline → timeout (pas de succès auto)", () => {
+    expect(nextVerifyPhase("pending", D, D)).toBe("timeout")
+    expect(nextVerifyPhase("pending", D + 5000, D)).toBe("timeout")
   })
 })
 
@@ -307,6 +307,58 @@ describe("DnsStep", () => {
       expect(
         screen.queryByText("Enregistrements gérés automatiquement")
       ).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("auto path: timeout (pending au-delà de la deadline) → 'continuer quand même', pas de grille auto", async () => {
+    vi.useFakeTimers()
+    try {
+      const props = {
+        ...baseProps(),
+        dnsManagementStatus: vi.fn(() =>
+          Promise.resolve({ status: "pending" as const })
+        ),
+      }
+      wrap(<DnsStep {...props} />)
+
+      fireEvent.click(screen.getByRole("button", { expanded: false }))
+      fireEvent.click(screen.getByText("Cloudflare"))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      fireEvent.change(screen.getByLabelText("Clé API"), {
+        target: { value: "tok" },
+      })
+      fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      // Dépasse la deadline (180s) en restant 'pending'.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(185000)
+      })
+
+      // État timeout : message + bouton explicite, jamais la grille auto.
+      expect(
+        screen.getByText(/prend plus de temps que prévu/)
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText("Enregistrements gérés automatiquement")
+      ).not.toBeInTheDocument()
+
+      // « Continuer quand même » → grille (choix conscient de l'opérateur).
+      fireEvent.click(
+        screen.getByRole("button", { name: "Continuer quand même" })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(
+        screen.getByText("Enregistrements gérés automatiquement")
+      ).toBeInTheDocument()
     } finally {
       vi.useRealTimers()
     }
