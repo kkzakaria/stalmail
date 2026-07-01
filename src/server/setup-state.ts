@@ -46,12 +46,23 @@ async function hasUserAdminAccount(): Promise<boolean> {
 }
 
 // DNS is considered managed only when a primary domain exists AND either:
-// - Stalwart manages it automatically (dnsManagement['@type'] === 'Automatic'), OR
-// - the operator has manually confirmed DNS is configured (isDnsConfigured marker).
+// - the operator has manually confirmed DNS is configured (isDnsConfigured marker), OR
+// - Stalwart manages it automatically (dnsManagement['@type'] === 'Automatic') AND the
+//   DnsManagement publish task has not FAILED.
 // A missing domain is never "managed" — it must still route to the 'dns' step.
-function isDnsManaged(domain: StalwartDomain | null): boolean {
+//
+// Le garde sur la tâche est crucial (#62) : setDnsManagement(Automatic) réussit au
+// niveau JMAP même avec un token invalide (le domaine passe en Automatic), seule la
+// tâche DnsManagement échoue ensuite. Sans ce garde, l'étape avancerait vers 'ssl' et
+// requireStep('dns') refuserait le retry → SETUP-FORBIDDEN. Un échec de publication
+// doit donc laisser l'opérateur sur l'étape 'dns' pour ressaisir le token. Les états
+// 'published'/'pending' (bon token, en cours) restent "managés" (non bloquant).
+async function isDnsManaged(domain: StalwartDomain | null): Promise<boolean> {
   if (!domain) return false
-  return domain.dnsManagement?.["@type"] === "Automatic" || isDnsConfigured()
+  if (isDnsConfigured()) return true
+  if (domain.dnsManagement?.["@type"] !== "Automatic") return false
+  const { getDnsManagementStatus } = await import("./stalwart-dns")
+  return (await getDnsManagementStatus()) !== "failed"
 }
 
 // SSL is configured when Stalwart manages certificates automatically.
@@ -74,7 +85,7 @@ export async function deriveSetupStep(): Promise<SetupStep> {
   if (isSetupComplete()) return "done"
   if (await isBootstrapMode()) return "collect"
   const domain = await getPrimaryDomain()
-  if (!isDnsManaged(domain)) return "dns"
+  if (!(await isDnsManaged(domain))) return "dns"
   if (!isSslConfigured(domain) && !isSslAcknowledged()) return "ssl"
   if (!(await hasUserAdminAccount())) return "account"
   return "done"
