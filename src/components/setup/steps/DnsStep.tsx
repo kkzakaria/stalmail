@@ -231,11 +231,18 @@ export function DnsStep({
   useEffect(() => {
     if (phase !== "verifying") return
     const startedAt = Date.now()
+    // Flag d'annulation par exécution d'effet : une requête lente d'un tick (le
+    // rate-limit 429 rallonge la latence) peut résoudre APRÈS qu'un tick plus
+    // rapide a déjà basculé la phase. Sans ce garde, un "published"/"pending"
+    // périmé rappellerait setPhase("grid") et écraserait une erreur réelle —
+    // exactement l'échec masqué que #62 corrige. `cancelled` est posé au cleanup
+    // (changement de phase / démontage), donc tout callback en vol est ignoré.
+    let cancelled = false
     const tick = () => {
       dnsManagementStatusRef
         .current()
         .then(({ status }) => {
-          if (!mountedRef.current) return
+          if (!mountedRef.current || cancelled) return
           const next = nextVerifyPhase(
             status,
             Date.now() - startedAt,
@@ -252,6 +259,7 @@ export function DnsStep({
           // Erreurs transitoires ignorées ; le tick suivant réessaie. Au-delà de
           // la deadline, on avance quand même vers la grille.
           if (
+            !cancelled &&
             mountedRef.current &&
             Date.now() - startedAt >= VERIFY_DEADLINE_MS
           ) {
@@ -261,7 +269,10 @@ export function DnsStep({
     }
     tick()
     const id = setInterval(tick, 5000)
-    return () => clearInterval(id)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [phase])
 
   // À l'entrée de la grille : découvrir l'IP du serveur une fois (écho sortant).

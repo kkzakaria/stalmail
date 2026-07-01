@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "@/i18n/i18n"
 import type { DnsGridRecord, HostAddressRecord } from "@/server/setup-actions"
@@ -254,6 +254,62 @@ describe("DnsStep", () => {
       screen.queryByText("Enregistrements gérés automatiquement")
     ).not.toBeInTheDocument()
     expect(props.dnsManagementStatus).toHaveBeenCalled()
+  })
+
+  it("auto path: une réponse périmée n'écrase pas une erreur déjà détectée (race #62)", async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveStale: (v: { status: "published" }) => void = () => {}
+      const stale = new Promise<{ status: "published" }>((r) => {
+        resolveStale = r
+      })
+      // Tick 1 (lent) résoudra "published" APRÈS que le tick 2 (rapide) a détecté
+      // "failed". Sans le garde d'annulation, ce "published" périmé rebasculerait
+      // sur la grille et masquerait l'échec — le bug #62 lui-même.
+      const dnsManagementStatus = vi
+        .fn()
+        .mockReturnValueOnce(stale)
+        .mockResolvedValue({ status: "failed" as const })
+      const props = { ...baseProps(), dnsManagementStatus }
+      wrap(<DnsStep {...props} />)
+
+      fireEvent.click(screen.getByRole("button", { expanded: false }))
+      fireEvent.click(screen.getByText("Cloudflare"))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      fireEvent.change(screen.getByLabelText("Clé API"), {
+        target: { value: "tok" },
+      })
+      fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+      // createDnsServer + setDnsManagement résolvent → phase verifying, tick 1 en vol.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      // 5s plus tard : tick 2 → "failed" → phase error.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000)
+      })
+      expect(
+        screen.getByText(/La publication DNS a échoué/)
+      ).toBeInTheDocument()
+
+      // La réponse périmée du tick 1 arrive APRÈS l'erreur : elle doit être ignorée.
+      await act(async () => {
+        resolveStale({ status: "published" })
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      expect(
+        screen.getByText(/La publication DNS a échoué/)
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText("Enregistrements gérés automatiquement")
+      ).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("écho IP échoué → hostAddressStatus interrogé sans IP, CNAME webmail affiché", async () => {
