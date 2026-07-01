@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.38](https://github.com/kkzakaria/stalmail/compare/v0.1.37...v0.1.38) (2026-07-01)
+
+
+### Features
+
+* **setup:** surfacer l'échec de publication DnsManagement ([#62](https://github.com/kkzakaria/stalmail/issues/62)) ([84b0bda](https://github.com/kkzakaria/stalmail/commit/84b0bda8a869b3edd09f9011315454bd90e9cdf0))
+
 ## [0.1.37](https://github.com/kkzakaria/stalmail/compare/v0.1.36...v0.1.37) (2026-06-30)
 
 
