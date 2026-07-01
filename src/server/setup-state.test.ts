@@ -13,6 +13,7 @@ vi.mock("./jmap", async (importActual) => ({
   jmapCall: vi.fn(),
   resolveAccountId: vi.fn(async () => "d333333"),
 }))
+vi.mock("./stalwart-dns", () => ({ getDnsManagementStatus: vi.fn() }))
 
 // eslint-disable-next-line import/first
 import {
@@ -27,6 +28,8 @@ import { getPrimaryDomain } from "./stalwart-domain"
 // eslint-disable-next-line import/first
 import { jmapCall } from "./jmap"
 // eslint-disable-next-line import/first
+import { getDnsManagementStatus } from "./stalwart-dns"
+// eslint-disable-next-line import/first
 import { deriveSetupStep, isDnsManual } from "./setup-state"
 
 const flag = vi.mocked(isSetupComplete)
@@ -35,6 +38,7 @@ const sslFlag = vi.mocked(isSslAcknowledged)
 const boot = vi.mocked(isBootstrapMode)
 const dom = vi.mocked(getPrimaryDomain)
 const mj = vi.mocked(jmapCall)
+const dnsMgmt = vi.mocked(getDnsManagementStatus)
 
 // Helper: a JMAP query+get pair for the given account list.
 const accounts = (list: Array<{ name?: string; description?: string }>) =>
@@ -62,6 +66,7 @@ beforeEach(() => {
   boot.mockResolvedValue(false)
   dom.mockResolvedValue(null)
   mj.mockResolvedValue(accounts([SYSTEM_ADMIN])) // only the system admin by default
+  dnsMgmt.mockResolvedValue("published") // publication réussie par défaut
 })
 
 describe("deriveSetupStep — nouvel ordre collect → dns → ssl → account → done", () => {
@@ -107,6 +112,29 @@ describe("deriveSetupStep — nouvel ordre collect → dns → ssl → account �
       dnsManagement: { "@type": "Manual" },
     })
     expect(await deriveSetupStep()).toBe("dns")
+  })
+
+  it('Automatic mais publication échouée (token invalide) → reste "dns" pour ressaisie (#62)', async () => {
+    // dnsManagement=Automatic est posé même avec un mauvais token (la tâche
+    // DnsManagement échoue à la publication) ; l'étape doit rester 'dns' sinon
+    // requireStep('dns') refuse le retry → SETUP-FORBIDDEN.
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Automatic" },
+    })
+    dnsMgmt.mockResolvedValue("failed")
+    expect(await deriveSetupStep()).toBe("dns")
+  })
+
+  it("Automatic + publication pending (bon token, en cours) → dépasse dns (→ ssl)", async () => {
+    dom.mockResolvedValue({
+      id: "b",
+      name: "exemple.fr",
+      dnsManagement: { "@type": "Automatic" },
+    })
+    dnsMgmt.mockResolvedValue("pending")
+    expect(await deriveSetupStep()).toBe("ssl")
   })
 
   // --- Marqueur manuel ---
