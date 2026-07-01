@@ -143,6 +143,25 @@ describe("setDnsManagementAutomatic", () => {
     // Seule la tâche DnsManagement est détruite, pas l'AcmeRenewal.
     const destroy = mj.mock.calls[1][0][0][1] as { destroy: string[] }
     expect(destroy.destroy).toEqual(["t1"])
+    // Après purge, la transition Manual → Automatic est bien émise (payloads).
+    const manual = mj.mock.calls[2][0][0][1] as {
+      update: Record<string, unknown>
+    }
+    expect(manual.update).toEqual({
+      b: { dnsManagement: { "@type": "Manual" } },
+    })
+    const auto = mj.mock.calls[3][0][0][1] as {
+      update: Record<string, unknown>
+    }
+    expect(auto.update).toEqual({
+      b: {
+        dnsManagement: {
+          "@type": "Automatic",
+          dnsServerId: "srv1",
+          origin: "exemple.fr",
+        },
+      },
+    })
   })
 
   it("ne purge PAS une tâche DnsManagement active (Pending)", async () => {
