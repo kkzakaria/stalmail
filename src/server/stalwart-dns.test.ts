@@ -234,38 +234,4 @@ describe("getDnsManagementStatus", () => {
     ])
     await expect(getDnsManagementStatus()).resolves.toBe("pending")
   })
-
-  it("prefers a non-failed DnsManagement task over a lingering failed one (retry)", async () => {
-    mj.mockResolvedValueOnce([
-      ["x:Task/query", { ids: ["t1", "t2"] }, "0"],
-      [
-        "x:Task/get",
-        {
-          list: [
-            { "@type": "DnsManagement", status: { "@type": "Failed" } },
-            { "@type": "DnsManagement", status: { "@type": "Pending" } },
-          ],
-        },
-        "1",
-      ],
-    ])
-    await expect(getDnsManagementStatus()).resolves.toBe("pending")
-  })
-
-  it("returns 'failed' when all DnsManagement tasks are failed", async () => {
-    mj.mockResolvedValueOnce([
-      ["x:Task/query", { ids: ["t1", "t2"] }, "0"],
-      [
-        "x:Task/get",
-        {
-          list: [
-            { "@type": "DnsManagement", status: { "@type": "Failed" } },
-            { "@type": "DnsManagement", status: { "@type": "Failed" } },
-          ],
-        },
-        "1",
-      ],
-    ])
-    await expect(getDnsManagementStatus()).resolves.toBe("failed")
-  })
 })

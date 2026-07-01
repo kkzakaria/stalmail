@@ -151,12 +151,6 @@ export async function getDnsManagementStatus(): Promise<DnsManagementStatus> {
   ])
   const list =
     (expectResult(responses, 1) as { list?: DnsManagementTask[] }).list ?? []
-  const dnsTasks = list.filter((t) => t["@type"] === "DnsManagement")
-  // Un retry (token corrigé) peut laisser une ancienne tâche `Failed` à côté de la
-  // nouvelle en cours : on privilégie une tâche NON échouée (publication en cours ou
-  // réussie) pour ne pas rester bloqué sur un échec périmé — cf. #62 (retry / step
-  // guard). En l'absence de tâche non échouée, on classifie l'échec.
-  const task =
-    dnsTasks.find((t) => t.status?.["@type"] !== "Failed") ?? dnsTasks[0]
+  const task = list.find((t) => t["@type"] === "DnsManagement")
   return classifyDnsManagement(task)
 }
