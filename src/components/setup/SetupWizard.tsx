@@ -21,6 +21,7 @@ import type {
   HostAddressRecord,
 } from "@/server/setup-actions"
 import type { AcmeStatus } from "@/server/stalwart-acme"
+import type { DnsManagementStatus } from "@/server/stalwart-dns"
 import "./wizard.css"
 
 // Server-derived step (from getStep). 'collect' means bootstrap is still pending.
@@ -59,6 +60,7 @@ interface Props {
   setDnsManagement: (input: { dnsServerId: string }) => Promise<{ ok: true }>
   setDnsManagementManual: () => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
+  dnsManagementStatus: () => Promise<{ status: DnsManagementStatus }>
   discoverServerIp: () => Promise<{ ipv4: string | null; ipv6: string | null }>
   hostAddressStatus: (ip: {
     ipv4?: string
@@ -96,6 +98,7 @@ export function SetupWizard({
   setDnsManagement,
   setDnsManagementManual,
   gridStatus,
+  dnsManagementStatus,
   discoverServerIp,
   hostAddressStatus,
   configureAcme,
@@ -495,6 +498,7 @@ export function SetupWizard({
         setDnsManagement={stableSetDnsManagement}
         setDnsManagementManual={stableSetDnsManagementManual}
         gridStatus={gridStatus}
+        dnsManagementStatus={dnsManagementStatus}
         discoverServerIp={discoverServerIp}
         hostAddressStatus={hostAddressStatus}
         onNext={(manual) => {

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start"
 import { z } from "zod"
 import type { BootstrapInput } from "./stalwart-bootstrap"
-import type { DnsProvider } from "./stalwart-dns"
+import type { DnsProvider, DnsManagementStatus } from "./stalwart-dns"
 import type { AcmeStatus } from "./stalwart-acme"
 import { DNS_AUTO_PROVIDERS } from "@/lib/dns-providers"
 import { isIpv4, isIpv6 } from "@/lib/ip"
@@ -453,6 +453,13 @@ export async function acmeStatusHandler(): Promise<{ status: AcmeStatus }> {
   return { status: await getAcmeStatus() }
 }
 
+export async function dnsManagementStatusHandler(): Promise<{
+  status: DnsManagementStatus
+}> {
+  const { getDnsManagementStatus } = await import("./stalwart-dns")
+  return { status: await getDnsManagementStatus() }
+}
+
 export async function finishSetupHandler(): Promise<{ ok: true }> {
   await requireSetupAuthGuard()
   await requireStep("done")
@@ -479,6 +486,9 @@ export const configureAcmeFn = createServerFn({ method: "POST" })
   .handler(configureAcmeHandler)
 export const acmeStatusFn = createServerFn({ method: "GET" }).handler(
   acmeStatusHandler
+)
+export const dnsManagementStatusFn = createServerFn({ method: "GET" }).handler(
+  dnsManagementStatusHandler
 )
 export const finishSetupFn = createServerFn({ method: "POST" }).handler(
   finishSetupHandler

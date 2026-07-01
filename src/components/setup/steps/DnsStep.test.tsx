@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "@/i18n/i18n"
 import type { DnsGridRecord, HostAddressRecord } from "@/server/setup-actions"
-import { DnsStep } from "./DnsStep"
+import { DnsStep, nextVerifyPhase } from "./DnsStep"
 
 const wrap = (ui: React.ReactNode) =>
   render(<I18nextProvider i18n={createI18n("fr")}>{ui}</I18nextProvider>)
@@ -27,6 +27,9 @@ const baseProps = () => ({
   gridStatus: vi.fn(() =>
     Promise.resolve({ origin: "exemple.fr", records: autoRecords })
   ),
+  dnsManagementStatus: vi.fn(() =>
+    Promise.resolve({ status: "published" as const })
+  ),
   discoverServerIp: vi.fn(() =>
     Promise.resolve({ ipv4: "203.0.113.4", ipv6: null })
   ),
@@ -44,6 +47,24 @@ const baseProps = () => ({
     })
   ),
   onNext: vi.fn(),
+})
+
+describe("nextVerifyPhase", () => {
+  const D = 120000
+  it("failed → error, quel que soit le temps écoulé", () => {
+    expect(nextVerifyPhase("failed", 0, D)).toBe("error")
+    expect(nextVerifyPhase("failed", D + 1, D)).toBe("error")
+  })
+  it("published → grid", () => {
+    expect(nextVerifyPhase("published", 0, D)).toBe("grid")
+  })
+  it("pending avant la deadline → wait", () => {
+    expect(nextVerifyPhase("pending", D - 1, D)).toBe("wait")
+  })
+  it("pending à/au-delà de la deadline → timeout (pas de succès auto)", () => {
+    expect(nextVerifyPhase("pending", D, D)).toBe("timeout")
+    expect(nextVerifyPhase("pending", D + 5000, D)).toBe("timeout")
+  })
 })
 
 describe("DnsStep", () => {
@@ -179,6 +200,168 @@ describe("DnsStep", () => {
         ipv6: undefined,
       })
     })
+  })
+
+  it("auto path: DnsManagement Failed → error box + retry vide le token", async () => {
+    const props = {
+      ...baseProps(),
+      dnsManagementStatus: vi.fn(() =>
+        Promise.resolve({ status: "failed" as const })
+      ),
+    }
+    wrap(<DnsStep {...props} />)
+
+    fireEvent.click(screen.getByRole("button", { expanded: false }))
+    fireEvent.click(screen.getByText("Cloudflare"))
+    fireEvent.change(await screen.findByLabelText("Clé API"), {
+      target: { value: "bad-token" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+
+    // L'erreur de publication apparaît.
+    expect(
+      await screen.findByText("SETUP-DNS-PUBLISH-FAILED")
+    ).toBeInTheDocument()
+
+    // Retry → retour au formulaire, token vidé pour ressaisie.
+    fireEvent.click(screen.getByText("Réessayer"))
+    expect(await screen.findByText("Fournisseur DNS")).toBeInTheDocument()
+    const token: HTMLInputElement = await screen.findByLabelText("Clé API")
+    expect(token.value).toBe("")
+  })
+
+  it("auto path: pending affiche la phase de vérification, pas encore la grille", async () => {
+    const props = {
+      ...baseProps(),
+      dnsManagementStatus: vi.fn(() =>
+        Promise.resolve({ status: "pending" as const })
+      ),
+    }
+    wrap(<DnsStep {...props} />)
+
+    fireEvent.click(screen.getByRole("button", { expanded: false }))
+    fireEvent.click(screen.getByText("Cloudflare"))
+    fireEvent.change(await screen.findByLabelText("Clé API"), {
+      target: { value: "tok" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+
+    // Spinner de vérification visible ; la grille n'est pas encore atteinte.
+    expect(
+      await screen.findByText(/Publication des enregistrements en cours/)
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText("Enregistrements gérés automatiquement")
+    ).not.toBeInTheDocument()
+    expect(props.dnsManagementStatus).toHaveBeenCalled()
+  })
+
+  it("auto path: une réponse périmée n'écrase pas une erreur déjà détectée (race #62)", async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveStale: (v: { status: "published" }) => void = () => {}
+      const stale = new Promise<{ status: "published" }>((r) => {
+        resolveStale = r
+      })
+      // Tick 1 (lent) résoudra "published" APRÈS que le tick 2 (rapide) a détecté
+      // "failed". Sans le garde d'annulation, ce "published" périmé rebasculerait
+      // sur la grille et masquerait l'échec — le bug #62 lui-même.
+      const dnsManagementStatus = vi
+        .fn()
+        .mockReturnValueOnce(stale)
+        .mockResolvedValue({ status: "failed" as const })
+      const props = { ...baseProps(), dnsManagementStatus }
+      wrap(<DnsStep {...props} />)
+
+      fireEvent.click(screen.getByRole("button", { expanded: false }))
+      fireEvent.click(screen.getByText("Cloudflare"))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      fireEvent.change(screen.getByLabelText("Clé API"), {
+        target: { value: "tok" },
+      })
+      fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+      // createDnsServer + setDnsManagement résolvent → phase verifying, tick 1 en vol.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      // 5s plus tard : tick 2 → "failed" → phase error.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000)
+      })
+      expect(
+        screen.getByText(/La publication DNS a échoué/)
+      ).toBeInTheDocument()
+
+      // La réponse périmée du tick 1 arrive APRÈS l'erreur : elle doit être ignorée.
+      await act(async () => {
+        resolveStale({ status: "published" })
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      expect(
+        screen.getByText(/La publication DNS a échoué/)
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText("Enregistrements gérés automatiquement")
+      ).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("auto path: timeout (pending au-delà de la deadline) → 'continuer quand même', pas de grille auto", async () => {
+    vi.useFakeTimers()
+    try {
+      const props = {
+        ...baseProps(),
+        dnsManagementStatus: vi.fn(() =>
+          Promise.resolve({ status: "pending" as const })
+        ),
+      }
+      wrap(<DnsStep {...props} />)
+
+      fireEvent.click(screen.getByRole("button", { expanded: false }))
+      fireEvent.click(screen.getByText("Cloudflare"))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      fireEvent.change(screen.getByLabelText("Clé API"), {
+        target: { value: "tok" },
+      })
+      fireEvent.click(screen.getByRole("button", { name: "Continuer" }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      // Dépasse la deadline (180s) en restant 'pending'.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(185000)
+      })
+
+      // État timeout : message + bouton explicite, jamais la grille auto.
+      expect(
+        screen.getByText(/prend plus de temps que prévu/)
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText("Enregistrements gérés automatiquement")
+      ).not.toBeInTheDocument()
+
+      // « Continuer quand même » → grille (choix conscient de l'opérateur).
+      fireEvent.click(
+        screen.getByRole("button", { name: "Continuer quand même" })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(
+        screen.getByText("Enregistrements gérés automatiquement")
+      ).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("écho IP échoué → hostAddressStatus interrogé sans IP, CNAME webmail affiché", async () => {

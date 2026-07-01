@@ -16,6 +16,7 @@ import { dnsProviderSchema } from "../schemas"
 import {
   Alert,
   Badge,
+  Button,
   CopyButton,
   Field,
   Spinner,
@@ -32,6 +33,29 @@ import {
 import { IconCheck, IconInfo } from "../ui/icons"
 import { SetupErrorBox } from "../ui/SetupErrorBox"
 import { codeFromError, messageKeyForCode } from "../error-code"
+import type { DnsManagementStatus } from "@/server/stalwart-dns"
+
+// Décision de transition de la phase 'verifying' à partir du statut sondé et du
+// temps écoulé. Pure → testée isolément. La tâche DnsManagement met ~80-100s à
+// s'exécuter (probe #62, variable — un token invalide déclenche en plus un
+// rate-limit 429 côté provider qui rallonge l'échec). Au-delà de la deadline on
+// NE déclare PAS le succès (un timeout n'est pas une publication) : on renvoie
+// "timeout" → l'UI propose de continuer explicitement, sans jamais afficher une
+// grille trompeuse (le poll continue en fond, la tâche reste source de vérité).
+export function nextVerifyPhase(
+  status: DnsManagementStatus,
+  elapsedMs: number,
+  deadlineMs: number
+): "error" | "grid" | "timeout" | "wait" {
+  if (status === "failed") return "error"
+  if (status === "published") return "grid"
+  return elapsedMs >= deadlineMs ? "timeout" : "wait"
+}
+
+// 3 min : marge confortable au-dessus des ~80-100s d'exécution observés (incl.
+// rate-limit 429). Au-delà, on n'affirme pas le succès — on laisse l'opérateur
+// choisir de continuer (cf. nextVerifyPhase → "timeout").
+const VERIFY_DEADLINE_MS = 180_000
 
 function zoneFileText(records: DnsGridRecord[]) {
   const pad = (s: string, n: number) => (s.length >= n ? s + " " : s.padEnd(n))
@@ -50,7 +74,13 @@ const DNS_GROUP_DEFS = [
 
 const PROVIDER_OPTIONS = DNS_PROVIDERS.filter((p) => p !== "Manual")
 
-type Phase = "form" | "connecting" | "publishing" | "grid" | "error"
+type Phase =
+  | "form"
+  | "connecting"
+  | "publishing"
+  | "verifying"
+  | "grid"
+  | "error"
 
 interface Props {
   hostname: string
@@ -62,6 +92,7 @@ interface Props {
   setDnsManagement: (i: { dnsServerId: string }) => Promise<{ ok: true }>
   setDnsManagementManual: () => Promise<{ ok: true }>
   gridStatus: () => Promise<{ origin: string; records: DnsGridRecord[] }>
+  dnsManagementStatus: () => Promise<{ status: DnsManagementStatus }>
   discoverServerIp: () => Promise<{ ipv4: string | null; ipv6: string | null }>
   hostAddressStatus: (ip: {
     ipv4?: string
@@ -77,12 +108,16 @@ export function DnsStep({
   setDnsManagement,
   setDnsManagementManual,
   gridStatus,
+  dnsManagementStatus,
   discoverServerIp,
   hostAddressStatus,
   onNext,
 }: Props) {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>("form")
+  // Deadline de la phase 'verifying' dépassée en 'pending' : on n'affiche PAS la
+  // grille (pas de faux succès), l'UI propose de continuer explicitement.
+  const [verifyTimedOut, setVerifyTimedOut] = useState(false)
   const [provider, setProvider] = useState("Manual")
   const [records, setRecords] = useState<DnsGridRecord[]>([])
   const [errorCode, setErrorCode] = useState("")
@@ -99,6 +134,8 @@ export function DnsStep({
 
   const mountedRef = useRef(true)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const dnsManagementStatusRef = useRef(dnsManagementStatus)
+  dnsManagementStatusRef.current = dnsManagementStatus
 
   useEffect(() => {
     mountedRef.current = true
@@ -132,7 +169,7 @@ export function DnsStep({
       })
       .then((res) => {
         if (!mountedRef.current || res === null) return
-        setPhase("grid")
+        setPhase("verifying")
       })
       .catch((e: unknown) => {
         if (!mountedRef.current) return
@@ -187,6 +224,77 @@ export function DnsStep({
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
       pollRef.current = null
+    }
+  }, [phase])
+
+  // Phase 'verifying' : la tâche DnsManagement est la SOURCE DE VÉRITÉ du succès
+  // de publication (un token invalide passait inaperçu via le cache DNS — #62).
+  // Poll 5s jusqu'à la deadline ; failed → erreur (ressaisie token), published →
+  // grille, pending au timeout → grille (non bloquant).
+  // Invariant (probe #62) : setDnsManagementAutomatic planifie la tâche
+  // DnsManagement de façon synchrone — elle est déjà présente (Pending) au
+  // premier sondage. Un classement "published" (tâche absente) ne survient donc
+  // qu'APRÈS exécution+nettoyage réussis, jamais avant création. Pas de course.
+  useEffect(() => {
+    if (phase !== "verifying") return
+    setVerifyTimedOut(false)
+    const startedAt = Date.now()
+    // Flag d'annulation par exécution d'effet : une requête lente d'un tick (le
+    // rate-limit 429 rallonge la latence) peut résoudre APRÈS qu'un tick plus
+    // rapide a déjà basculé la phase. Sans ce garde, un "published"/"pending"
+    // périmé rappellerait setPhase("grid") et écraserait une erreur réelle —
+    // exactement l'échec masqué que #62 corrige. `cancelled` est posé au cleanup
+    // (changement de phase / démontage), donc tout callback en vol est ignoré.
+    let cancelled = false
+    // `terminal` est posé SYNCHRONEMENT dès qu'un tick décide une transition
+    // terminale (error/grid), avant de rendre la main à la boucle de microtâches.
+    // `cancelled` (posé au cleanup) ne suffit pas : le cleanup s'exécute APRÈS le
+    // commit React, laissant une fenêtre où un callback périmé résolu entre-temps
+    // rebasculerait sur la grille et écraserait l'erreur. `terminal` ferme cette
+    // fenêtre intra-run ; `cancelled` couvre les re-entrées (retry) inter-run.
+    let terminal = false
+    const tick = () => {
+      dnsManagementStatusRef
+        .current()
+        .then(({ status }) => {
+          if (!mountedRef.current || cancelled || terminal) return
+          const next = nextVerifyPhase(
+            status,
+            Date.now() - startedAt,
+            VERIFY_DEADLINE_MS
+          )
+          if (next === "error") {
+            terminal = true
+            setErrorCode("SETUP-DNS-PUBLISH-FAILED")
+            setPhase("error")
+          } else if (next === "grid") {
+            terminal = true
+            setPhase("grid")
+          } else if (next === "timeout") {
+            // Deadline dépassée en 'pending' : on NE déclare PAS le succès. On
+            // révèle l'option « continuer quand même » et on continue de sonder
+            // (la tâche peut encore basculer failed/published).
+            setVerifyTimedOut(true)
+          }
+        })
+        .catch(() => {
+          // Erreurs transitoires ignorées ; le tick suivant réessaie. Au-delà de
+          // la deadline, on révèle l'option de continuer (jamais de grille auto).
+          if (
+            !cancelled &&
+            !terminal &&
+            mountedRef.current &&
+            Date.now() - startedAt >= VERIFY_DEADLINE_MS
+          ) {
+            setVerifyTimedOut(true)
+          }
+        })
+    }
+    tick()
+    const id = setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
     }
   }, [phase])
 
@@ -389,6 +497,27 @@ export function DnsStep({
           <Spinner size={14} />
           {t("wizard.dns.records.publishing")}
         </p>
+      ) : null}
+
+      {phase === "verifying" ? (
+        verifyTimedOut ? (
+          <div className="step-body">
+            <Alert
+              variant="warning"
+              title={t("wizard.dns.records.verifyTimeoutTitle")}
+            >
+              {t("wizard.dns.records.verifyTimeout")}
+            </Alert>
+            <Button variant="outline" onClick={() => setPhase("grid")}>
+              {t("wizard.dns.records.continueAnyway")}
+            </Button>
+          </div>
+        ) : (
+          <p className="inline-status">
+            <Spinner size={14} />
+            {t("wizard.dns.records.verifying")}
+          </p>
+        )
       ) : null}
 
       {phase === "error" ? (
