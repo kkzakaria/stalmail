@@ -43,7 +43,8 @@ export async function setDnsManagementAutomatic(opts: {
 
   // Retry (token corrigé) — deux écueils vérifiés par probe (#62) :
   //  1. Une ancienne tâche DnsManagement `Failed` PERSISTE et masquerait le nouvel
-  //     essai (getDnsManagementStatus la retrouverait → erreur/blocage). On la purge.
+  //     essai (getDnsManagementStatus la retrouverait → erreur/blocage). On purge les
+  //     tâches DnsManagement ÉCHOUÉES uniquement (jamais une tâche active/en cours).
   //  2. Re-poser `Automatic` sur un domaine DÉJÀ `Automatic` est un NO-OP : aucune
   //     re-publication n'est planifiée. Seul le PASSAGE en `Automatic` crée une tâche
   //     fraîche → on force la transition `Manual` → `Automatic`.
@@ -60,21 +61,42 @@ export async function setDnsManagementAutomatic(opts: {
       "1",
     ],
   ])
-  const staleTaskIds = (
+  const failedTaskIds = (
     (
       expectResult(taskResp, 1) as {
-        list?: Array<{ "@type"?: string; id?: string }>
+        list?: Array<{
+          "@type"?: string
+          id?: string
+          status?: { "@type"?: string }
+        }>
       }
     ).list ?? []
   )
-    .filter((t) => t["@type"] === "DnsManagement" && typeof t.id === "string")
+    .filter(
+      (t) =>
+        t["@type"] === "DnsManagement" &&
+        t.status?.["@type"] === "Failed" &&
+        typeof t.id === "string"
+    )
     .map((t) => t.id as string)
-  if (staleTaskIds.length > 0) {
-    await jmapCall([["x:Task/set", { accountId, destroy: staleTaskIds }, "0"]])
+  if (failedTaskIds.length > 0) {
+    const destroyResp = await jmapCall([
+      ["x:Task/set", { accountId, destroy: failedTaskIds }, "0"],
+    ])
+    // jmapCall ne throw que sur erreur HTTP : une erreur de méthode remonte en
+    // réponse `["error", …]` — la traiter pour ne pas laisser de tâche périmée.
+    if (firstResponse(destroyResp)[0] === "error") {
+      throw new JmapError(
+        "stale DnsManagement task purge rejected",
+        firstResponse(destroyResp)[1]
+      )
+    }
   }
 
-  // setManual transitoire (aucun record publié à ce stade) — résultat non vérifié.
-  await jmapCall([
+  // Force la transition `Manual` → `Automatic` : le passage EN Automatic est la seule
+  // façon de planifier une publication fraîche. On vérifie qu'elle a bien pris (sinon
+  // l'écriture Automatic suivante serait un no-op et rien ne serait republié).
+  const manualResp = await jmapCall([
     [
       "x:Domain/set",
       {
@@ -84,6 +106,16 @@ export async function setDnsManagementAutomatic(opts: {
       "0",
     ],
   ])
+  const manual = firstResponse(manualResp)[1] as {
+    updated?: Record<string, unknown>
+    notUpdated?: unknown
+  }
+  if (!manual.updated || !(domainId in manual.updated)) {
+    throw new JmapError(
+      "transient Manual dnsManagement update rejected",
+      manual.notUpdated
+    )
+  }
 
   const responses = await jmapCall([
     [

@@ -145,6 +145,51 @@ describe("setDnsManagementAutomatic", () => {
     expect(destroy.destroy).toEqual(["t1"])
   })
 
+  it("ne purge PAS une tâche DnsManagement active (Pending)", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: ["t1"] }, "0"],
+      [
+        "x:Task/get",
+        {
+          list: [
+            {
+              "@type": "DnsManagement",
+              id: "t1",
+              status: { "@type": "Pending" },
+            },
+          ],
+        },
+        "1",
+      ],
+    ])
+    mj.mockResolvedValueOnce([["x:Domain/set", { updated: { b: null } }, "0"]]) // Manual
+    mj.mockResolvedValueOnce([["x:Domain/set", { updated: { b: null } }, "0"]]) // Automatic
+    await setDnsManagementAutomatic({
+      domainId: "b",
+      dnsServerId: "srv1",
+      origin: "exemple.fr",
+    })
+    // 3 appels : pas de x:Task/set destroy (la tâche Pending n'est pas purgée).
+    expect(mj).toHaveBeenCalledTimes(3)
+  })
+
+  it("throws when the transient Manual update is rejected", async () => {
+    mj.mockResolvedValueOnce([
+      ["x:Task/query", { ids: [] }, "0"],
+      ["x:Task/get", { list: [] }, "1"],
+    ])
+    mj.mockResolvedValueOnce([
+      ["x:Domain/set", { notUpdated: { b: { type: "forbidden" } } }, "0"],
+    ]) // Manual rejeté
+    await expect(
+      setDnsManagementAutomatic({
+        domainId: "b",
+        dnsServerId: "srv1",
+        origin: "exemple.fr",
+      })
+    ).rejects.toThrow()
+  })
+
   it("throws when the Automatic update is rejected", async () => {
     mj.mockResolvedValueOnce([
       ["x:Task/query", { ids: [] }, "0"],
