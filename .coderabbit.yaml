@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Configuration CodeRabbit pour Stalmail — https://docs.coderabbit.ai/getting-started/yaml-configuration
+# Webmail auto-hébergé : TanStack Start (React 19, SSR + server functions/BFF) devant Stalwart via JMAP.
+
+# Langue des revues : anglais.
+language: "en-US"
+
+# Ton attendu du relecteur : rigoureux sur la sécurité et les conventions du dépôt.
+tone_instructions: >
+  Tu relis un webmail auto-hébergé sensible à la sécurité. Sois précis et concis, en français.
+  Priorise les fuites de secrets/tokens côté client, le rendu de contenu d'email non fiable,
+  la validation Zod des entrées de server functions, et le respect du pattern BFF (le navigateur
+  ne parle jamais directement à Stalwart).
+
+reviews:
+  # "assertive" : signale davantage de problèmes potentiels (adapté à une app mail sensible).
+  profile: "assertive"
+  # On laisse GitHub gérer l'approbation ; CodeRabbit ne bloque pas via "request changes".
+  request_changes_workflow: false
+  high_level_summary: true
+  # Résumé « walkthrough » et estimation d'effort de revue.
+  review_status: true
+  # Pas de poème — on garde des revues sobres.
+  poem: false
+  collapse_walkthrough: false
+  # Suggère des changements sous forme de commits applicables directement.
+  suggested_labels: true
+  suggested_reviewers: true
+
+  auto_review:
+    enabled: true
+    # Ne pas relire les PR en brouillon.
+    drafts: false
+    # Revue des PR ciblant main (base_branches = motifs regex, ancrés strictement).
+    base_branches:
+      - "^main$"
+
+  # Fichiers exclus de la revue (générés, verrous, artefacts).
+  path_filters:
+    - "!bun.lock"
+    - "!src/routeTree.gen.ts"
+    - "!CHANGELOG.md"
+    - "!public/**"
+    - "!docker/**"
+
+  # Instructions ciblées par chemin, ancrées sur les conventions du CLAUDE.md.
+  path_instructions:
+    - path: "src/server/**"
+      instructions: >
+        Server functions = BFF. Vérifie que : (1) toute entrée est validée par Zod ;
+        (2) l'auth passe par requireSession/requireAuth et withFreshAccessToken (session
+        expirée -> redirect('/login')) ; (3) aucune opération JMAP générique n'est exposée
+        au client (enums fermés résolus côté serveur) ; (4) aucun secret ni token n'est
+        renvoyé vers le navigateur ; (5) la logique métier vit dans des fonctions pures
+        extraites (builders buildListMethodCalls, parsers parseListPage, résolveurs
+        resolveFilter) et non dans les handlers.
+    - path: "src/**/*.{ts,tsx}"
+      instructions: >
+        i18n : tous les libellés visibles passent par des clés react-i18next (t('...')) en
+        français ; signale tout texte en dur. Les composants doivent rester présentationnels
+        (props injectées), sans hooks de route dans le composant testé.
+    - path: "src/**/*.test.{ts,tsx}"
+      instructions: >
+        Les fonctions pures (parsers, builders, résolveurs) doivent être testées isolément —
+        c'est le cœur de la stratégie de test. Signale la logique non couverte.
+    - path: "src/components/**"
+      instructions: >
+        Le contenu non fiable (HTML d'email) doit être isolé dans une iframe sandbox.
+        Vérifie l'absence de dangerouslySetInnerHTML sur du contenu distant non assaini.
+
+  # Outils d'analyse statique.
+  tools:
+    eslint:
+      enabled: true
+    # Détection de secrets — critique pour un serveur mail.
+    gitleaks:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: "auto"
