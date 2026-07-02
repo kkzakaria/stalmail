@@ -19,6 +19,7 @@ import {
   setupAuthStatusHandler,
   setupContextHandler,
   resolveServerHostname,
+  resolveDomainWithRetry,
 } from "./setup-actions"
 import type * as StalwartAccountModule from "./stalwart-account"
 import type * as StalwartDomainModule from "./stalwart-domain"
@@ -107,6 +108,9 @@ vi.mock("./session-cookie", () => ({
   clientIp: vi.fn(() => "127.0.0.1"),
 }))
 
+// Mock timers: sleep resolves immediately so the domain-retry delay never slows tests.
+vi.mock("./timers", () => ({ sleep: vi.fn(async () => undefined) }))
+
 // eslint-disable-next-line import/first
 import {
   getPrimaryDomain,
@@ -146,6 +150,8 @@ import {
 } from "./setup-auth"
 // eslint-disable-next-line import/first
 import { assertSameOriginStrict } from "./session-cookie"
+// eslint-disable-next-line import/first
+import { JmapError } from "./jmap"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -194,6 +200,88 @@ describe("resolveServerHostname (pur)", () => {
   })
   it("env vide → repli sur le nom de domaine", () => {
     expect(resolveServerHostname("", "exemple.fr")).toBe("exemple.fr")
+  })
+})
+
+describe("resolveDomainWithRetry (pur — #63/#120)", () => {
+  const domain = { id: "dom-1", name: "exemple.fr" }
+
+  it("retourne le domaine du premier essai sans dormir", async () => {
+    const sleep = vi.fn(async () => undefined)
+    const getDomain = vi.fn(async () => domain)
+    const result = await resolveDomainWithRetry(getDomain, {
+      attempts: 2,
+      delayMs: 750,
+      sleep,
+      isTransient: () => true,
+    })
+    expect(result).toEqual(domain)
+    expect(getDomain).toHaveBeenCalledOnce()
+    expect(sleep).not.toHaveBeenCalled()
+  })
+
+  it("retente après un null transitoire puis réussit (#120)", async () => {
+    const sleep = vi.fn(async () => undefined)
+    const getDomain = vi
+      .fn<() => Promise<typeof domain | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(domain)
+    const result = await resolveDomainWithRetry(getDomain, {
+      attempts: 2,
+      delayMs: 750,
+      sleep,
+      isTransient: () => true,
+    })
+    expect(result).toEqual(domain)
+    expect(getDomain).toHaveBeenCalledTimes(2)
+    expect(sleep).toHaveBeenCalledWith(750)
+  })
+
+  it("retente après une erreur transitoire puis réussit", async () => {
+    const sleep = vi.fn(async () => undefined)
+    const getDomain = vi
+      .fn<() => Promise<typeof domain>>()
+      .mockRejectedValueOnce(new Error("jmap down"))
+      .mockResolvedValueOnce(domain)
+    const result = await resolveDomainWithRetry(getDomain, {
+      attempts: 2,
+      delayMs: 750,
+      sleep,
+      isTransient: () => true,
+    })
+    expect(result).toEqual(domain)
+    expect(getDomain).toHaveBeenCalledTimes(2)
+  })
+
+  it("renvoie null après épuisement des essais (backend indisponible)", async () => {
+    const sleep = vi.fn(async () => undefined)
+    const getDomain = vi.fn(async () => null)
+    const result = await resolveDomainWithRetry(getDomain, {
+      attempts: 2,
+      delayMs: 750,
+      sleep,
+      isTransient: () => true,
+    })
+    expect(result).toBeNull()
+    expect(getDomain).toHaveBeenCalledTimes(2)
+  })
+
+  it("propage immédiatement une erreur non-transitoire (ne masque pas l'inattendu)", async () => {
+    const sleep = vi.fn(async () => undefined)
+    const boom = new Error("unexpected")
+    const getDomain = vi.fn(async () => {
+      throw boom
+    })
+    await expect(
+      resolveDomainWithRetry(getDomain, {
+        attempts: 2,
+        delayMs: 750,
+        sleep,
+        isTransient: () => false,
+      })
+    ).rejects.toBe(boom)
+    expect(getDomain).toHaveBeenCalledOnce()
+    expect(sleep).not.toHaveBeenCalled()
   })
 })
 
@@ -440,13 +528,15 @@ describe("createAdminAccountHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-ACCOUNT-REJECTED")
   })
 
-  it("throws SETUP-UNKNOWN when no primary domain is found (I2)", async () => {
-    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+  it("throws SETUP-BACKEND-UNAVAILABLE when the domain stays absent (#63/#120)", async () => {
+    vi.mocked(getPrimaryDomain)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
     const err = await createAdminAccountHandler({
       data: { name: "koffi", password: "correct horse battery staple" },
     }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
-    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
+    expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
   })
 
   it("throws SETUP-FORBIDDEN when step is not 'account'", async () => {
@@ -571,13 +661,48 @@ describe("setDnsManagementHandler", () => {
     expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
-  it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
-    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+  it("throws SETUP-BACKEND-UNAVAILABLE when the domain stays absent (#63/#120)", async () => {
+    vi.mocked(getPrimaryDomain)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
     const err = await setDnsManagementHandler({
       data: { dnsServerId: "srv-1" },
     }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
-    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
+    expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
+  })
+
+  it("retente puis réussit quand le domaine est null au 1er essai (#120)", async () => {
+    vi.mocked(getPrimaryDomain)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "dom-1", name: "exemple.fr" })
+    const result = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    })
+    expect(result).toEqual({ ok: true })
+    expect(getPrimaryDomain).toHaveBeenCalledTimes(2)
+  })
+
+  it("throws SETUP-BACKEND-UNAVAILABLE quand getPrimaryDomain lève une JmapError (#63)", async () => {
+    vi.mocked(getPrimaryDomain)
+      .mockRejectedValueOnce(new JmapError("session request failed: HTTP 503"))
+      .mockRejectedValueOnce(new JmapError("session request failed: HTTP 503"))
+    const err = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
+  })
+
+  it("throws SETUP-ORIGIN-REJECTED quand la garde d'origine rejette (#63)", async () => {
+    vi.mocked(assertSameOriginStrict).mockImplementationOnce(() => {
+      throw new Error("cross-origin request rejected")
+    })
+    const err = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-ORIGIN-REJECTED")
   })
 
   it("throws SetupError with SETUP-DNS-MANAGEMENT-REJECTED on setDnsManagementAutomatic failure", async () => {
@@ -686,8 +811,10 @@ describe("configureAcmeHandler", () => {
     expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
-  it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
-    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+  it("throws SETUP-BACKEND-UNAVAILABLE when the domain stays absent (#63/#120)", async () => {
+    vi.mocked(getPrimaryDomain)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
     const err = await configureAcmeHandler({
       data: {
         hostname: "mail.example.com",
@@ -695,7 +822,7 @@ describe("configureAcmeHandler", () => {
       },
     }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
-    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
+    expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
   })
 
   it("resume (empty client input): sources hostname from STALMAIL_PUBLIC_URL and contactEmail from the domain", async () => {
@@ -884,11 +1011,13 @@ describe("setDnsManagementManualHandler", () => {
     expect(issueSetupCookie).not.toHaveBeenCalled()
   })
 
-  it("throws SETUP-UNKNOWN when getPrimaryDomain returns null (I2)", async () => {
-    vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+  it("throws SETUP-BACKEND-UNAVAILABLE when the domain stays absent (#63/#120)", async () => {
+    vi.mocked(getPrimaryDomain)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
     const err = await setDnsManagementManualHandler().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
-    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
+    expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
     expect(markDnsConfigured).not.toHaveBeenCalled()
   })
 

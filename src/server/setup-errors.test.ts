@@ -56,4 +56,14 @@ describe("SETUP_CODES bootstrap-auth codes", () => {
     const err = new SetupError("SETUP-UNLOCK-FAILED")
     expect(err.code).toBe("SETUP-UNLOCK-FAILED")
   })
+
+  it("SETUP-ORIGIN-REJECTED is a valid SetupError code (#63)", () => {
+    const err = new SetupError("SETUP-ORIGIN-REJECTED")
+    expect(err.code).toBe("SETUP-ORIGIN-REJECTED")
+  })
+
+  it("SETUP-BACKEND-UNAVAILABLE is a valid SetupError code (#63/#120)", () => {
+    const err = new SetupError("SETUP-BACKEND-UNAVAILABLE")
+    expect(err.code).toBe("SETUP-BACKEND-UNAVAILABLE")
+  })
 })

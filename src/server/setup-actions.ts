@@ -8,6 +8,7 @@ import { isIpv4, isIpv6 } from "@/lib/ip"
 import { domainSchema } from "@/components/setup/schemas"
 import type { SetupStep } from "./setup-state"
 import type { HostRole } from "./dns-host-records"
+import type { StalwartDomain } from "./stalwart-domain"
 
 // The setup-state / stalwart-bootstrap / stalwart-restart modules reach `node:fs`
 // (and the JMAP transport) at module scope. This file is pulled into the client
@@ -32,8 +33,60 @@ async function requireStep(expected: SetupStep): Promise<void> {
 async function requireSetupAuthGuard(): Promise<void> {
   const { assertSameOriginStrict } = await import("./session-cookie")
   const { requireSetupAuth } = await import("./setup-auth")
-  assertSameOriginStrict()
+  const { SetupError } = await import("./setup-errors")
+  // assertSameOriginStrict lève un `Error` brut (rejet CSRF) ; hors du try de mapping il
+  // retomberait en SETUP-UNKNOWN opaque (#63). On le traduit en code parlant.
+  try {
+    assertSameOriginStrict()
+  } catch {
+    throw new SetupError("SETUP-ORIGIN-REJECTED")
+  }
   await requireSetupAuth()
+}
+
+// Politique de retry (pure, deps injectées) pour la résolution du domaine primaire.
+// Absorbe la fenêtre transitoire post-restart bootstrap où x:Domain/query peut répondre
+// vide (null) ou en erreur (#120). Renvoie null si le domaine reste indisponible après
+// tous les essais ; relaie immédiatement une erreur NON transitoire (à ne pas masquer).
+export async function resolveDomainWithRetry(
+  getDomain: () => Promise<StalwartDomain | null>,
+  deps: {
+    attempts: number
+    delayMs: number
+    sleep: (ms: number) => Promise<void>
+    isTransient: (e: unknown) => boolean
+  }
+): Promise<StalwartDomain | null> {
+  for (let i = 0; i < deps.attempts; i++) {
+    if (i > 0) await deps.sleep(deps.delayMs)
+    try {
+      const domain = await getDomain()
+      if (domain) return domain
+    } catch (e) {
+      if (!deps.isTransient(e)) throw e
+    }
+  }
+  return null
+}
+
+// Résout le domaine primaire HORS du try de mapping des handlers. Toute défaillance
+// devient un code SETUP-* parlant plutôt qu'un SETUP-UNKNOWN opaque (#63) :
+//  - JmapError (backend injoignable) → transitoire, retenté puis SETUP-BACKEND-UNAVAILABLE
+//  - domaine absent juste après le restart bootstrap → retenté (#120) puis, si toujours
+//    absent, SETUP-BACKEND-UNAVAILABLE (le serveur mail n'est pas encore stable).
+async function resolveDomainOrThrow(): Promise<StalwartDomain> {
+  const { getPrimaryDomain } = await import("./stalwart-domain")
+  const { JmapError } = await import("./jmap")
+  const { SetupError } = await import("./setup-errors")
+  const { sleep } = await import("./timers")
+  const domain = await resolveDomainWithRetry(getPrimaryDomain, {
+    attempts: 2,
+    delayMs: 750,
+    sleep,
+    isTransient: (e) => e instanceof JmapError,
+  })
+  if (!domain) throw new SetupError("SETUP-BACKEND-UNAVAILABLE")
+  return domain
 }
 
 export async function getStepHandler(): Promise<{
@@ -89,14 +142,9 @@ export async function createAdminAccountHandler({
 }): Promise<CreateAccountResult> {
   await requireSetupAuthGuard()
   await requireStep("account")
-  const { getPrimaryDomain } = await import("./stalwart-domain")
   const { createAdminAccount, WeakPasswordError } =
     await import("./stalwart-account")
-  const domain = await getPrimaryDomain()
-  if (!domain) {
-    const { SetupError } = await import("./setup-errors")
-    throw new SetupError("SETUP-UNKNOWN")
-  }
+  const domain = await resolveDomainOrThrow()
   try {
     await createAdminAccount({
       name: data.name,
@@ -160,13 +208,8 @@ export async function setDnsManagementHandler({
 }): Promise<{ ok: true }> {
   await requireSetupAuthGuard()
   await requireStep("dns")
-  const { getPrimaryDomain, setDnsManagementAutomatic } =
-    await import("./stalwart-domain")
-  const domain = await getPrimaryDomain()
-  if (!domain) {
-    const { SetupError } = await import("./setup-errors")
-    throw new SetupError("SETUP-UNKNOWN")
-  }
+  const { setDnsManagementAutomatic } = await import("./stalwart-domain")
+  const domain = await resolveDomainOrThrow()
   try {
     await setDnsManagementAutomatic({
       domainId: domain.id,
@@ -323,14 +366,9 @@ export const hostAddressStatusFn = createServerFn({ method: "POST" })
 export async function setDnsManagementManualHandler(): Promise<{ ok: true }> {
   await requireSetupAuthGuard()
   await requireStep("dns")
-  const { getPrimaryDomain, setDnsManagementManual } =
-    await import("./stalwart-domain")
+  const { setDnsManagementManual } = await import("./stalwart-domain")
   const { markDnsConfigured } = await import("./setup-flag")
-  const domain = await getPrimaryDomain()
-  if (!domain) {
-    const { SetupError } = await import("./setup-errors")
-    throw new SetupError("SETUP-UNKNOWN")
-  }
+  const domain = await resolveDomainOrThrow()
   try {
     await setDnsManagementManual({ domainId: domain.id })
   } catch (e) {
@@ -421,13 +459,8 @@ export async function configureAcmeHandler({
     const { SetupError } = await import("./setup-errors")
     throw new SetupError("SETUP-FORBIDDEN")
   }
-  const { getPrimaryDomain } = await import("./stalwart-domain")
   const { configureAcme } = await import("./stalwart-acme")
-  const domain = await getPrimaryDomain()
-  if (!domain) {
-    const { SetupError } = await import("./setup-errors")
-    throw new SetupError("SETUP-UNKNOWN")
-  }
+  const domain = await resolveDomainOrThrow()
   // hostname + contactEmail are resolved server-side (not authoritative from the
   // client) so an automatic-SSL resume — where the client carries empty inputs —
   // still produces a valid ACME payload instead of failing validation immediately.
