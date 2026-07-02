@@ -54,6 +54,8 @@ interface ImagePrefsRecord {
 
 CRUD : `getPrefs(accountId)` (renvoie `{ allowedSenders: [] }` si absent), `addSender(accountId, email)`, `removeSender(accountId, email)`, `deleteAllForAccount(accountId)` (cohérence avec la purge de session).
 
+**Borne anti-abus (revue sécu)** : `allowedSenders` est plafonné à `MAX_TRUSTED_SENDERS = 500` par compte ; au-delà, `addSender` évince le plus ancien (FIFO). Sans cap, un client authentifié pourrait faire croître `image-prefs.json` sans limite (chaque mutation réécrit le fichier entier).
+
 Absence de fichier → allowlist vide → tout `blocked` (défaut sûr, rétro-compatible).
 
 ### 3.4 Résolution serveur autoritaire dans `readThreadFn`
@@ -86,6 +88,8 @@ resolveImageDecision(
   → 'sender-allowed' si normalizeSender(message.from[0]?.email) ∈ allowedSenders
   → sinon message.imageDecision inchangé ('message-allowed' ou 'blocked')
   Précédence : sender > (message | blocked).
+  Seul from[0] gouverne la décision (cohérent avec l'affichage du lecteur, qui
+  présente from[0]) ; le cas multi-From n'est pas géré — cf. §8.
 
 applyImagePrefs(detail: AppThreadDetail, prefs): AppThreadDetail
   → map resolveImageDecision(prefs, m) sur chaque message
@@ -95,9 +99,11 @@ applyImagePrefs(detail: AppThreadDetail, prefs): AppThreadDetail
 
 ```ts
 export type ImageDecision = "sender-allowed" | "message-allowed" | "blocked"
-// AppMessage gagne :
-imageDecision: ImageDecision
+// AppMessage gagne un champ OPTIONNEL (absent ⇒ traité comme "blocked", défaut sûr) :
+imageDecision?: ImageDecision
 ```
+
+Optionnel plutôt que requis : les factories de test existantes (`message-item.test.tsx`, `reader.test.tsx`, `$folder.test.tsx`) construisent des `AppMessage` sans ce champ — un champ requis les casserait toutes sans bénéfice, le défaut `blocked` étant le comportement sûr voulu.
 
 `parseThreadDetail` pose le niveau message directement depuis le keyword : `imageDecision = keywords.stalmail_showimages === true ? "message-allowed" : "blocked"`. `readThreadFn` applique ensuite `applyImagePrefs(parseThreadDetail(...), getPrefs(accountId))` pour l'upgrade `sender-allowed`.
 
@@ -111,7 +117,8 @@ readThreadFn (modifié)
 
 showImagesOnceFn({ emailIds: string[] })      // Zod: emailIdsSchema (réutilisé)
   → Email/set { update: { [id]: { "keywords/stalmail_showimages": true } } }
-  (au niveau fil, cohérent avec setFlagsFn/moveThreadFn)
+  (signature en tableau — réutilise emailIdsSchema, comme setFlagsFn — mais
+  l'UI appelle PAR MESSAGE : onShowOnce(message.id) → emailIds: [id])
 
 trustSenderFn({ sender: string })             // Zod: email normalisable, borné en longueur
   → addSender(accountId, normalizeSender(sender))
@@ -120,11 +127,11 @@ untrustSenderFn({ sender: string })
   → removeSender(accountId, normalizeSender(sender))
 ```
 
-Pas d'`Email/set` générique exposé (convention sécu : enums/keywords fermés résolus côté serveur).
+Pas d'`Email/set` générique exposé (convention sécu : enums/keywords fermés résolus côté serveur). Les schémas Zod des nouvelles fn (`senderSchema`, `showImagesSchema`) sont exportés et testés (rejet d'adresse invalide/trop longue, lot d'ids vide), comme `sendMailSchema`.
 
 ## 7. UI — `src/components/mail/message-item.tsx` + câblage route/reader
 
-`showImages` local disparaît. `MessageItem` dérive : `const showImages = message.imageDecision !== "blocked"`, passé à `buildFrameDoc`. La CSP (`frameCsp`) est **inchangée**.
+`showImages` local disparaît. `MessageItem` dérive : `const showImages = message.imageDecision !== "blocked"`, passé à `buildFrameDoc`. Le mécanisme CSP (`frameCsp`) est inchangé dans sa structure ; seul le durcissement §8 (retrait de `http:` de la variante consentie) le modifie.
 
 Variantes de bandeau selon `message.imageDecision` :
 
@@ -142,8 +149,14 @@ Callbacks (props) → mutations dans la route → invalidation de la query du th
 - Persistance **explicite** (clic utilisateur) et **révocable** (lien Bloquer inline).
 - Identité expéditeur = **adresse exacte normalisée**, jamais le domaine (conservateur, anti-usurpation de domaine).
 - Anti-traceur (à documenter dans le code) : faire confiance à un expéditeur charge automatiquement ses images distantes (pixels de tracking inclus) — choix explicite et révocable, façon Gmail.
-- Store `image-prefs.json` : mode `0o600`, scopé `accountId` (issu serveur), aucune fuite inter-comptes.
-- On n'élargit `img-src` qu'après consentement persisté — le confinement iframe sandbox (#68) reste intact.
+- Store `image-prefs.json` : mode `0o600`, scopé `accountId` (issu serveur), aucune fuite inter-comptes. Allowlist plafonnée (`MAX_TRUSTED_SENDERS`, cf. §3.3).
+- On n'élargit `img-src` qu'après consentement persisté — le confinement iframe sandbox (#68) reste intact. **Durcissement inclus** (revue sécu) : la CSP consentie passe de `img-src data: cid: https: http:` à `img-src data: cid: https:` — les traceurs en clair (http) exposaient l'ouverture du mail à tout intermédiaire réseau ; les rares images http-only ne se chargeront pas (défaut sûr).
+
+**Risques résiduels acceptés** (revue sécu, à réévaluer en phase settings) :
+
+- **Usurpation du From** : l'allowlist est keyée sur l'en-tête From affiché, falsifiable. Un mail usurpant l'adresse d'un expéditeur de confiance et passant les filtres déclencherait l'auto-chargement de ses traceurs. Impact limité à la vie privée (aucune exécution JS possible : sandbox/CSP inchangés). Durcissement futur : conditionner `sender-allowed` à un verdict DMARC pass (lecture d'`Authentication-Results` via `Email/get`) — hors périmètre ici, à ouvrir en issue de suivi.
+- **Multi-From** : seul `from[0]` gouverne ; un mail `From: confiance@x, autre@y` chargerait aussi les traceurs du second (la CSP est par-message, pas par-adresse). Marginal — suppose déjà un `from[0]` de confiance.
+- **Allowlist non corroborée** : `trustSenderFn` n'exige pas que l'adresse figure dans un mail réel du compte ; impact nul hors du compte lui-même.
 
 ## 9. Tests
 

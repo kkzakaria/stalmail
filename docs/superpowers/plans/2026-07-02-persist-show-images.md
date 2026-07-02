@@ -14,7 +14,7 @@
 - **Zod** valide toute entrée de server function ; `accountId` toujours issu de `requireSession()`, jamais du client.
 - **Pas d'`Email/set` générique** exposé au client ; keyword fermé résolu côté serveur.
 - **i18n** : libellés FR via clés `t('...')`, jamais de texte en dur. Ajouter aussi le bloc `en` (les deux existent dans `resources.ts`).
-- **CSP inchangée** : on n'élargit `img-src` qu'après consentement (défaut `img-src data: cid:`).
+- **CSP** : on n'élargit `img-src` qu'après consentement (défaut `img-src data: cid:`). Durcissement inclus (revue sécu, Task 7) : la variante consentie devient `img-src data: cid: https:` (retrait de `http:`).
 - **Fonctions pures extraites et testées** isolément ; composants présentationnels (pas de hooks de route dans le composant testé).
 - Commits **conventionnels** (`feat:`, `test:`…). Pre-commit (`lint && typecheck && test`) ne doit pas être contourné.
 - Keyword custom : `stalmail_showimages` (lowercase, sans `$`, sans caractère IMAP exclu).
@@ -23,7 +23,7 @@
 
 ## File Structure
 
-- **Créé** `src/server/image-prefs.ts` — fonctions pures : `normalizeSender`, `resolveImageDecision`, `applyImagePrefs`, constante `SHOW_IMAGES_KEYWORD`. Importable client (types uniquement).
+- **Créé** `src/server/image-prefs.ts` — fonctions pures : `normalizeSender`, `resolveImageDecision`, `applyImagePrefs`, constante `SHOW_IMAGES_KEYWORD`. Importable côté client (aucune dépendance Node ; fonctions pures + constante — `use-image-actions.ts` importe `normalizeSender` au runtime).
 - **Créé** `src/server/image-prefs.test.ts` — tests des fonctions pures.
 - **Créé** `src/server/image-prefs-store.ts` — store fichier de l'allowlist expéditeurs (calqué sur `session-store.ts`).
 - **Créé** `src/server/image-prefs-store.test.ts` — tests du store (miroir de `session-store.test.ts`).
@@ -37,6 +37,8 @@
 - **Modifié** `src/components/mail/reader.tsx` — props callbacks passées à `MessageItem`.
 - **Modifié** `src/routes/mail/$folder.tsx` — câble `useImageActions` dans `ReaderPane`.
 - **Modifié** `src/i18n/resources.ts` — clés `trustSender`, `imagesFromSenderShown`, `blockSender` (fr + en).
+- **Modifié** `src/components/mail/email-body.ts` — durcissement `frameCsp` (retrait de `http:` de la variante consentie).
+- **Modifié** `src/components/mail/email-body.test.ts` — assertion CSP mise à jour.
 
 ---
 
@@ -187,7 +189,8 @@ Create `src/server/image-prefs.ts` :
 
 ```ts
 // Fonctions pures de résolution de la décision d'affichage des images distantes (#70).
-// Aucune dépendance Node : ce module est importable côté client (types uniquement).
+// Aucune dépendance Node : ce module est importable côté client au runtime
+// (use-image-actions.ts consomme normalizeSender).
 import type { AppThreadDetail, ImageDecision, MailAddress } from "./mail-types"
 
 // Keyword JMAP custom (RFC 8621 : « Users may add arbitrary keywords ») marquant les
@@ -248,8 +251,9 @@ git commit -m "feat(reader): résolveur pur de décision d'affichage des images 
 **Interfaces:**
 - Produces:
   - `interface ImagePrefsRecord { accountId: string; allowedSenders: string[] }`
+  - `MAX_TRUSTED_SENDERS = 500` (const exportée — cap anti-abus, revue sécu)
   - `getPrefs(accountId: string): { allowedSenders: string[] }` (jamais undefined ; `{ allowedSenders: [] }` si absent)
-  - `addSender(accountId: string, sender: string): void` (dédupliqué)
+  - `addSender(accountId: string, sender: string): void` (dédupliqué, plafonné : évince le plus ancien au-delà du cap)
   - `removeSender(accountId: string, sender: string): void`
   - `deleteAllForAccount(accountId: string): void`
   - `__resetCacheForTest(): void`
@@ -303,6 +307,15 @@ describe("image-prefs-store", () => {
     store.addSender("a", "bob@x.io")
     store.removeSender("a", "bob@x.io")
     expect(store.getPrefs("a").allowedSenders).toEqual([])
+  })
+
+  it("plafonne l'allowlist (évince le plus ancien au-delà du cap)", () => {
+    for (let i = 0; i <= store.MAX_TRUSTED_SENDERS; i++)
+      store.addSender("a", `s${i}@x.io`)
+    const senders = store.getPrefs("a").allowedSenders
+    expect(senders).toHaveLength(store.MAX_TRUSTED_SENDERS)
+    expect(senders[0]).toBe("s1@x.io") // s0 évincé (FIFO)
+    expect(senders.at(-1)).toBe(`s${store.MAX_TRUSTED_SENDERS}@x.io`)
   })
 
   it("purge un compte sans toucher les autres", () => {
@@ -390,11 +403,18 @@ export function getPrefs(accountId: string): { allowedSenders: string[] } {
   return { allowedSenders: r ? [...r.allowedSenders] : [] }
 }
 
+// Cap anti-abus (revue sécu) : sans borne, un client authentifié pourrait faire croître
+// image-prefs.json sans limite (chaque mutation réécrit le fichier entier).
+export const MAX_TRUSTED_SENDERS = 500
+
 export function addSender(accountId: string, sender: string): void {
   const m = load()
   const cur = m.get(accountId) ?? { accountId, allowedSenders: [] }
   if (cur.allowedSenders.includes(sender)) return
-  m.set(accountId, { ...cur, allowedSenders: [...cur.allowedSenders, sender] })
+  // Au-delà du cap : éviction FIFO du plus ancien (l'action utilisateur aboutit toujours,
+  // cohérent avec le patch optimiste côté client).
+  const next = [...cur.allowedSenders, sender].slice(-MAX_TRUSTED_SENDERS)
+  m.set(accountId, { ...cur, allowedSenders: next })
   persist(m)
 }
 
@@ -449,8 +469,10 @@ git commit -m "feat(reader): store de l'allowlist d'expéditeurs de confiance (#
 Ajouter dans `src/server/mail-actions.test.ts`, à l'intérieur du `describe("parseThreadDetail", …)` existant :
 
 ```ts
+  // NB : fixtures nommées withKeyword/withoutKeyword (PAS `responses`) — le describe
+  // parseThreadDetail existant a déjà un `const responses` à son scope (no-shadow).
   it("imageDecision = message-allowed quand le keyword stalmail_showimages est posé", () => {
-    const responses: JmapMethodResponse[] = [
+    const withKeyword: JmapMethodResponse[] = [
       ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
       [
         "Email/get",
@@ -468,13 +490,13 @@ Ajouter dans `src/server/mail-actions.test.ts`, à l'intérieur du `describe("pa
         "1",
       ],
     ]
-    expect(parseThreadDetail(responses).messages[0].imageDecision).toBe(
+    expect(parseThreadDetail(withKeyword).messages[0].imageDecision).toBe(
       "message-allowed"
     )
   })
 
   it("imageDecision = blocked sans keyword", () => {
-    const responses: JmapMethodResponse[] = [
+    const withoutKeyword: JmapMethodResponse[] = [
       ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
       [
         "Email/get",
@@ -482,7 +504,7 @@ Ajouter dans `src/server/mail-actions.test.ts`, à l'intérieur du `describe("pa
         "1",
       ],
     ]
-    expect(parseThreadDetail(responses).messages[0].imageDecision).toBe(
+    expect(parseThreadDetail(withoutKeyword).messages[0].imageDecision).toBe(
       "blocked"
     )
   })
@@ -545,17 +567,16 @@ git commit -m "feat(reader): résout imageDecision côté serveur dans readThrea
 - Consumes: `SHOW_IMAGES_KEYWORD`, `normalizeSender` (Task 1) ; `addSender`, `removeSender` (Task 2) ; `emailIdsSchema`, `requireSession`, `jmapUserCall` (existants)
 - Produces:
   - `buildShowImagesCall(accountId: string, emailIds: string[]): JmapMethodCall[]`
+  - `showImagesSchema`, `senderSchema` (schémas Zod exportés, testés)
   - `showImagesOnceFn({ emailIds: string[] }) → Promise<{ ok: true }>`
   - `trustSenderFn({ sender: string }) → Promise<{ ok: true }>`
   - `untrustSenderFn({ sender: string }) → Promise<{ ok: true }>`
 
 - [ ] **Step 1: Écrire les tests (builder pur + validation Zod)**
 
-Ajouter dans `src/server/mail-actions.test.ts` (nouveau `describe`) :
+Dans `src/server/mail-actions.test.ts` : ajouter `buildShowImagesCall`, `senderSchema` et `showImagesSchema` au **bloc d'import existant** depuis `./mail-actions` en tête de fichier (lignes 2-18 — PAS un import séparé en milieu de fichier : la règle `import/first` est active). Puis ajouter les `describe` suivants :
 
 ```ts
-import { buildShowImagesCall } from "./mail-actions"
-
 describe("buildShowImagesCall (pur)", () => {
   it("pose le keyword stalmail_showimages=true sur chaque email", () => {
     expect(buildShowImagesCall("acc", ["e1", "e2"])).toEqual([
@@ -573,12 +594,31 @@ describe("buildShowImagesCall (pur)", () => {
     ])
   })
 })
+
+describe("schémas Zod des actions images (#70)", () => {
+  it("senderSchema accepte une adresse valide", () => {
+    expect(senderSchema.parse({ sender: "bob@x.io" })).toEqual({
+      sender: "bob@x.io",
+    })
+  })
+  it("senderSchema rejette une non-adresse", () => {
+    expect(() => senderSchema.parse({ sender: "pas-une-adresse" })).toThrow()
+  })
+  it("senderSchema rejette une adresse trop longue", () => {
+    expect(() =>
+      senderSchema.parse({ sender: "a".repeat(320) + "@x.io" })
+    ).toThrow()
+  })
+  it("showImagesSchema rejette un lot d'emailIds vide", () => {
+    expect(() => showImagesSchema.parse({ emailIds: [] })).toThrow()
+  })
+})
 ```
 
 - [ ] **Step 2: Lancer le test → échec attendu**
 
 Run: `bun run test mail-actions`
-Expected: FAIL (`buildShowImagesCall` non exporté).
+Expected: FAIL (`buildShowImagesCall`, `senderSchema`, `showImagesSchema` non exportés).
 
 - [ ] **Step 3: Implémenter le bloc dans `mail-actions.ts`**
 
@@ -601,7 +641,7 @@ export function buildShowImagesCall(
   return [["Email/set", { accountId, update }, "0"]]
 }
 
-const showImagesSchema = z.object({ emailIds: emailIdsSchema })
+export const showImagesSchema = z.object({ emailIds: emailIdsSchema })
 
 export const showImagesOnceFn = createServerFn({ method: "POST" })
   .validator((d: { emailIds: string[] }) => showImagesSchema.parse(d))
@@ -623,7 +663,7 @@ export const showImagesOnceFn = createServerFn({ method: "POST" })
 // révocable (untrustSenderFn). Jamais de « tout afficher » global. L'allowlist est
 // scopée à l'accountId de session — aucune valeur influençable par le client n'y entre
 // hors l'adresse normalisée.
-const senderSchema = z.object({ sender: z.string().email().max(320) })
+export const senderSchema = z.object({ sender: z.string().email().max(320) })
 
 export const trustSenderFn = createServerFn({ method: "POST" })
   .validator((d: { sender: string }) => senderSchema.parse(d))
@@ -959,7 +999,7 @@ Create `src/components/mail/use-image-actions.test.tsx` :
 
 ```tsx
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { renderHook, waitFor } from "@testing-library/react"
+import { renderHook } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { createElement } from "react"
 import type { ReactNode } from "react"
@@ -1212,6 +1252,62 @@ git commit -m "feat(reader): câble les mutations de persistance des images au l
 
 ---
 
+## Task 7 : Durcissement CSP — retrait de `http:` de la variante consentie
+
+**Files:**
+- Modify: `src/components/mail/email-body.ts:9-12` (`frameCsp`)
+- Test: `src/components/mail/email-body.test.ts:126-131`
+
+**Interfaces:**
+- Consumes: rien (indépendante des tasks 1-6 ; peut s'exécuter à tout moment)
+- Produces: `frameCsp(true)` renvoie `img-src data: cid: https:` (plus de `http:`)
+
+Contexte (revue sécu, spec §8) : un traceur chargé en `http:` clair expose l'ouverture du mail (et l'URL cible) à tout intermédiaire réseau, en plus du mixed content. Les rares images http-only ne se chargeront plus — défaut sûr, aligné sur les clients mail modernes.
+
+- [ ] **Step 1: Mettre à jour le test existant**
+
+Dans `src/components/mail/email-body.test.ts`, remplacer le test `it("élargit la CSP img-src aux schémas distants quand showImages=true", …)` (ligne ~126) : l'assertion `expect(on).toContain("img-src data: cid: https: http:;")` devient :
+
+```ts
+    expect(on).toContain("img-src data: cid: https:;")
+    expect(on).not.toContain("http:;") // jamais de traceur en clair, même consenti
+```
+
+- [ ] **Step 2: Lancer le test → échec attendu**
+
+Run: `bun run test email-body`
+Expected: FAIL (la CSP contient encore `http:`).
+
+- [ ] **Step 3: Durcir `frameCsp`**
+
+Dans `src/components/mail/email-body.ts`, remplacer :
+
+```ts
+  const imgSrc = showImages ? "data: cid: https: http:" : "data: cid:"
+```
+
+par :
+
+```ts
+  // https: seulement (pas http:) : un traceur en clair exposerait l'ouverture du mail
+  // à tout intermédiaire réseau (revue sécu #70). Les images http-only ne se chargent pas.
+  const imgSrc = showImages ? "data: cid: https:" : "data: cid:"
+```
+
+- [ ] **Step 4: Lancer le test → succès attendu**
+
+Run: `bun run test email-body`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/mail/email-body.ts src/components/mail/email-body.test.ts
+git commit -m "fix(reader): retire http: de la CSP images consentie (traceurs en clair) (#70)"
+```
+
+---
+
 ## Vérification finale
 
 - [ ] **Test manuel de non-régression (#70) :**
@@ -1222,11 +1318,13 @@ git commit -m "feat(reader): câble les mutations de persistance des images au l
   5. Recharger → images de cet expéditeur affichées d'office.
   6. Cliquer « Bloquer » → l'expéditeur repasse bloqué au prochain chargement.
 - [ ] Confirmer que la CSP par défaut reste `img-src data: cid:` tant qu'aucun consentement (inspecter le `srcDoc` de l'iframe d'un mail non consenti).
+- [ ] Confirmer que la CSP consentie est `img-src data: cid: https:` (sans `http:`) sur un mail affiché (Task 7).
 
 ---
 
 ## Notes de couverture (auto-revue plan ↔ spec)
 
-- Spec §3.2 (keyword) → Tasks 3, 4. §3.3 (store) → Task 2. §3.4 (résolution serveur) → Task 3. §3.5 (révocation inline) → Tasks 5, 6. §3.6 (présentationnel) → Task 5. §4 (fonctions pures) → Task 1. §5 (types) → Task 1. §6 (server functions) → Tasks 3, 4. §7 (UI) → Tasks 5, 6. §8 (sécurité) → commentaires Tasks 4, 5 + vérif finale. §9 (tests) → chaque task. §10 (i18n) → Task 5.
+- Spec §3.2 (keyword) → Tasks 3, 4. §3.3 (store + cap) → Task 2. §3.4 (résolution serveur) → Task 3. §3.5 (révocation inline) → Tasks 5, 6. §3.6 (présentationnel) → Task 5. §4 (fonctions pures) → Task 1. §5 (types) → Task 1. §6 (server functions + schémas Zod testés) → Tasks 3, 4. §7 (UI) → Tasks 5, 6. §8 (sécurité, dont durcissement CSP) → commentaires Tasks 4, 5 + Task 7 + vérif finale. §9 (tests) → chaque task. §10 (i18n) → Task 5.
+- Risque résiduel « From usurpé » (spec §8) : accepté et documenté ici ; le gating DMARC est hors périmètre → **issue de suivi à ouvrir** au moment de la PR.
 - Hors périmètre (spec §11) : page settings, allowlist par domaine, réglage global — non traités, conforme.
 - `deleteAllForAccount` (Task 2) est fourni + testé mais non câblé (purge future à la suppression de compte) — volontaire.
