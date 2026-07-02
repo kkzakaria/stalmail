@@ -266,6 +266,22 @@ describe("resolveDomainWithRetry (pur — #63/#120)", () => {
     expect(getDomain).toHaveBeenCalledTimes(2)
   })
 
+  it("renvoie null après épuisement par erreurs transitoires répétées", async () => {
+    const sleep = vi.fn(async () => undefined)
+    const getDomain = vi.fn(async () => {
+      throw new Error("jmap down")
+    })
+    const result = await resolveDomainWithRetry(getDomain, {
+      attempts: 2,
+      delayMs: 750,
+      sleep,
+      isTransient: () => true,
+    })
+    expect(result).toBeNull()
+    expect(getDomain).toHaveBeenCalledTimes(2)
+    expect(sleep).toHaveBeenCalledTimes(1)
+  })
+
   it("propage immédiatement une erreur non-transitoire (ne masque pas l'inattendu)", async () => {
     const sleep = vi.fn(async () => undefined)
     const boom = new Error("unexpected")
@@ -706,6 +722,7 @@ describe("setDnsManagementHandler", () => {
   })
 
   it("throws SETUP-ORIGIN-REJECTED quand la garde d'origine rejette (#63)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     vi.mocked(assertSameOriginStrict).mockImplementationOnce(() => {
       throw new Error("cross-origin request rejected")
     })
@@ -714,6 +731,8 @@ describe("setDnsManagementHandler", () => {
     }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
     expect((err as SetupError).code).toBe("SETUP-ORIGIN-REJECTED")
+    expect(warn).toHaveBeenCalledOnce() // cause loggée côté serveur pour diagnostic
+    warn.mockRestore()
   })
 
   it("throws SetupError with SETUP-DNS-MANAGEMENT-REJECTED on setDnsManagementAutomatic failure", async () => {

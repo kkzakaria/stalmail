@@ -35,10 +35,16 @@ async function requireSetupAuthGuard(): Promise<void> {
   const { requireSetupAuth } = await import("./setup-auth")
   const { SetupError } = await import("./setup-errors")
   // assertSameOriginStrict lève un `Error` brut (rejet CSRF) ; hors du try de mapping il
-  // retomberait en SETUP-UNKNOWN opaque (#63). On le traduit en code parlant.
+  // retomberait en SETUP-UNKNOWN opaque (#63). On le traduit en code parlant, en gardant
+  // la cause en log serveur pour le diagnostic proxy (le message d'origine ne porte aucun
+  // secret — cf. session-cookie.ts).
   try {
     assertSameOriginStrict()
-  } catch {
+  } catch (e) {
+    console.warn(
+      "[setup-actions] origin guard rejected:",
+      e instanceof Error ? e.message : e
+    )
     throw new SetupError("SETUP-ORIGIN-REJECTED")
   }
   await requireSetupAuth()
@@ -85,6 +91,8 @@ async function resolveDomainOrThrow(): Promise<StalwartDomain> {
       attempts: 2,
       delayMs: 750,
       sleep,
+      // En contexte setup, un échec JMAP de getPrimaryDomain traduit quasi toujours un
+      // backend pas encore stable → on considère TOUTE JmapError comme transitoire.
       isTransient: (e) => e instanceof JmapError,
     })
   } catch (e) {
