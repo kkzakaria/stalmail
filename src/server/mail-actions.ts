@@ -546,7 +546,9 @@ export const showImagesOnceFn = createServerFn({ method: "POST" })
 // révocable (untrustSenderFn). Jamais de « tout afficher » global. L'allowlist est
 // scopée à l'accountId de session — aucune valeur influençable par le client n'y entre
 // hors l'adresse normalisée.
-export const senderSchema = z.object({ sender: z.string().email().max(320) })
+// z.email() : forme top-level recommandée Zod 4 (z.string().email() déprécié — CodeRabbit #125).
+// L'addressSchema pré-existant (compose) reste en forme legacy : migration = chore séparé.
+export const senderSchema = z.object({ sender: z.email().max(320) })
 
 export const trustSenderFn = createServerFn({ method: "POST" })
   .validator((d: { sender: string }) => senderSchema.parse(d))

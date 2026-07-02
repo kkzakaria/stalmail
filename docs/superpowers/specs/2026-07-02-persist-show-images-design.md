@@ -82,8 +82,8 @@ normalizeSender(email: string): string
 
 // upgrade par-expéditeur d'une décision message-level déjà calculée
 resolveImageDecision(
-  prefs: { allowedSenders: string[] },
-  message: { from: MailAddress[]; imageDecision: ImageDecision },
+  prefs: ImagePrefs, // { allowedSenders: string[] }
+  message: { from: MailAddress[]; imageDecision?: ImageDecision }, // absent ⇒ blocked (cohérent §5)
 ): ImageDecision
   → 'sender-allowed' si normalizeSender(message.from[0]?.email) ∈ allowedSenders
   → sinon message.imageDecision inchangé ('message-allowed' ou 'blocked')
