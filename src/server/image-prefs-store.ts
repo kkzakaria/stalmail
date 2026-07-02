@@ -29,8 +29,17 @@ function load(): Map<string, ImagePrefsRecord> {
   const p = storePath()
   if (existsSync(p)) {
     try {
-      for (const r of JSON.parse(readFileSync(p, "utf8")) as ImagePrefsRecord[])
-        m.set(r.accountId, r)
+      const parsed: unknown = JSON.parse(readFileSync(p, "utf8"))
+      if (Array.isArray(parsed)) {
+        for (const r of parsed as (Partial<ImagePrefsRecord> | null)[]) {
+          if (
+            r &&
+            typeof r.accountId === "string" &&
+            Array.isArray(r.allowedSenders)
+          )
+            m.set(r.accountId, r as ImagePrefsRecord)
+        }
+      }
     } catch (err) {
       console.error(
         "[image-prefs-store] corrupt image-prefs.json, starting empty:",

@@ -16,6 +16,7 @@ import {
   parseCreatedMailboxId,
   sendMailSchema,
   buildShowImagesCall,
+  emailSetRejections,
   senderSchema,
   showImagesSchema,
 } from "./mail-actions"
@@ -810,6 +811,31 @@ describe("buildShowImagesCall (pur)", () => {
         "0",
       ],
     ])
+  })
+})
+
+describe("emailSetRejections (pur)", () => {
+  it("renvoie les ids présents dans notUpdated", () => {
+    const responses: JmapMethodResponse[] = [
+      [
+        "Email/set",
+        {
+          notUpdated: {
+            e1: { type: "notFound" },
+            e2: { type: "invalidProperties" },
+          },
+        },
+        "0",
+      ],
+    ]
+    expect(emailSetRejections(responses)).toEqual(["e1", "e2"])
+  })
+
+  it("renvoie [] quand notUpdated est absent", () => {
+    const responses: JmapMethodResponse[] = [
+      ["Email/set", { updated: { e1: null } }, "0"],
+    ]
+    expect(emailSetRejections(responses)).toEqual([])
   })
 })
 

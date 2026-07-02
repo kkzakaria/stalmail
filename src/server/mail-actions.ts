@@ -509,6 +509,16 @@ export function buildShowImagesCall(
   return [["Email/set", { accountId, update }, "0"]]
 }
 
+// Pur : ids rejetés par un Email/set (notUpdated). jmapUserCall ne lève que les erreurs
+// de méthode — un rejet per-id passerait silencieusement (CodeRabbit #125).
+export function emailSetRejections(responses: JmapMethodResponse[]): string[] {
+  const payload = responses.find(([n]) => n === "Email/set")?.[1]
+  const notUpdated = (
+    payload as { notUpdated?: Record<string, unknown> } | undefined
+  )?.notUpdated
+  return notUpdated ? Object.keys(notUpdated) : []
+}
+
 export const showImagesSchema = z.object({ emailIds: emailIdsSchema })
 
 export const showImagesOnceFn = createServerFn({ method: "POST" })
@@ -517,7 +527,12 @@ export const showImagesOnceFn = createServerFn({ method: "POST" })
     try {
       const { jmapUserCall } = await import("./jmap-user")
       const { sid, accountId } = await requireSession()
-      await jmapUserCall(sid, buildShowImagesCall(accountId, data.emailIds))
+      const responses = await jmapUserCall(
+        sid,
+        buildShowImagesCall(accountId, data.emailIds)
+      )
+      const rejected = emailSetRejections(responses)
+      if (rejected.length > 0) throw new Error("email set rejected")
       return { ok: true }
     } catch (e) {
       if (isRedirect(e)) throw e

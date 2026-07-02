@@ -71,4 +71,18 @@ describe("image-prefs-store", () => {
       spy.mockRestore()
     }
   })
+
+  it("ignore un record malformé (JSON valide, forme inattendue) sans lever", () => {
+    writeFileSync(
+      join(dir, "image-prefs.json"),
+      JSON.stringify([
+        { accountId: "a", allowedSenders: "oops" },
+        { accountId: "b", allowedSenders: ["ok@x.io"] },
+      ]),
+      { mode: 0o600 }
+    )
+    store.__resetCacheForTest()
+    expect(store.getPrefs("a").allowedSenders).toEqual([])
+    expect(store.getPrefs("b").allowedSenders).toEqual(["ok@x.io"])
+  })
 })

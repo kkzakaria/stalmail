@@ -14,7 +14,8 @@ vi.mock("../../server/mail-actions", () => ({
   trustSenderFn: (a: unknown) => trust(a),
   untrustSenderFn: (a: unknown) => untrust(a),
 }))
-vi.mock("./toast", () => ({ useToast: () => vi.fn() }))
+const notifyMock = vi.fn()
+vi.mock("./toast", () => ({ useToast: () => notifyMock }))
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
@@ -77,6 +78,24 @@ describe("useImageActions", () => {
     const spy = vi.spyOn(qc, "invalidateQueries")
     await result.current.untrustSender("bob@x.io")
     expect(untrust).toHaveBeenCalledWith({ data: { sender: "bob@x.io" } })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["thread", "t1"] })
+  })
+
+  it("showOnce : échec serveur → invalidation + toast d'erreur (pas de restore snapshot)", async () => {
+    const { qc, result } = setup()
+    const spy = vi.spyOn(qc, "invalidateQueries")
+    showImages.mockRejectedValueOnce(new Error("boom"))
+    await result.current.showOnce("e1")
+    expect(notifyMock).toHaveBeenCalledWith("mail.actions.error", "error")
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["thread", "t1"] })
+  })
+
+  it("trustSender : échec serveur → invalidation + toast d'erreur (pas de restore snapshot)", async () => {
+    const { qc, result } = setup()
+    const spy = vi.spyOn(qc, "invalidateQueries")
+    trust.mockRejectedValueOnce(new Error("boom"))
+    await result.current.trustSender("bob@x.io")
+    expect(notifyMock).toHaveBeenCalledWith("mail.actions.error", "error")
     expect(spy).toHaveBeenCalledWith({ queryKey: ["thread", "t1"] })
   })
 })

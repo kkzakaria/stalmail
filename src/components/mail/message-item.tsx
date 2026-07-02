@@ -71,6 +71,7 @@ export function MessageItem({
                 {t("mail.reader.imagesBlocked")}
               </span>{" "}
               <button
+                type="button"
                 className="banner-btn"
                 onClick={() => onShowOnce?.(message.id)}
               >
@@ -78,6 +79,7 @@ export function MessageItem({
               </button>{" "}
               {senderEmail && (
                 <button
+                  type="button"
                   className="banner-btn"
                   onClick={() => onTrustSender?.(senderEmail)}
                 >
@@ -94,6 +96,7 @@ export function MessageItem({
                 })}
               </span>{" "}
               <button
+                type="button"
                 className="banner-btn"
                 onClick={() => onUntrustSender?.(senderEmail)}
               >

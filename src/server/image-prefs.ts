@@ -8,6 +8,10 @@ import type { AppThreadDetail, ImageDecision, MailAddress } from "./mail-types"
 // lowercase, sans préfixe `$` (réservé), sans caractère IMAP exclu.
 export const SHOW_IMAGES_KEYWORD = "stalmail_showimages"
 
+export interface ImagePrefs {
+  allowedSenders: string[]
+}
+
 export function normalizeSender(email: string): string {
   return email.trim().toLowerCase()
 }
@@ -15,7 +19,7 @@ export function normalizeSender(email: string): string {
 // Upgrade par-expéditeur d'une décision niveau-message déjà calculée (via le keyword).
 // Précédence : sender-allowed > (message-allowed | blocked).
 export function resolveImageDecision(
-  prefs: { allowedSenders: string[] },
+  prefs: ImagePrefs,
   message: { from: MailAddress[]; imageDecision?: ImageDecision }
 ): ImageDecision {
   const preliminary: ImageDecision = message.imageDecision ?? "blocked"
@@ -26,7 +30,7 @@ export function resolveImageDecision(
 
 export function applyImagePrefs(
   detail: AppThreadDetail,
-  prefs: { allowedSenders: string[] }
+  prefs: ImagePrefs
 ): AppThreadDetail {
   return {
     ...detail,

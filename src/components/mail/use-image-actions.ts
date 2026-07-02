@@ -41,30 +41,38 @@ export function useImageActions(threadId: string): ImageActions {
     )
   }
 
+  // Cancel → patch optimiste → appel serveur ; échec → invalidation (resync autoritaire,
+  // PAS de restore snapshot : il écraserait des mutations concurrentes confirmées, cf. #38).
+  async function runOptimistic(
+    pred: (m: AppThreadDetail["messages"][number]) => boolean,
+    to: ImageDecision,
+    call: () => Promise<unknown>
+  ): Promise<void> {
+    await qc.cancelQueries({ queryKey: detailKey })
+    patch(pred, to)
+    try {
+      await call()
+    } catch {
+      await qc.invalidateQueries({ queryKey: detailKey })
+      notify(t("mail.actions.error"), "error")
+    }
+  }
+
   return {
     showOnce: async (emailId) => {
-      await qc.cancelQueries({ queryKey: detailKey })
-      patch((m) => m.id === emailId, "message-allowed")
-      try {
-        await showImagesOnceFn({ data: { emailIds: [emailId] } })
-      } catch {
-        await qc.invalidateQueries({ queryKey: detailKey })
-        notify(t("mail.actions.error"), "error")
-      }
+      await runOptimistic(
+        (m) => m.id === emailId,
+        "message-allowed",
+        () => showImagesOnceFn({ data: { emailIds: [emailId] } })
+      )
     },
     trustSender: async (sender) => {
       const norm = normalizeSender(sender)
-      await qc.cancelQueries({ queryKey: detailKey })
-      patch(
+      await runOptimistic(
         (m) => normalizeSender(m.from.at(0)?.email ?? "") === norm,
-        "sender-allowed"
+        "sender-allowed",
+        () => trustSenderFn({ data: { sender } })
       )
-      try {
-        await trustSenderFn({ data: { sender } })
-      } catch {
-        await qc.invalidateQueries({ queryKey: detailKey })
-        notify(t("mail.actions.error"), "error")
-      }
     },
     untrustSender: async (sender) => {
       try {
