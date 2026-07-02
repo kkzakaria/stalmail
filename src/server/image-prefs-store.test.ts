@@ -85,4 +85,18 @@ describe("image-prefs-store", () => {
     expect(store.getPrefs("a").allowedSenders).toEqual([])
     expect(store.getPrefs("b").allowedSenders).toEqual(["ok@x.io"])
   })
+
+  it("ignore un record dont allowedSenders contient des non-strings", () => {
+    writeFileSync(
+      join(dir, "image-prefs.json"),
+      JSON.stringify([
+        { accountId: "a", allowedSenders: [42, "ok@x.io"] },
+        { accountId: "b", allowedSenders: ["ok@x.io"] },
+      ]),
+      { mode: 0o600 }
+    )
+    store.__resetCacheForTest()
+    expect(store.getPrefs("a").allowedSenders).toEqual([])
+    expect(store.getPrefs("b").allowedSenders).toEqual(["ok@x.io"])
+  })
 })

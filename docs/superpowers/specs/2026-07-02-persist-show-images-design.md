@@ -2,7 +2,7 @@
 
 **Date :** 2026-07-02
 **Statut :** validé en brainstorming, prêt pour le plan d'implémentation.
-**Périmètre :** persister la décision utilisateur « Afficher les images » d'un mail à image distante, à deux granularités (par message + allowlist par expéditeur), avec révocation. Corrige [#70](https://github.com/kkzakaria/stalmail/issues/70).
+**Périmètre :** persister la décision utilisateur « Afficher les images » d'un mail à image distante, à deux granularités (par message + allowlist par expéditeur), avec révocation **au niveau expéditeur** (le consentement par-message n'est pas révocable dans cette itération, cf. §3.2/§11). Corrige [#70](https://github.com/kkzakaria/stalmail/issues/70).
 **Dépendances :** lecteur 4b livré (`MessageItem`, `readThreadFn`, `buildFrameDoc`/`frameCsp`, `setFlagsFn`/`buildSetFlagsCall`, store de session `session-store.ts` servant de gabarit).
 
 ## 1. Problème
@@ -18,7 +18,7 @@ Mémoriser le choix « Afficher les images », comme les clients mail standard, 
 - **Par message** : le choix « afficher pour CE message » persiste (rechargement, cross-device).
 - **Par expéditeur** : allowlist d'expéditeurs de confiance (façon Gmail « Toujours afficher les images de X »).
 
-Le tout **révocable** et **explicite** : jamais de « tout afficher » global par défaut.
+Le tout **explicite**, et **révocable au niveau expéditeur** (bandeau « Bloquer ») : jamais de « tout afficher » global par défaut.
 
 ## 3. Décisions architecturales
 
@@ -146,7 +146,7 @@ Callbacks (props) → mutations dans la route → invalidation de la query du th
 ## 8. Sécurité (revue requise avant merge)
 
 - Défaut `blocked` (CSP `img-src data: cid:`) tant qu'aucun consentement enregistré — **inchangé**.
-- Persistance **explicite** (clic utilisateur) et **révocable** (lien Bloquer inline).
+- Persistance **explicite** (clic utilisateur) et **révocable au niveau expéditeur** (lien Bloquer inline ; le keyword par-message n'a pas de chemin de révocation exposé, cf. §3.2/§11).
 - Identité expéditeur = **adresse exacte normalisée**, jamais le domaine (conservateur, anti-usurpation de domaine).
 - Anti-traceur (à documenter dans le code) : faire confiance à un expéditeur charge automatiquement ses images distantes (pixels de tracking inclus) — choix explicite et révocable, façon Gmail.
 - Store `image-prefs.json` : mode `0o600`, scopé `accountId` (issu serveur), aucune fuite inter-comptes. Allowlist plafonnée (`MAX_TRUSTED_SENDERS`, cf. §3.3).

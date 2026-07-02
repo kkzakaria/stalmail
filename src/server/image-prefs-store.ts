@@ -32,10 +32,13 @@ function load(): Map<string, ImagePrefsRecord> {
       const parsed: unknown = JSON.parse(readFileSync(p, "utf8"))
       if (Array.isArray(parsed)) {
         for (const r of parsed as (Partial<ImagePrefsRecord> | null)[]) {
+          // Valide la forme ET les éléments : un JSON valide mais altéré (ex.
+          // allowedSenders: [42]) serait sinon re-persisté typé string[] (CodeRabbit #125).
           if (
             r &&
             typeof r.accountId === "string" &&
-            Array.isArray(r.allowedSenders)
+            Array.isArray(r.allowedSenders) &&
+            r.allowedSenders.every((s) => typeof s === "string")
           )
             m.set(r.accountId, r as ImagePrefsRecord)
         }
