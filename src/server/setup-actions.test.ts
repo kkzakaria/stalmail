@@ -264,6 +264,8 @@ describe("resolveDomainWithRetry (pur — #63/#120)", () => {
     })
     expect(result).toBeNull()
     expect(getDomain).toHaveBeenCalledTimes(2)
+    expect(sleep).toHaveBeenCalledTimes(1)
+    expect(sleep).toHaveBeenCalledWith(750)
   })
 
   it("renvoie null après épuisement par erreurs transitoires répétées", async () => {

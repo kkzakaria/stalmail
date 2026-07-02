@@ -75,6 +75,11 @@ export async function resolveDomainWithRetry(
   return null
 }
 
+// « Un court retry » pour absorber la fenêtre transitoire post-restart bootstrap (#120) :
+// 1 essai + 1 retry espacé, avant de conclure à l'indisponibilité du backend.
+const DOMAIN_RESOLVE_ATTEMPTS = 2
+const DOMAIN_RESOLVE_RETRY_DELAY_MS = 750
+
 // Résout le domaine primaire HORS du try de mapping des handlers. Toute défaillance
 // devient un code SETUP-* parlant plutôt qu'un SETUP-UNKNOWN opaque (#63) :
 //  - JmapError (backend injoignable) → transitoire, retenté puis SETUP-BACKEND-UNAVAILABLE
@@ -88,8 +93,8 @@ async function resolveDomainOrThrow(): Promise<StalwartDomain> {
   let domain: StalwartDomain | null
   try {
     domain = await resolveDomainWithRetry(getPrimaryDomain, {
-      attempts: 2,
-      delayMs: 750,
+      attempts: DOMAIN_RESOLVE_ATTEMPTS,
+      delayMs: DOMAIN_RESOLVE_RETRY_DELAY_MS,
       sleep,
       // En contexte setup, un échec JMAP de getPrimaryDomain traduit quasi toujours un
       // backend pas encore stable → on considère TOUTE JmapError comme transitoire.
