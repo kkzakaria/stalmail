@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.42](https://github.com/kkzakaria/stalmail/compare/v0.1.41...v0.1.42) (2026-07-02)
+
+
+### Features
+
+* **reader:** persiste la décision « Afficher les images » ([#70](https://github.com/kkzakaria/stalmail/issues/70)) ([#125](https://github.com/kkzakaria/stalmail/issues/125)) ([04ec946](https://github.com/kkzakaria/stalmail/commit/04ec946b82d298311dcfa71a8a8037d95bee1c4d))
+
 ## [0.1.41](https://github.com/kkzakaria/stalmail/compare/v0.1.40...v0.1.41) (2026-07-02)
 
 
