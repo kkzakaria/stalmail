@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.41](https://github.com/kkzakaria/stalmail/compare/v0.1.40...v0.1.41) (2026-07-02)
+
+
+### Bug Fixes
+
+* **setup:** mapper les défaillances pré-try vers des codes SETUP-* parlants ([#63](https://github.com/kkzakaria/stalmail/issues/63), [#120](https://github.com/kkzakaria/stalmail/issues/120)) ([#123](https://github.com/kkzakaria/stalmail/issues/123)) ([de0f68b](https://github.com/kkzakaria/stalmail/commit/de0f68bada431d54ae65daa4489015ccfb8f2dc2))
+
 ## [0.1.40](https://github.com/kkzakaria/stalmail/compare/v0.1.39...v0.1.40) (2026-07-01)
 
 
