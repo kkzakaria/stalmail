@@ -8,17 +8,26 @@ import type { AppMessage } from "../../server/mail-types"
 export function MessageItem({
   message,
   defaultOpen = false,
+  onShowOnce,
+  onTrustSender,
+  onUntrustSender,
 }: {
   message: AppMessage
   defaultOpen?: boolean
+  onShowOnce?: (emailId: string) => void
+  onTrustSender?: (sender: string) => void
+  onUntrustSender?: (sender: string) => void
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(defaultOpen)
-  // intentionnel : sticky par session (ne ré-alerte pas au repli/dépli)
-  const [showImages, setShowImages] = useState(false)
+
+  // Décision d'affichage résolue côté serveur (readThreadFn). Absent → "blocked" (défaut sûr).
+  const decision = message.imageDecision ?? "blocked"
+  const showImages = decision !== "blocked"
 
   const lead = message.from.at(0)
   const leadName = lead?.name || lead?.email || "—"
+  const senderEmail = lead?.email ?? ""
   const body = useMemo(() => pickBody(message), [message])
   const remote = body.kind === "html" && hasRemoteImages(body.content)
   const frameDoc = useMemo(
@@ -41,7 +50,7 @@ export function MessageItem({
           }
         }}
       >
-        <Avatar name={leadName} email={lead?.email ?? ""} />
+        <Avatar name={leadName} email={senderEmail} />
         <div className="who">
           <div className="nm">{leadName}</div>
           {open && message.to.length > 0 && (
@@ -56,16 +65,39 @@ export function MessageItem({
 
       {open && (
         <div className="msg-body">
-          {remote && !showImages && (
+          {remote && decision === "blocked" && (
             <div className="img-block-banner">
               <span className="banner-note">
                 {t("mail.reader.imagesBlocked")}
               </span>{" "}
               <button
                 className="banner-btn"
-                onClick={() => setShowImages(true)}
+                onClick={() => onShowOnce?.(message.id)}
               >
                 {t("mail.reader.showImages")}
+              </button>{" "}
+              {senderEmail && (
+                <button
+                  className="banner-btn"
+                  onClick={() => onTrustSender?.(senderEmail)}
+                >
+                  {t("mail.reader.trustSender", { sender: senderEmail })}
+                </button>
+              )}
+            </div>
+          )}
+          {remote && decision === "sender-allowed" && senderEmail && (
+            <div className="img-block-banner">
+              <span className="banner-note">
+                {t("mail.reader.imagesFromSenderShown", {
+                  sender: senderEmail,
+                })}
+              </span>{" "}
+              <button
+                className="banner-btn"
+                onClick={() => onUntrustSender?.(senderEmail)}
+              >
+                {t("mail.reader.blockSender")}
               </button>
             </div>
           )}
