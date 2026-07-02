@@ -15,6 +15,9 @@ import {
   buildCreateMailboxCall,
   parseCreatedMailboxId,
   sendMailSchema,
+  buildShowImagesCall,
+  senderSchema,
+  showImagesSchema,
 } from "./mail-actions"
 import type { JmapMethodResponse } from "./jmap"
 import type { AppMailbox } from "./mail-types"
@@ -789,5 +792,42 @@ describe("sendMailSchema", () => {
     expect(() =>
       sendMailSchema.parse({ ...base, to: [{ name: "", email: "x" }] })
     ).toThrow()
+  })
+})
+
+describe("buildShowImagesCall (pur)", () => {
+  it("pose le keyword stalmail_showimages=true sur chaque email", () => {
+    expect(buildShowImagesCall("acc", ["e1", "e2"])).toEqual([
+      [
+        "Email/set",
+        {
+          accountId: "acc",
+          update: {
+            e1: { "keywords/stalmail_showimages": true },
+            e2: { "keywords/stalmail_showimages": true },
+          },
+        },
+        "0",
+      ],
+    ])
+  })
+})
+
+describe("schémas Zod des actions images (#70)", () => {
+  it("senderSchema accepte une adresse valide", () => {
+    expect(senderSchema.parse({ sender: "bob@x.io" })).toEqual({
+      sender: "bob@x.io",
+    })
+  })
+  it("senderSchema rejette une non-adresse", () => {
+    expect(() => senderSchema.parse({ sender: "pas-une-adresse" })).toThrow()
+  })
+  it("senderSchema rejette une adresse trop longue", () => {
+    expect(() =>
+      senderSchema.parse({ sender: "a".repeat(320) + "@x.io" })
+    ).toThrow()
+  })
+  it("showImagesSchema rejette un lot d'emailIds vide", () => {
+    expect(() => showImagesSchema.parse({ emailIds: [] })).toThrow()
   })
 })

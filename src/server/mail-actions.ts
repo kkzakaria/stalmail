@@ -19,7 +19,11 @@ import {
   isCleanHeaderValue,
 } from "./compose-build"
 import type { SendBody } from "./compose-build"
-import { SHOW_IMAGES_KEYWORD, applyImagePrefs } from "./image-prefs"
+import {
+  SHOW_IMAGES_KEYWORD,
+  applyImagePrefs,
+  normalizeSender,
+} from "./image-prefs"
 
 interface RawMailbox {
   id: string
@@ -481,6 +485,76 @@ export const setFlagsFn = createServerFn({ method: "POST" })
         sid,
         buildSetFlagsCall(accountId, data.emailIds, data.flag, data.value)
       )
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
+  })
+
+// ---------------------------------------------------------------------------
+// #70 — Persistance « Afficher les images »
+// Par message : keyword JMAP custom. Par expéditeur : store allowlist (côté serveur).
+// ---------------------------------------------------------------------------
+
+// Pur : Email/set posant le keyword stalmail_showimages sur plusieurs emails.
+export function buildShowImagesCall(
+  accountId: string,
+  emailIds: string[]
+): JmapMethodCall[] {
+  const update: Record<string, Record<string, true>> = {}
+  for (const id of emailIds)
+    update[id] = { [`keywords/${SHOW_IMAGES_KEYWORD}`]: true }
+  return [["Email/set", { accountId, update }, "0"]]
+}
+
+export const showImagesSchema = z.object({ emailIds: emailIdsSchema })
+
+export const showImagesOnceFn = createServerFn({ method: "POST" })
+  .validator((d: { emailIds: string[] }) => showImagesSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    try {
+      const { jmapUserCall } = await import("./jmap-user")
+      const { sid, accountId } = await requireSession()
+      await jmapUserCall(sid, buildShowImagesCall(accountId, data.emailIds))
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
+  })
+
+// Anti-traceur : faire confiance à un expéditeur charge AUTOMATIQUEMENT ses images
+// distantes (pixels de tracking inclus) sur tous ses futurs mails. Choix explicite et
+// révocable (untrustSenderFn). Jamais de « tout afficher » global. L'allowlist est
+// scopée à l'accountId de session — aucune valeur influençable par le client n'y entre
+// hors l'adresse normalisée.
+export const senderSchema = z.object({ sender: z.string().email().max(320) })
+
+export const trustSenderFn = createServerFn({ method: "POST" })
+  .validator((d: { sender: string }) => senderSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    try {
+      const { addSender } = await import("./image-prefs-store")
+      const { accountId } = await requireSession()
+      addSender(accountId, normalizeSender(data.sender))
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
+  })
+
+export const untrustSenderFn = createServerFn({ method: "POST" })
+  .validator((d: { sender: string }) => senderSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    try {
+      const { removeSender } = await import("./image-prefs-store")
+      const { accountId } = await requireSession()
+      removeSender(accountId, normalizeSender(data.sender))
       return { ok: true }
     } catch (e) {
       if (isRedirect(e)) throw e
