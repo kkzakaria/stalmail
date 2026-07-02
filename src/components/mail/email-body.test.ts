@@ -128,7 +128,8 @@ describe("buildFrameDoc", () => {
     expect(off).toContain("img-src data: cid:;")
     expect(off).not.toContain("https:")
     const on = buildFrameDoc("<p>x</p>", { showImages: true })
-    expect(on).toContain("img-src data: cid: https: http:;")
+    expect(on).toContain("img-src data: cid: https:;")
+    expect(on).not.toContain("http:") // jamais de traceur en clair, même consenti
   })
   it("force l'ouverture des liens dans un nouvel onglet (base target=_blank)", () => {
     const doc = buildFrameDoc('<a href="https://x.com">x</a>', {

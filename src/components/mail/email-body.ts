@@ -7,7 +7,9 @@
 // sinon le navigateur bloquerait les images malgré la levée du filtrage regex (le bouton
 // « Afficher les images » restait alors sans effet). Toujours pas de scripts ni same-origin.
 function frameCsp(showImages: boolean): string {
-  const imgSrc = showImages ? "data: cid: https: http:" : "data: cid:"
+  // https: seulement (pas http:) : un traceur en clair exposerait l'ouverture du mail
+  // à tout intermédiaire réseau (revue sécu #70). Les images http-only ne se chargent pas.
+  const imgSrc = showImages ? "data: cid: https:" : "data: cid:"
   return `default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'`
 }
 

@@ -15,6 +15,10 @@ import {
   buildCreateMailboxCall,
   parseCreatedMailboxId,
   sendMailSchema,
+  buildShowImagesCall,
+  emailSetRejections,
+  senderSchema,
+  showImagesSchema,
 } from "./mail-actions"
 import type { JmapMethodResponse } from "./jmap"
 import type { AppMailbox } from "./mail-types"
@@ -483,6 +487,42 @@ describe("parseThreadDetail", () => {
     const d = parseThreadDetail(withoutMsgId)
     expect(d.messages[0].messageId).toBeNull()
   })
+
+  // NB : fixtures nommées withKeyword/withoutKeyword (PAS `responses`) — le describe
+  // parseThreadDetail existant a déjà un `const responses` à son scope (no-shadow).
+  it("imageDecision = message-allowed quand le keyword stalmail_showimages est posé", () => {
+    const withKeyword: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
+      [
+        "Email/get",
+        {
+          list: [
+            {
+              id: "e1",
+              from: [{ name: "Bob", email: "bob@x.io" }],
+              keywords: { stalmail_showimages: true },
+              htmlBody: [{ partId: "1", type: "text/html" }],
+              bodyValues: { "1": { value: "<p>hi</p>" } },
+            },
+          ],
+        },
+        "1",
+      ],
+    ]
+    expect(parseThreadDetail(withKeyword).messages[0].imageDecision).toBe(
+      "message-allowed"
+    )
+  })
+
+  it("imageDecision = blocked sans keyword", () => {
+    const withoutKeyword: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
+      ["Email/get", { list: [{ id: "e1", from: [], keywords: {} }] }, "1"],
+    ]
+    expect(parseThreadDetail(withoutKeyword).messages[0].imageDecision).toBe(
+      "blocked"
+    )
+  })
 })
 
 describe("buildSetFlagsCall", () => {
@@ -753,5 +793,67 @@ describe("sendMailSchema", () => {
     expect(() =>
       sendMailSchema.parse({ ...base, to: [{ name: "", email: "x" }] })
     ).toThrow()
+  })
+})
+
+describe("buildShowImagesCall (pur)", () => {
+  it("pose le keyword stalmail_showimages=true sur chaque email", () => {
+    expect(buildShowImagesCall("acc", ["e1", "e2"])).toEqual([
+      [
+        "Email/set",
+        {
+          accountId: "acc",
+          update: {
+            e1: { "keywords/stalmail_showimages": true },
+            e2: { "keywords/stalmail_showimages": true },
+          },
+        },
+        "0",
+      ],
+    ])
+  })
+})
+
+describe("emailSetRejections (pur)", () => {
+  it("renvoie les ids présents dans notUpdated", () => {
+    const responses: JmapMethodResponse[] = [
+      [
+        "Email/set",
+        {
+          notUpdated: {
+            e1: { type: "notFound" },
+            e2: { type: "invalidProperties" },
+          },
+        },
+        "0",
+      ],
+    ]
+    expect(emailSetRejections(responses)).toEqual(["e1", "e2"])
+  })
+
+  it("renvoie [] quand notUpdated est absent", () => {
+    const responses: JmapMethodResponse[] = [
+      ["Email/set", { updated: { e1: null } }, "0"],
+    ]
+    expect(emailSetRejections(responses)).toEqual([])
+  })
+})
+
+describe("schémas Zod des actions images (#70)", () => {
+  it("senderSchema accepte une adresse valide", () => {
+    expect(senderSchema.parse({ sender: "bob@x.io" })).toEqual({
+      sender: "bob@x.io",
+    })
+  })
+  it("senderSchema rejette une non-adresse", () => {
+    expect(() => senderSchema.parse({ sender: "pas-une-adresse" })).toThrow()
+  })
+  it("senderSchema rejette une adresse trop longue", () => {
+    expect(() =>
+      senderSchema.parse({ sender: "a".repeat(320) + "@x.io" })
+    ).toThrow()
+  })
+  it("showImagesSchema rejette un lot d'emailIds vide", () => {
+    expect(() => showImagesSchema.parse({ emailIds: [] })).toThrow()
   })
 })

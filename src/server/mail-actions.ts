@@ -19,6 +19,11 @@ import {
   isCleanHeaderValue,
 } from "./compose-build"
 import type { SendBody } from "./compose-build"
+import {
+  SHOW_IMAGES_KEYWORD,
+  applyImagePrefs,
+  normalizeSender,
+} from "./image-prefs"
 
 interface RawMailbox {
   id: string
@@ -413,6 +418,10 @@ export function parseThreadDetail(
     subject: e.subject ?? "",
     receivedAt: e.receivedAt ?? "",
     unread: (e.keywords ?? {}).$seen !== true,
+    imageDecision:
+      (e.keywords ?? {})[SHOW_IMAGES_KEYWORD] === true
+        ? "message-allowed"
+        : "blocked",
     hasAttachment: e.hasAttachment === true,
     textBody: resolveBody(e.textBody, e.bodyValues, "text/plain"),
     htmlBody: resolveBody(e.htmlBody, e.bodyValues, "text/html"),
@@ -476,6 +485,93 @@ export const setFlagsFn = createServerFn({ method: "POST" })
         sid,
         buildSetFlagsCall(accountId, data.emailIds, data.flag, data.value)
       )
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
+  })
+
+// ---------------------------------------------------------------------------
+// #70 — Persistance « Afficher les images »
+// Par message : keyword JMAP custom. Par expéditeur : store allowlist (côté serveur).
+// ---------------------------------------------------------------------------
+
+// Pur : Email/set posant le keyword stalmail_showimages sur plusieurs emails.
+export function buildShowImagesCall(
+  accountId: string,
+  emailIds: string[]
+): JmapMethodCall[] {
+  const update: Record<string, Record<string, true>> = {}
+  for (const id of emailIds)
+    update[id] = { [`keywords/${SHOW_IMAGES_KEYWORD}`]: true }
+  return [["Email/set", { accountId, update }, "0"]]
+}
+
+// Pur : ids rejetés par un Email/set (notUpdated). jmapUserCall ne lève que les erreurs
+// de méthode — un rejet per-id passerait silencieusement (CodeRabbit #125).
+export function emailSetRejections(responses: JmapMethodResponse[]): string[] {
+  const payload = responses.find(([n]) => n === "Email/set")?.[1]
+  const notUpdated = (
+    payload as { notUpdated?: Record<string, unknown> } | undefined
+  )?.notUpdated
+  return notUpdated ? Object.keys(notUpdated) : []
+}
+
+export const showImagesSchema = z.object({ emailIds: emailIdsSchema })
+
+export const showImagesOnceFn = createServerFn({ method: "POST" })
+  .validator((d: { emailIds: string[] }) => showImagesSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    try {
+      const { jmapUserCall } = await import("./jmap-user")
+      const { sid, accountId } = await requireSession()
+      const responses = await jmapUserCall(
+        sid,
+        buildShowImagesCall(accountId, data.emailIds)
+      )
+      const rejected = emailSetRejections(responses)
+      if (rejected.length > 0) throw new Error("email set rejected")
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
+  })
+
+// Anti-traceur : faire confiance à un expéditeur charge AUTOMATIQUEMENT ses images
+// distantes (pixels de tracking inclus) sur tous ses futurs mails. Choix explicite et
+// révocable (untrustSenderFn). Jamais de « tout afficher » global. L'allowlist est
+// scopée à l'accountId de session — aucune valeur influençable par le client n'y entre
+// hors l'adresse normalisée.
+// z.email() : forme top-level recommandée Zod 4 (z.string().email() déprécié — CodeRabbit #125).
+// L'addressSchema pré-existant (compose) reste en forme legacy : migration = chore séparé.
+export const senderSchema = z.object({ sender: z.email().max(320) })
+
+export const trustSenderFn = createServerFn({ method: "POST" })
+  .validator((d: { sender: string }) => senderSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    try {
+      const { addSender } = await import("./image-prefs-store")
+      const { accountId } = await requireSession()
+      addSender(accountId, normalizeSender(data.sender))
+      return { ok: true }
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      console.error("mail action failed", e)
+      throw new Error("mail action failed")
+    }
+  })
+
+export const untrustSenderFn = createServerFn({ method: "POST" })
+  .validator((d: { sender: string }) => senderSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    try {
+      const { removeSender } = await import("./image-prefs-store")
+      const { accountId } = await requireSession()
+      removeSender(accountId, normalizeSender(data.sender))
       return { ok: true }
     } catch (e) {
       if (isRedirect(e)) throw e
@@ -674,7 +770,8 @@ export const readThreadFn = createServerFn({ method: "GET" })
         sid,
         buildReadThreadCalls(accountId, data.threadId)
       )
-      return parseThreadDetail(responses)
+      const { getPrefs } = await import("./image-prefs-store")
+      return applyImagePrefs(parseThreadDetail(responses), getPrefs(accountId))
     } catch (e) {
       if (isRedirect(e)) throw e
       console.error("mail action failed", e)

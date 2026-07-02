@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next"
 import { createI18n } from "../../i18n/i18n"
@@ -73,22 +73,62 @@ describe("MessageItem", () => {
     expect(screen.queryByText("corps en clair")).not.toBeInTheDocument()
   })
 
-  it("bandeau images : visible puis masqué après 'afficher les images'", () => {
+  it("bandeau bloqué : boutons afficher-une-fois + faire-confiance déclenchent les callbacks", () => {
+    const onShowOnce = vi.fn()
+    const onTrustSender = vi.fn()
     wrap(
       <MessageItem
         message={msg({
           textBody: null,
           htmlBody: '<img src="https://t/x.png">',
+          imageDecision: "blocked",
+        })}
+        defaultOpen
+        onShowOnce={onShowOnce}
+        onTrustSender={onTrustSender}
+      />
+    )
+    expect(screen.getByText(/images distantes/i)).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole("button", { name: /afficher les images/i })
+    )
+    expect(onShowOnce).toHaveBeenCalledWith("e1")
+    fireEvent.click(
+      screen.getByRole("button", { name: /toujours afficher pour/i })
+    )
+    expect(onTrustSender).toHaveBeenCalledWith("bob@x.io")
+  })
+
+  it("message-allowed : pas de bandeau, images affichées", () => {
+    wrap(
+      <MessageItem
+        message={msg({
+          textBody: null,
+          htmlBody: '<img src="https://t/x.png">',
+          imageDecision: "message-allowed",
         })}
         defaultOpen
       />
     )
-    const banner = screen.getByText(/images distantes/i)
-    expect(banner).toBeInTheDocument()
-    fireEvent.click(
-      screen.getByRole("button", { name: /afficher les images/i })
-    )
     expect(screen.queryByText(/images distantes/i)).not.toBeInTheDocument()
+  })
+
+  it("sender-allowed : note + bouton bloquer déclenche onUntrustSender", () => {
+    const onUntrustSender = vi.fn()
+    wrap(
+      <MessageItem
+        message={msg({
+          textBody: null,
+          htmlBody: '<img src="https://t/x.png">',
+          imageDecision: "sender-allowed",
+        })}
+        defaultOpen
+        onUntrustSender={onUntrustSender}
+      />
+    )
+    expect(screen.getByText(/affichées automatiquement/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /bloquer/i }))
+    expect(onUntrustSender).toHaveBeenCalledWith("bob@x.io")
   })
 
   it("expéditeur vide → '—' sans crash", () => {
