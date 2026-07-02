@@ -798,7 +798,7 @@ describe("sendMailSchema", () => {
 
 describe("buildShowImagesCall (pur)", () => {
   it("pose le keyword stalmail_showimages=true sur chaque email", () => {
-    expect(buildShowImagesCall("acc", ["e1", "e2"])).toEqual([
+    expect(buildShowImagesCall("acc", ["e1", "e2"], true)).toEqual([
       [
         "Email/set",
         {
@@ -807,6 +807,19 @@ describe("buildShowImagesCall (pur)", () => {
             e1: { "keywords/stalmail_showimages": true },
             e2: { "keywords/stalmail_showimages": true },
           },
+        },
+        "0",
+      ],
+    ])
+  })
+
+  it("retire le keyword via null quand value=false (révocation par-message)", () => {
+    expect(buildShowImagesCall("acc", ["e1"], false)).toEqual([
+      [
+        "Email/set",
+        {
+          accountId: "acc",
+          update: { e1: { "keywords/stalmail_showimages": null } },
         },
         "0",
       ],

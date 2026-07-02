@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import {
   showImagesOnceFn,
+  hideImagesFn,
   trustSenderFn,
   untrustSenderFn,
 } from "../../server/mail-actions"
@@ -11,6 +12,7 @@ import { useToast } from "./toast"
 
 export interface ImageActions {
   showOnce: (emailId: string) => Promise<void>
+  hideImages: (emailId: string) => Promise<void>
   trustSender: (sender: string) => Promise<void>
   untrustSender: (sender: string) => Promise<void>
 }
@@ -64,6 +66,15 @@ export function useImageActions(threadId: string): ImageActions {
         (m) => m.id === emailId,
         "message-allowed",
         () => showImagesOnceFn({ data: { emailIds: [emailId] } })
+      )
+    },
+    // Révocation par-message : patch vers "blocked" déterministe (si l'expéditeur était
+    // de confiance, l'état serait sender-allowed — jamais message-allowed).
+    hideImages: async (emailId) => {
+      await runOptimistic(
+        (m) => m.id === emailId,
+        "blocked",
+        () => hideImagesFn({ data: { emailIds: [emailId] } })
       )
     },
     trustSender: async (sender) => {

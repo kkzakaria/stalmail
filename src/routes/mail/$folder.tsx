@@ -210,6 +210,7 @@ function ReaderPane({
       sending={composer.sending}
       selfEmail={accountName}
       onShowOnce={(id) => void imageActions.showOnce(id)}
+      onHideImages={(id) => void imageActions.hideImages(id)}
       onTrustSender={(s) => void imageActions.trustSender(s)}
       onUntrustSender={(s) => void imageActions.untrustSender(s)}
     />

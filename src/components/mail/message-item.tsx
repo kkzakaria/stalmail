@@ -9,12 +9,14 @@ export function MessageItem({
   message,
   defaultOpen = false,
   onShowOnce,
+  onHideImages,
   onTrustSender,
   onUntrustSender,
 }: {
   message: AppMessage
   defaultOpen?: boolean
   onShowOnce?: (emailId: string) => void
+  onHideImages?: (emailId: string) => void
   onTrustSender?: (sender: string) => void
   onUntrustSender?: (sender: string) => void
 }) {
@@ -86,6 +88,20 @@ export function MessageItem({
                   {t("mail.reader.trustSender", { sender: senderEmail })}
                 </button>
               )}
+            </div>
+          )}
+          {remote && decision === "message-allowed" && (
+            <div className="img-block-banner">
+              <span className="banner-note">
+                {t("mail.reader.imagesShown")}
+              </span>{" "}
+              <button
+                type="button"
+                className="banner-btn"
+                onClick={() => onHideImages?.(message.id)}
+              >
+                {t("mail.reader.blockSender")}
+              </button>
             </div>
           )}
           {remote && decision === "sender-allowed" && senderEmail && (
