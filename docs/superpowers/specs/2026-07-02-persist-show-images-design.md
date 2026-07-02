@@ -38,7 +38,7 @@ Les deux restent côté serveur / cross-device, cohérent avec le choix « serve
 - Nom : `stalmail_showimages` — lowercase, sans préfixe `$` (réservé aux keywords enregistrés), sans caractère exclu IMAP (`( ) { espace % * " \ ]` et contrôles). RFC 8621 autorise les keywords arbitraires.
 - **Lecture** : `Email/get` récupère déjà `keywords` (`mail-actions.ts:365`). `parseThreadDetail` lit déjà `keywords.$seen`/`.$flagged` — on ajoute la lecture de `keywords.stalmail_showimages`.
 - **Écriture** : réutilise le patron `buildSetFlagsCall`/`setFlagsFn` → `Email/set { update: { [id]: { "keywords/stalmail_showimages": true } } }`.
-- **Révocation par-message** : `"keywords/stalmail_showimages": null`.
+- Le mécanisme JMAP permet la révocation par-message (`"keywords/stalmail_showimages": null`), non exposée dans cette itération : la révocation offerte à l'utilisateur est au niveau expéditeur (bandeau « Bloquer », §3.5).
 - Effet de bord bénin, à documenter : le keyword est visible via IMAP (client tiers), inoffensif car advisoire (comme `$seen`).
 
 ### 3.3 Store maison pour l'allowlist expéditeurs
@@ -178,3 +178,4 @@ Réutilise `mail.reader.imagesBlocked`, `mail.reader.showImages`. Nouvelles clé
 - Page settings de gestion de l'allowlist (phase 4e) — révocation inline suffit ici.
 - Allowlist par **domaine** (volontairement écartée, trop large).
 - Réglage global « toujours afficher toutes les images » (refusé, anti-traceur).
+- Révocation par-message d'un consentement « afficher une fois » (le keyword reste posé ; possible plus tard via `null`).
