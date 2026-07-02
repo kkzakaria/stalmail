@@ -79,12 +79,22 @@ async function resolveDomainOrThrow(): Promise<StalwartDomain> {
   const { JmapError } = await import("./jmap")
   const { SetupError } = await import("./setup-errors")
   const { sleep } = await import("./timers")
-  const domain = await resolveDomainWithRetry(getPrimaryDomain, {
-    attempts: 2,
-    delayMs: 750,
-    sleep,
-    isTransient: (e) => e instanceof JmapError,
-  })
+  let domain: StalwartDomain | null
+  try {
+    domain = await resolveDomainWithRetry(getPrimaryDomain, {
+      attempts: 2,
+      delayMs: 750,
+      sleep,
+      isTransient: (e) => e instanceof JmapError,
+    })
+  } catch (e) {
+    // Erreur inattendue non transitoire relayée par resolveDomainWithRetry. Comme cet
+    // appel est hors du try de mapping des handlers, un throw brut fuirait son message
+    // à la frontière createServerFn. On le confine en SETUP-UNKNOWN (réservé au
+    // réellement inattendu, #63) ; un SetupError éventuel garde son code.
+    if (e instanceof SetupError) throw e
+    throw new SetupError("SETUP-UNKNOWN")
+  }
   if (!domain) throw new SetupError("SETUP-BACKEND-UNAVAILABLE")
   return domain
 }

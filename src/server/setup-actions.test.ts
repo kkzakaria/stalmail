@@ -694,6 +694,17 @@ describe("setDnsManagementHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
   })
 
+  it("throws SETUP-UNKNOWN (pas de message brut) quand getPrimaryDomain lève une erreur inattendue non-JmapError (#63)", async () => {
+    vi.mocked(getPrimaryDomain).mockRejectedValueOnce(
+      new Error("boom inattendu")
+    )
+    const err = await setDnsManagementHandler({
+      data: { dnsServerId: "srv-1" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-UNKNOWN")
+  })
+
   it("throws SETUP-ORIGIN-REJECTED quand la garde d'origine rejette (#63)", async () => {
     vi.mocked(assertSameOriginStrict).mockImplementationOnce(() => {
       throw new Error("cross-origin request rejected")
