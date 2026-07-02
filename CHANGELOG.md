@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.40](https://github.com/kkzakaria/stalmail/compare/v0.1.39...v0.1.40) (2026-07-01)
+
+
+### Bug Fixes
+
+* **setup:** re-déclencher la publication DNS au retry + purger la tâche périmée ([#62](https://github.com/kkzakaria/stalmail/issues/62)) ([96b5108](https://github.com/kkzakaria/stalmail/commit/96b5108dadb9353b402fbc87dc968cc7d00eab3c))
+
 ## [0.1.39](https://github.com/kkzakaria/stalmail/compare/v0.1.38...v0.1.39) (2026-07-01)
 
 
