@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { codeFromError, messageKeyForCode } from "./error-code"
+import { codeFromError, messageKeyForCode, KNOWN_CODES } from "./error-code"
 
 describe("error-code", () => {
   describe("codeFromError", () => {
@@ -20,20 +20,9 @@ describe("error-code", () => {
   })
 
   describe("messageKeyForCode", () => {
-    const knownCodes = [
-      "SETUP-RESTART-TIMEOUT",
-      "SETUP-DNS-REJECTED",
-      "SETUP-DNS-MANAGEMENT-REJECTED",
-      "SETUP-ACCOUNT-WEAK",
-      "SETUP-ACCOUNT-REJECTED",
-      "SETUP-SSL-REJECTED",
-      "SETUP-FORBIDDEN",
-      "SETUP-UNKNOWN",
-      "SETUP-UNAUTHENTICATED",
-      "SETUP-UNLOCK-FAILED",
-    ]
-
-    it.each(knownCodes)("maps %s to wizard.error.codes.%s", (code) => {
+    // Source unique : on itère sur KNOWN_CODES lui-même pour éviter toute dérive entre
+    // le Set de production et la liste testée (chaque code doit avoir une clé dédiée).
+    it.each([...KNOWN_CODES])("maps %s to wizard.error.codes.%s", (code) => {
       expect(messageKeyForCode(code)).toBe(`wizard.error.codes.${code}`)
     })
 

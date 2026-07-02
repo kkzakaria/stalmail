@@ -37,6 +37,10 @@ export const fr = {
         "SETUP-ACCOUNT-REJECTED":
           "La création du compte administrateur a échoué.",
         "SETUP-SSL-REJECTED": "L'obtention du certificat SSL a échoué.",
+        "SETUP-ORIGIN-REJECTED":
+          "Requête rejetée (origine non conforme). Vérifiez la configuration du proxy et réessayez depuis l'URL officielle.",
+        "SETUP-BACKEND-UNAVAILABLE":
+          "Le serveur mail n'est pas encore prêt (démarrage en cours). Patientez quelques secondes puis réessayez.",
         "SETUP-UNKNOWN": "Une erreur inattendue s'est produite.",
         "SETUP-FORBIDDEN": "Cette étape n'est pas disponible.",
         "SETUP-UNAUTHENTICATED": "Authentification de setup requise.",
@@ -387,6 +391,10 @@ export const en: DeepRecord<typeof fr> = {
         "SETUP-ACCOUNT-WEAK": "The chosen password is not strong enough.",
         "SETUP-ACCOUNT-REJECTED": "Administrator account creation failed.",
         "SETUP-SSL-REJECTED": "Obtaining the SSL certificate failed.",
+        "SETUP-ORIGIN-REJECTED":
+          "Request rejected (origin mismatch). Check the proxy configuration and retry from the official URL.",
+        "SETUP-BACKEND-UNAVAILABLE":
+          "The mail server is not ready yet (still starting up). Wait a few seconds and try again.",
         "SETUP-UNKNOWN": "An unexpected error occurred.",
         "SETUP-FORBIDDEN": "This step is not available.",
         "SETUP-UNAUTHENTICATED": "Setup authentication required.",

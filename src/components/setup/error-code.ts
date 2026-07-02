@@ -9,7 +9,7 @@ export function codeFromError(e: unknown): string {
 
 // Closed set of codes that have a dedicated localized message under
 // wizard.error.codes.*. Anything else falls back to the generic message.
-const KNOWN_CODES = new Set([
+export const KNOWN_CODES = new Set([
   "SETUP-RESTART-TIMEOUT",
   "SETUP-DNS-REJECTED",
   "SETUP-DNS-MANAGEMENT-REJECTED",
@@ -18,6 +18,8 @@ const KNOWN_CODES = new Set([
   "SETUP-ACCOUNT-REJECTED",
   "SETUP-SSL-REJECTED",
   "SETUP-FORBIDDEN",
+  "SETUP-ORIGIN-REJECTED",
+  "SETUP-BACKEND-UNAVAILABLE",
   "SETUP-UNKNOWN",
   "SETUP-UNAUTHENTICATED",
   "SETUP-UNLOCK-FAILED",
