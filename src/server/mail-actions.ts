@@ -19,6 +19,7 @@ import {
   isCleanHeaderValue,
 } from "./compose-build"
 import type { SendBody } from "./compose-build"
+import { SHOW_IMAGES_KEYWORD, applyImagePrefs } from "./image-prefs"
 
 interface RawMailbox {
   id: string
@@ -413,6 +414,10 @@ export function parseThreadDetail(
     subject: e.subject ?? "",
     receivedAt: e.receivedAt ?? "",
     unread: (e.keywords ?? {}).$seen !== true,
+    imageDecision:
+      (e.keywords ?? {})[SHOW_IMAGES_KEYWORD] === true
+        ? "message-allowed"
+        : "blocked",
     hasAttachment: e.hasAttachment === true,
     textBody: resolveBody(e.textBody, e.bodyValues, "text/plain"),
     htmlBody: resolveBody(e.htmlBody, e.bodyValues, "text/html"),
@@ -674,7 +679,8 @@ export const readThreadFn = createServerFn({ method: "GET" })
         sid,
         buildReadThreadCalls(accountId, data.threadId)
       )
-      return parseThreadDetail(responses)
+      const { getPrefs } = await import("./image-prefs-store")
+      return applyImagePrefs(parseThreadDetail(responses), getPrefs(accountId))
     } catch (e) {
       if (isRedirect(e)) throw e
       console.error("mail action failed", e)

@@ -483,6 +483,42 @@ describe("parseThreadDetail", () => {
     const d = parseThreadDetail(withoutMsgId)
     expect(d.messages[0].messageId).toBeNull()
   })
+
+  // NB : fixtures nommées withKeyword/withoutKeyword (PAS `responses`) — le describe
+  // parseThreadDetail existant a déjà un `const responses` à son scope (no-shadow).
+  it("imageDecision = message-allowed quand le keyword stalmail_showimages est posé", () => {
+    const withKeyword: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
+      [
+        "Email/get",
+        {
+          list: [
+            {
+              id: "e1",
+              from: [{ name: "Bob", email: "bob@x.io" }],
+              keywords: { stalmail_showimages: true },
+              htmlBody: [{ partId: "1", type: "text/html" }],
+              bodyValues: { "1": { value: "<p>hi</p>" } },
+            },
+          ],
+        },
+        "1",
+      ],
+    ]
+    expect(parseThreadDetail(withKeyword).messages[0].imageDecision).toBe(
+      "message-allowed"
+    )
+  })
+
+  it("imageDecision = blocked sans keyword", () => {
+    const withoutKeyword: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
+      ["Email/get", { list: [{ id: "e1", from: [], keywords: {} }] }, "1"],
+    ]
+    expect(parseThreadDetail(withoutKeyword).messages[0].imageDecision).toBe(
+      "blocked"
+    )
+  })
 })
 
 describe("buildSetFlagsCall", () => {
