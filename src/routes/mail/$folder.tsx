@@ -12,6 +12,7 @@ import {
   ToastProvider,
   ToastViewport,
   useThreadActions,
+  useImageActions,
   Composer,
   useComposer,
 } from "@/components/mail"
@@ -161,6 +162,7 @@ function ReaderPane({
   })
   const detail = query.data
   const actions = useThreadActions(folder, threadId, detail?.emailIds ?? [])
+  const imageActions = useImageActions(threadId)
   const composer = useComposer(folder)
 
   // Refs stables : markRead + dernier detail, pour que l'useEffect ne dépende NI de `actions`
@@ -207,6 +209,9 @@ function ReaderPane({
       onSend={composer.send}
       sending={composer.sending}
       selfEmail={accountName}
+      onShowOnce={(id) => void imageActions.showOnce(id)}
+      onTrustSender={(s) => void imageActions.trustSender(s)}
+      onUntrustSender={(s) => void imageActions.untrustSender(s)}
     />
   )
 }

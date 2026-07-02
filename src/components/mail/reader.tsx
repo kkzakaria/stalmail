@@ -18,6 +18,9 @@ export interface ReaderProps {
   onSend?: (draft: ComposerDraft) => boolean | void | Promise<boolean | void>
   sending?: boolean
   selfEmail?: string
+  onShowOnce?: (emailId: string) => void
+  onTrustSender?: (sender: string) => void
+  onUntrustSender?: (sender: string) => void
 }
 
 export function Reader({
@@ -32,6 +35,9 @@ export function Reader({
   onSend,
   sending,
   selfEmail,
+  onShowOnce,
+  onTrustSender,
+  onUntrustSender,
 }: ReaderProps) {
   const { t } = useTranslation()
 
@@ -168,6 +174,9 @@ export function Reader({
                   key={m.id}
                   message={m}
                   defaultOpen={i === detail.messages.length - 1}
+                  onShowOnce={onShowOnce}
+                  onTrustSender={onTrustSender}
+                  onUntrustSender={onUntrustSender}
                 />
               ))}
 
