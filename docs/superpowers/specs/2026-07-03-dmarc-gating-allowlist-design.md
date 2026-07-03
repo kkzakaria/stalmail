@@ -26,6 +26,8 @@ Approche retenue (vs re-vérifier DMARC nous-mêmes — redondant avec le MTA ; 
 
 `buildReadThreadCalls` fetch en plus `"header:Authentication-Results:asText:all"`. Zéro appel réseau supplémentaire, zéro config Stalwart requise.
 
+Côté réponse, RFC 8621 renvoie la valeur **sous la clé exacte demandée** : `RawDetailEmail` gagne le champ `"header:Authentication-Results:asText:all"?: string[] | null` et `parseThreadDetail` lit **cette clé littérale** (piège classique : une clé approximative → toujours `none`, silencieux). Fixture de test sur la clé exacte.
+
 ### 3.2 Parseur pur — `src/server/auth-results.ts`
 
 ```
@@ -33,7 +35,11 @@ parseDmarcVerdict(headers: string[] | null | undefined): "pass" | "fail" | "none
 ```
 
 - Prend `headers[0]` (**première instance**, ordre du message — la nôtre, cf. §2).
-- Extrait la clause `dmarc=<résultat>` (RFC 8601) : insensible à la casse, tolérant aux commentaires parenthésés et aux espaces.
+- Extraction de la clause `dmarc=<résultat>` (RFC 8601), dans cet ordre **obligatoire** :
+  1. **Retirer d'abord les commentaires parenthésés** (CFWS) de l'instance — sinon un commentaire influençable par l'expéditeur (ex. `spf=pass (dmarc=pass)`) placé avant la vraie clause ferait matcher un faux verdict *dans notre propre en-tête* ;
+  2. Matcher `dmarc` comme **méthode en frontière de clause** (début de chaîne ou après `;`, espaces tolérés), valeur lue jusqu'au prochain espace/`;` ;
+  3. Insensible à la casse.
+  Note : la forme JMAP `:asText` renvoie l'en-tête **déplié et décodé** (RFC 8621) — aucun traitement du folding requis. Fixture dédiée : « commentaire injectant `dmarc=pass` ignoré ».
 - `dmarc=pass` → `"pass"` ; toute autre valeur (`fail`, `none`, `temperror`, `permerror`…) → `"fail"` ; pas d'instance ou pas de clause `dmarc=` → `"none"`.
 - **Pas de vérification d'authserv-id en v1** : la première instance est la nôtre par construction (port 25). Une **sonde sur un mail réel** (JMAP, boîte de prod) à l'implémentation confirme le format exact produit par Stalwart avant d'écrire les fixtures.
 
@@ -45,7 +51,9 @@ Décision utilisateur (option 1) :
 |---|---|
 | `"pass"` | ✅ autorisé |
 | `"fail"` | ❌ jamais |
-| `"none"` (pas d'A-R) | ✅ **seulement si** domaine de `from[0]` === domaine du compte de session (`localDomain`) |
+| `"none"` (pas d'A-R) | ✅ **seulement si** domaine de `from[0]` === `localDomain`, les **deux non vides** |
+
+**Garde anti-fail-open** : `senderDomain(email)` renvoie `""` si l'entrée ne contient pas de `@` ; l'exemption exige `localDomain !== ""` **et** `senderDomain(from) !== ""` avant comparaison — sinon un From malformé et un `localDomain` indérivable s'égaliseraient à vide (`"" === ""`) et accorderaient l'upgrade sans authentification. Fixture de test dédiée.
 
 Justification : une usurpation **externe** d'une adresse locale arrive par le port 25 → reçoit notre A-R → nos domaines publient DMARC (créé par le wizard) → `fail` → bloquée. Contourner l'exemption exige une soumission authentifiée = déjà un compte du serveur.
 
@@ -53,17 +61,25 @@ Limites documentées :
 - **Domaine expéditeur sans politique DMARC publiée** : l'A-R contient `dmarc=none` → mappé sur `"fail"` (§3.2) → jamais d'upgrade pour ces expéditeurs. Voulu : sans DMARC, rien ne protège contre l'usurpation de ce domaine, l'auto-affichage serait vide de sens. Le consentement **par-message** reste disponible pour eux.
 - Serveur **multi-domaines** : un expéditeur interne d'un *autre* domaine hébergé retombe en fail-closed (`none` + domaine ≠ compte). Rare, direction sûre ; à élargir si besoin réel (liste des domaines via admin API + cache).
 - **Résiduel** : un compte local malveillant usurpant le From d'un autre compte local via la soumission (Stalwart impose normalement l'alignement expéditeur en soumission). Accepté.
+- **Résiduel — messages sans passage port 25** : un message entré dans le store par `IMAP APPEND`, import/migration, ou copie (dossier Sent) conserve ses en-têtes d'origine — dont un éventuel `Authentication-Results` forgé en première position (Stalwart ne re-tamponne que le port 25). L'invariant « première instance = la nôtre » ne vaut donc que pour le courrier reçu en SMTP. Exploitation = compte local déjà authentifié ou import volontaire ; impact vie privée seul. Accepté, au même titre que les autres résidus. (Les dossiers Sent légitimes : pas d'A-R → `none` → exemption locale → comportement correct.)
 
 ### 3.4 Types et flux
 
 - `AppMessage.authVerdict?: "pass" | "fail" | "none"` — posé par `parseThreadDetail` (depuis le header fetché), consommé par `resolveImageDecision`. Exposé au client : informatif, sans risque (pourrait servir à un badge plus tard). Absent (factories de test) ⇒ traité comme `"none"`.
-- `resolveImageDecision(prefs, message)` : `prefs` devient `{ allowedSenders: string[]; localDomain: string }` (type `ImagePrefs` étendu). `localDomain` = domaine de l'`accountName` de `requireSession()`, fourni par `readThreadFn` — jamais du client.
+- `resolveImageDecision(prefs, message)` : `prefs` devient `{ allowedSenders: string[]; localDomain: string }` (type `ImagePrefs` étendu).
+- **Source de `localDomain`** : le helper `requireSession()` de `mail-actions.ts` ne renvoie aujourd'hui que `{ sid, accountId }` — il doit être **étendu pour propager `accountName`** (déjà présent sur le `SessionRecord`, cf. `currentSession`). `localDomain = senderDomain(accountName)`. ⚠️ `accountName` = username du principal Stalwart, **pas garanti** être une adresse email : si sans `@`, `senderDomain` renvoie `""` → l'exemption locale est simplement inopérante (fail-closed, cf. §3.3). La **sonde** d'implémentation confirme que le username est bien l'email sur notre déploiement. Jamais dérivé du client.
+- **Assemblage** : `localDomain` est injecté au point d'appel dans `readThreadFn` (`applyImagePrefs(detail, { ...getPrefs(accountId), localDomain })`) — le store `image-prefs.json` ne le persiste **jamais** (il reste `{ allowedSenders }`).
 - La logique d'upgrade (§3.3) vit dans `resolveImageDecision` (pur, testé en matrice). `applyImagePrefs` inchangé dans sa forme (passe `prefs` enrichi).
 - Le **keyword par-message** (`stalmail_showimages`) est **inchangé** : consentement explicite par message, non gouverné par le verdict.
 
-### 3.5 UI : aucune modification
+### 3.5 UI : bandeaux inchangés, hook ajusté (patch optimiste conditionné)
 
-« Toujours afficher pour X » reste cliquable même sur un mail `fail` — le trust s'enregistre et s'appliquera aux mails **authentifiés** de X (comportement correct). Un badge/explication éventuel = itération future (le champ `authVerdict` exposé le permet).
+Aucun changement visuel de bandeau. Mais le **patch optimiste** actuel de `trustSender` (`use-image-actions.ts`) passe TOUS les messages de l'expéditeur en `sender-allowed` — sous gating, cet état devient **faux** pour un mail `fail` (le serveur ne le confirmera pas) : flicker et, pire, chargement du pixel de tracking pendant la fenêtre optimiste — précisément ce que #126 corrige. Ajustements :
+
+- `trustSender` ne patche optimistiquement que les messages dont `authVerdict === "pass"` (le client dispose du champ, cf. §3.4) — **jamais de chargement optimiste non authentifié** (fail-closed côté client aussi) ;
+- après succès du serveur, `invalidateQueries(detailKey)` → les cas `none`+local s'affichent au refetch (léger différé, acceptable).
+
+Conséquence UX documentée et assumée : « Toujours afficher pour X » sur un expéditeur **sans DMARC publié** (`dmarc=none` → `fail`) enregistre le trust mais n'affiche rien — ni optimistiquement ni au refetch. No-op silencieux (pas de badge en v1 ; le champ `authVerdict` exposé permettra une explication plus tard). Le trust s'appliquera si le domaine publie DMARC un jour.
 
 ### 3.6 Mineur A — purge des prefs à la suppression de compte : constat
 
@@ -71,7 +87,7 @@ Limites documentées :
 
 ### 3.7 Mineur B — rate-limit des mutations d'allowlist
 
-Nouveau `src/server/image-prefs-rate-limit.ts`, **calqué sur `send-rate-limit.ts`** (fenêtre glissante en mémoire, par compte, `consumeSlot` atomique, `__resetForTest`) : `MAX_PREFS_MUTATIONS = 60` par fenêtre de `60 min`. Appliqué en tête de `trustSenderFn` **et** `untrustSenderFn` (avant tout `await`), dépassement → erreur générique existante (« mail action failed »). Les fns keyword (`showImagesOnceFn`/`hideImagesFn`) ne sont **pas** limitées ici (bornées par JMAP/Stalwart, pas d'écriture disque locale).
+Nouveau `src/server/image-prefs-rate-limit.ts`, **calqué sur `send-rate-limit.ts`** (fenêtre glissante en mémoire, par compte, `consumeSlot` atomique — check + enregistrement en une passe **synchrone**, `__resetForTest`) : `MAX_PREFS_MUTATIONS = 60` par fenêtre de `60 min`. Ordonnancement identique à `sendMailFn` : `requireSession()` d'abord (il faut l'`accountId`), puis `consumeSlot(accountId)` **synchrone immédiatement après** — aucun `await` entre vérification et enregistrement. Appliqué à `trustSenderFn` **et** `untrustSenderFn`, dépassement → erreur générique existante (« mail action failed »). Les fns keyword (`showImagesOnceFn`/`hideImagesFn`) ne sont **pas** limitées ici (bornées par JMAP/Stalwart, pas d'écriture disque locale).
 
 ## 4. Fonctions pures (testées isolément)
 
@@ -83,7 +99,7 @@ Nouveau `src/server/image-prefs-rate-limit.ts`, **calqué sur `send-rate-limit.t
 ## 5. Sécurité
 
 - **Anti-spoof** : première instance A-R uniquement (les forgées sont en dessous de la nôtre) ; fixture de test dédiée « header forgé en 2ᵉ position ignoré ».
-- **Fail-closed** partout : verdict illisible/absent → `none` → exemption locale stricte sinon pas d'upgrade ; `authVerdict` absent → `none`.
+- **Fail-closed** partout : verdict illisible/absent → `none` → exemption locale stricte sinon pas d'upgrade ; `authVerdict` absent → `none` ; domaines vides → jamais d'upgrade (§3.3) ; patch optimiste client conditionné à `pass` (§3.5).
 - `localDomain` dérivé de la session côté serveur, jamais du client.
 - Rate-limit consommé atomiquement avant tout `await` (même raison que `consumeSendSlot`, cf. CodeRabbit #7 historique).
 - Revue sécurité de branche au cycle, comme d'habitude.
@@ -91,10 +107,11 @@ Nouveau `src/server/image-prefs-rate-limit.ts`, **calqué sur `send-rate-limit.t
 ## 6. Tests
 
 - `auth-results.test.ts` : pass/fail/none ; casse mixte ; commentaires RFC 8601 ; clause dmarc absente ; tableau vide/null ; **multi-instances → première seule** ; **forgée en 2ᵉ position ignorée** ; fixtures alignées sur le format réel constaté par la sonde.
-- `image-prefs.test.ts` : matrice `resolveImageDecision` (pass+allowlisté ✅ ; fail+allowlisté ❌ ; none+même domaine ✅ ; none+domaine externe ❌ ; non-allowlisté ❌ quel que soit le verdict ; précédence keyword inchangée) ; `senderDomain`.
+- `image-prefs.test.ts` : matrice `resolveImageDecision` (pass+allowlisté ✅ ; fail+allowlisté ❌ ; none+même domaine ✅ ; none+domaine externe ❌ ; **none+domaines vides ❌ (anti-fail-open)** ; non-allowlisté ❌ quel que soit le verdict ; précédence keyword inchangée) ; `senderDomain` (avec/sans `@`, casse).
 - `mail-actions.test.ts` : property `header:Authentication-Results:asText:all` présente dans `buildReadThreadCalls` ; `parseThreadDetail` pose `authVerdict`.
 - `image-prefs-rate-limit.test.ts` : miroir de `send-rate-limit.test.ts` (cap, fenêtre, atomicité, reset).
 - Handler : `trustSenderFn` refuse au-delà du cap (erreur générique).
+- `use-image-actions.test.tsx` : `trustSender` ne patche que les messages `authVerdict === "pass"` ; invalidation au succès.
 
 ## 7. Hors périmètre
 
