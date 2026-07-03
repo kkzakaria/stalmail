@@ -68,7 +68,7 @@ Aucune page settings n'existe (phase 4e non faite). La révocation vit **dans le
 
 ### 3.6 Composant présentationnel
 
-`MessageItem` reste présentationnel : il lit `message.imageDecision` et reçoit des **callbacks en props** (`onShowOnce`, `onTrustSender`, `onUntrustSender`). Pas de hooks de route dans le composant testé (convention). La route possède la query + les mutations et **invalide la query du thread** après action.
+`MessageItem` reste présentationnel : il lit `message.imageDecision` et reçoit des **callbacks en props** (`onShowOnce`, `onHideImages`, `onTrustSender`, `onUntrustSender`). Pas de hooks de route dans le composant testé (convention). La route possède la query + les mutations et **invalide la query du thread** après action.
 
 ## 4. Fonctions pures (extraites et testées) — `src/server/image-prefs.ts`
 
@@ -145,7 +145,7 @@ Variantes de bandeau selon `message.imageDecision` :
 | `sender-allowed` | « Images de {expéditeur} affichées automatiquement · **[Bloquer]** » (révocation) |
 | `message-allowed` | « Images distantes affichées · **[Bloquer]** » (révocation par-message : retire le keyword) |
 
-Callbacks (props) → mutations dans la route → invalidation de la query du thread. Optimistic update possible (basculer `imageDecision` en cache avant refetch).
+Callbacks (props) → mutations dans la route → invalidation de la query du thread. Optimistic update possible (basculer `imageDecision` en cache avant refetch). Quatre callbacks : `onShowOnce(id)` (pose le keyword), `onHideImages(id)` (le retire — révocation par-message), `onTrustSender(sender)` / `onUntrustSender(sender)` (allowlist).
 
 ## 8. Sécurité (revue requise avant merge)
 
@@ -167,7 +167,7 @@ Callbacks (props) → mutations dans la route → invalidation de la query du th
 - `src/server/image-prefs.test.ts` : `normalizeSender` ; `resolveImageDecision` (3 branches + précédence sender > message + `from` vide) ; `applyImagePrefs`.
 - `src/server/image-prefs-store.test.ts` : CRUD + persistance disque + cache + `__resetCacheForTest` (miroir de `session-store.test.ts`, sur répertoire tmp).
 - `src/server/mail-actions.test.ts` : validation Zod des nouvelles fn ; enrichissement `readThreadFn` (lecture keyword → `imageDecision`) ; `Email/set` du keyword custom.
-- `src/components/mail/message-item.test.tsx` : les 3 variantes de bandeau selon `imageDecision` ; déclenchement des callbacks `onShowOnce`/`onTrustSender`/`onUntrustSender`.
+- `src/components/mail/message-item.test.tsx` : les 3 variantes de bandeau selon `imageDecision` ; déclenchement des callbacks `onShowOnce`/`onHideImages`/`onTrustSender`/`onUntrustSender`.
 
 ## 10. i18n — `src/i18n/resources.ts` (clés FR)
 
