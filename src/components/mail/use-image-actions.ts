@@ -79,11 +79,23 @@ export function useImageActions(threadId: string): ImageActions {
     },
     trustSender: async (sender) => {
       const norm = normalizeSender(sender)
-      await runOptimistic(
-        (m) => normalizeSender(m.from.at(0)?.email ?? "") === norm,
-        "sender-allowed",
-        () => trustSenderFn({ data: { sender } })
+      await qc.cancelQueries({ queryKey: detailKey })
+      // Gating #126 : ne patcher optimistiquement QUE les messages AUTHENTIFIÉS (pass)
+      // — jamais de chargement d'images non authentifié, même transitoire. Les cas
+      // none+domaine local s'afficheront au refetch (invalidation au succès ci-dessous).
+      patch(
+        (m) =>
+          m.authVerdict === "pass" &&
+          normalizeSender(m.from.at(0)?.email ?? "") === norm,
+        "sender-allowed"
       )
+      try {
+        await trustSenderFn({ data: { sender } })
+        await qc.invalidateQueries({ queryKey: detailKey })
+      } catch {
+        await qc.invalidateQueries({ queryKey: detailKey })
+        notify(t("mail.actions.error"), "error")
+      }
     },
     untrustSender: async (sender) => {
       try {
