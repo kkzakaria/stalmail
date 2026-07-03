@@ -25,6 +25,7 @@ import {
   normalizeSender,
   senderDomain,
 } from "./image-prefs"
+import { parseDmarcVerdict } from "./auth-results"
 
 interface RawMailbox {
   id: string
@@ -329,6 +330,7 @@ interface RawDetailEmail {
   subject?: string
   receivedAt?: string
   keywords?: Record<string, boolean>
+  "header:Authentication-Results:asText:all"?: string[] | null
   hasAttachment?: boolean
   textBody?: RawBodyPart[]
   htmlBody?: RawBodyPart[]
@@ -379,6 +381,9 @@ export function buildReadThreadCalls(
           "subject",
           "receivedAt",
           "keywords",
+          // Verdict DMARC (#126) — clé LITTÉRALE : la réponse JMAP renvoie la valeur
+          // sous exactement ce nom (RFC 8621 §4.1.2).
+          "header:Authentication-Results:asText:all",
           "hasAttachment",
           "textBody",
           "htmlBody",
@@ -433,6 +438,9 @@ export function parseThreadDetail(
       (e.keywords ?? {})[SHOW_IMAGES_KEYWORD] === true
         ? "message-allowed"
         : "blocked",
+    authVerdict: parseDmarcVerdict(
+      e["header:Authentication-Results:asText:all"]
+    ),
     hasAttachment: e.hasAttachment === true,
     textBody: resolveBody(e.textBody, e.bodyValues, "text/plain"),
     htmlBody: resolveBody(e.htmlBody, e.bodyValues, "text/html"),
