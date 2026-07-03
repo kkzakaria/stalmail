@@ -19,6 +19,7 @@ export interface ReaderProps {
   sending?: boolean
   selfEmail?: string
   onShowOnce?: (emailId: string) => void
+  onHideImages?: (emailId: string) => void
   onTrustSender?: (sender: string) => void
   onUntrustSender?: (sender: string) => void
 }
@@ -36,6 +37,7 @@ export function Reader({
   sending,
   selfEmail,
   onShowOnce,
+  onHideImages,
   onTrustSender,
   onUntrustSender,
 }: ReaderProps) {
@@ -175,6 +177,7 @@ export function Reader({
                   message={m}
                   defaultOpen={i === detail.messages.length - 1}
                   onShowOnce={onShowOnce}
+                  onHideImages={onHideImages}
                   onTrustSender={onTrustSender}
                   onUntrustSender={onUntrustSender}
                 />

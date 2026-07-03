@@ -5,16 +5,44 @@ import { formatThreadDate } from "./format-date"
 import { pickBody, buildFrameDoc, hasRemoteImages } from "./email-body"
 import type { AppMessage } from "../../server/mail-types"
 
+// Bandeau images factorisé (CodeRabbit #128) : les 3 variantes (blocked / message-allowed /
+// sender-allowed) ne diffèrent que par la note et les actions.
+function ImageBanner({
+  note,
+  actions,
+}: {
+  note: string
+  actions: { label: string; onClick: () => void }[]
+}) {
+  return (
+    <div className="img-block-banner">
+      <span className="banner-note">{note}</span>{" "}
+      {actions.map((a) => (
+        <button
+          key={a.label}
+          type="button"
+          className="banner-btn"
+          onClick={a.onClick}
+        >
+          {a.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function MessageItem({
   message,
   defaultOpen = false,
   onShowOnce,
+  onHideImages,
   onTrustSender,
   onUntrustSender,
 }: {
   message: AppMessage
   defaultOpen?: boolean
   onShowOnce?: (emailId: string) => void
+  onHideImages?: (emailId: string) => void
   onTrustSender?: (sender: string) => void
   onUntrustSender?: (sender: string) => void
 }) {
@@ -66,43 +94,49 @@ export function MessageItem({
       {open && (
         <div className="msg-body">
           {remote && decision === "blocked" && (
-            <div className="img-block-banner">
-              <span className="banner-note">
-                {t("mail.reader.imagesBlocked")}
-              </span>{" "}
-              <button
-                type="button"
-                className="banner-btn"
-                onClick={() => onShowOnce?.(message.id)}
-              >
-                {t("mail.reader.showImages")}
-              </button>{" "}
-              {senderEmail && (
-                <button
-                  type="button"
-                  className="banner-btn"
-                  onClick={() => onTrustSender?.(senderEmail)}
-                >
-                  {t("mail.reader.trustSender", { sender: senderEmail })}
-                </button>
-              )}
-            </div>
+            <ImageBanner
+              note={t("mail.reader.imagesBlocked")}
+              actions={[
+                {
+                  label: t("mail.reader.showImages"),
+                  onClick: () => onShowOnce?.(message.id),
+                },
+                ...(senderEmail
+                  ? [
+                      {
+                        label: t("mail.reader.trustSender", {
+                          sender: senderEmail,
+                        }),
+                        onClick: () => onTrustSender?.(senderEmail),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          )}
+          {remote && decision === "message-allowed" && (
+            <ImageBanner
+              note={t("mail.reader.imagesShown")}
+              actions={[
+                {
+                  label: t("mail.reader.blockSender"),
+                  onClick: () => onHideImages?.(message.id),
+                },
+              ]}
+            />
           )}
           {remote && decision === "sender-allowed" && senderEmail && (
-            <div className="img-block-banner">
-              <span className="banner-note">
-                {t("mail.reader.imagesFromSenderShown", {
-                  sender: senderEmail,
-                })}
-              </span>{" "}
-              <button
-                type="button"
-                className="banner-btn"
-                onClick={() => onUntrustSender?.(senderEmail)}
-              >
-                {t("mail.reader.blockSender")}
-              </button>
-            </div>
+            <ImageBanner
+              note={t("mail.reader.imagesFromSenderShown", {
+                sender: senderEmail,
+              })}
+              actions={[
+                {
+                  label: t("mail.reader.blockSender"),
+                  onClick: () => onUntrustSender?.(senderEmail),
+                },
+              ]}
+            />
           )}
           {body.kind === "text" ? (
             <p style={{ whiteSpace: "pre-wrap" }}>{body.content}</p>

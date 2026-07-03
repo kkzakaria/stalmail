@@ -7,10 +7,12 @@ import { useImageActions } from "./use-image-actions"
 import type { AppThreadDetail } from "../../server/mail-types"
 
 const showImages = vi.fn().mockResolvedValue({ ok: true })
+const hideImages = vi.fn().mockResolvedValue({ ok: true })
 const trust = vi.fn().mockResolvedValue({ ok: true })
 const untrust = vi.fn().mockResolvedValue({ ok: true })
 vi.mock("../../server/mail-actions", () => ({
   showImagesOnceFn: (a: unknown) => showImages(a),
+  hideImagesFn: (a: unknown) => hideImages(a),
   trustSenderFn: (a: unknown) => trust(a),
   untrustSenderFn: (a: unknown) => untrust(a),
 }))
@@ -71,6 +73,18 @@ describe("useImageActions", () => {
     expect(trust).toHaveBeenCalledWith({ data: { sender: "Bob@x.io" } })
     const d = qc.getQueryData<AppThreadDetail>(["thread", "t1"])
     expect(d?.messages[0].imageDecision).toBe("sender-allowed")
+  })
+
+  it("hideImages : patch optimiste blocked + appelle le serveur (révocation par-message)", async () => {
+    const { qc, result } = setup()
+    qc.setQueryData<AppThreadDetail>(["thread", "t1"], {
+      ...detail,
+      messages: [{ ...detail.messages[0], imageDecision: "message-allowed" }],
+    })
+    await result.current.hideImages("e1")
+    expect(hideImages).toHaveBeenCalledWith({ data: { emailIds: ["e1"] } })
+    const d = qc.getQueryData<AppThreadDetail>(["thread", "t1"])
+    expect(d?.messages[0].imageDecision).toBe("blocked")
   })
 
   it("untrustSender : invalide le détail (re-résolution serveur)", async () => {

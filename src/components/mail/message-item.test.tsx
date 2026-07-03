@@ -99,7 +99,8 @@ describe("MessageItem", () => {
     expect(onTrustSender).toHaveBeenCalledWith("bob@x.io")
   })
 
-  it("message-allowed : pas de bandeau, images affichées", () => {
+  it("message-allowed : note + bouton bloquer déclenche onHideImages", () => {
+    const onHideImages = vi.fn()
     wrap(
       <MessageItem
         message={msg({
@@ -108,9 +109,12 @@ describe("MessageItem", () => {
           imageDecision: "message-allowed",
         })}
         defaultOpen
+        onHideImages={onHideImages}
       />
     )
-    expect(screen.queryByText(/images distantes/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/images distantes affichées/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /bloquer/i }))
+    expect(onHideImages).toHaveBeenCalledWith("e1")
   })
 
   it("sender-allowed : note + bouton bloquer déclenche onUntrustSender", () => {

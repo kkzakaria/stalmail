@@ -498,14 +498,17 @@ export const setFlagsFn = createServerFn({ method: "POST" })
 // Par message : keyword JMAP custom. Par expéditeur : store allowlist (côté serveur).
 // ---------------------------------------------------------------------------
 
-// Pur : Email/set posant le keyword stalmail_showimages sur plusieurs emails.
+// Pur : Email/set posant (true) ou retirant (false → null) le keyword stalmail_showimages
+// sur plusieurs emails — même patron que buildSetFlagsCall.
 export function buildShowImagesCall(
   accountId: string,
-  emailIds: string[]
+  emailIds: string[],
+  value: boolean
 ): JmapMethodCall[] {
-  const update: Record<string, Record<string, true>> = {}
+  const patch = value ? true : null
+  const update: Record<string, Record<string, true | null>> = {}
   for (const id of emailIds)
-    update[id] = { [`keywords/${SHOW_IMAGES_KEYWORD}`]: true }
+    update[id] = { [`keywords/${SHOW_IMAGES_KEYWORD}`]: patch }
   return [["Email/set", { accountId, update }, "0"]]
 }
 
@@ -521,15 +524,20 @@ export function emailSetRejections(responses: JmapMethodResponse[]): string[] {
 
 export const showImagesSchema = z.object({ emailIds: emailIdsSchema })
 
-export const showImagesOnceFn = createServerFn({ method: "POST" })
-  .validator((d: { emailIds: string[] }) => showImagesSchema.parse(d))
-  .handler(async ({ data }): Promise<{ ok: true }> => {
+// Handler partagé pose/retrait du keyword (CodeRabbit #128) : les deux fns ne diffèrent
+// que par le booléen passé à buildShowImagesCall.
+function handleShowImagesRequest(value: boolean) {
+  return async ({
+    data,
+  }: {
+    data: { emailIds: string[] }
+  }): Promise<{ ok: true }> => {
     try {
       const { jmapUserCall } = await import("./jmap-user")
       const { sid, accountId } = await requireSession()
       const responses = await jmapUserCall(
         sid,
-        buildShowImagesCall(accountId, data.emailIds)
+        buildShowImagesCall(accountId, data.emailIds, value)
       )
       const rejected = emailSetRejections(responses)
       if (rejected.length > 0) throw new Error("email set rejected")
@@ -539,7 +547,18 @@ export const showImagesOnceFn = createServerFn({ method: "POST" })
       console.error("mail action failed", e)
       throw new Error("mail action failed")
     }
-  })
+  }
+}
+
+export const showImagesOnceFn = createServerFn({ method: "POST" })
+  .validator((d: { emailIds: string[] }) => showImagesSchema.parse(d))
+  .handler(handleShowImagesRequest(true))
+
+// Révocation par-message (miroir de showImagesOnceFn) : retire le keyword → le message
+// redevient "blocked" au prochain readThreadFn. Direction fail-safe.
+export const hideImagesFn = createServerFn({ method: "POST" })
+  .validator((d: { emailIds: string[] }) => showImagesSchema.parse(d))
+  .handler(handleShowImagesRequest(false))
 
 // Anti-traceur : faire confiance à un expéditeur charge AUTOMATIQUEMENT ses images
 // distantes (pixels de tracking inclus) sur tous ses futurs mails. Choix explicite et
