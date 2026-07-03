@@ -16,3 +16,6 @@ todos.json
 
 # typescript
 *.tsbuildinfo
+
+# identifiants de test locaux (jamais commités)
+mail-id.txt
