@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.43](https://github.com/kkzakaria/stalmail/compare/v0.1.42...v0.1.43) (2026-07-03)
+
+
+### Features
+
+* **reader:** révocation par-message de « Afficher les images » ([#128](https://github.com/kkzakaria/stalmail/issues/128)) ([254fcb7](https://github.com/kkzakaria/stalmail/commit/254fcb708f7f99a1e166a8fce452546a1dbe8eb5))
+
 ## [0.1.42](https://github.com/kkzakaria/stalmail/compare/v0.1.41...v0.1.42) (2026-07-02)
 
 
