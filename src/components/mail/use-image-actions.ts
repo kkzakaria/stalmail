@@ -48,12 +48,16 @@ export function useImageActions(threadId: string): ImageActions {
   async function runOptimistic(
     pred: (m: AppThreadDetail["messages"][number]) => boolean,
     to: ImageDecision,
-    call: () => Promise<unknown>
+    call: () => Promise<unknown>,
+    options?: { invalidateOnSuccess?: boolean }
   ): Promise<void> {
     await qc.cancelQueries({ queryKey: detailKey })
     patch(pred, to)
     try {
       await call()
+      if (options?.invalidateOnSuccess) {
+        await qc.invalidateQueries({ queryKey: detailKey })
+      }
     } catch {
       await qc.invalidateQueries({ queryKey: detailKey })
       notify(t("mail.actions.error"), "error")
@@ -79,23 +83,17 @@ export function useImageActions(threadId: string): ImageActions {
     },
     trustSender: async (sender) => {
       const norm = normalizeSender(sender)
-      await qc.cancelQueries({ queryKey: detailKey })
       // Gating #126 : ne patcher optimistiquement QUE les messages AUTHENTIFIÉS (pass)
       // — jamais de chargement d'images non authentifié, même transitoire. Les cas
-      // none+domaine local s'afficheront au refetch (invalidation au succès ci-dessous).
-      patch(
+      // none+domaine local s'afficheront au refetch (invalidation au succès).
+      await runOptimistic(
         (m) =>
           m.authVerdict === "pass" &&
           normalizeSender(m.from.at(0)?.email ?? "") === norm,
-        "sender-allowed"
+        "sender-allowed",
+        () => trustSenderFn({ data: { sender } }),
+        { invalidateOnSuccess: true }
       )
-      try {
-        await trustSenderFn({ data: { sender } })
-        await qc.invalidateQueries({ queryKey: detailKey })
-      } catch {
-        await qc.invalidateQueries({ queryKey: detailKey })
-        notify(t("mail.actions.error"), "error")
-      }
     },
     untrustSender: async (sender) => {
       try {

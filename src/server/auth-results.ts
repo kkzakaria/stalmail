@@ -49,12 +49,15 @@ function neutralize(value: string): string | null {
 // dmarc=none = domaine sans politique, aucune protection anti-usurpation) ; instance
 // présente SANS clause dmarc= → "fail" (message tamponné port 25 sans verdict : ne
 // JAMAIS ouvrir l'exemption locale — audit #126 F1) ; aucune instance → "none" (seul
-// cas éligible à l'exemption locale §3.3) ; structure malformée → "fail" (jamais "none").
+// cas éligible à l'exemption locale §3.3) ; première instance présente mais vide
+// (chaîne vide en tête de tableau) → "fail" (illisible, pas d'absence) ; structure
+// malformée → "fail" (jamais "none").
 export function parseDmarcVerdict(
   headers: string[] | null | undefined
 ): AuthVerdict {
-  const first = headers?.[0]
-  if (!first) return "none"
+  if (!headers || headers.length === 0) return "none" // aucune instance = courrier interne
+  const first = headers[0]
+  if (!first) return "fail" // instance présente mais vide = illisible → fail-closed
   const cleaned = neutralize(first)
   if (cleaned === null) return "fail"
   const m = /(?:^|;)\s*dmarc\s*=\s*([a-z0-9]+)/i.exec(cleaned)

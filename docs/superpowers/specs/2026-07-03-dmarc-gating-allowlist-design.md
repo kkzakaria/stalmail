@@ -36,7 +36,7 @@ parseDmarcVerdict(headers: string[] | null | undefined): "pass" | "fail" | "none
 
 - Prend `headers[0]` (**première instance**, ordre du message — la nôtre, cf. §2).
 - Extraction de la clause `dmarc=<résultat>` (RFC 8601), dans cet ordre **obligatoire** :
-  1. **Retirer d'abord les commentaires parenthésés** (CFWS) de l'instance — sinon un commentaire influençable par l'expéditeur (ex. `spf=pass (dmarc=pass)`) placé avant la vraie clause ferait matcher un faux verdict *dans notre propre en-tête* ;
+  1. **Neutraliser d'abord, en un seul balayage à états, les commentaires parenthésés (imbriqués), les quoted-strings ET les échappements `\x`** — deux passes regex ne peuvent pas être correctes ensemble (une quote dans un commentaire est du texte, une parenthèse dans une quoted-string aussi) ; sinon un contenu influençable par l'expéditeur (ex. `spf=pass (dmarc=pass)` ou `reason="…; dmarc=pass…"`) ferait matcher un faux verdict *dans notre propre en-tête*. **Structure non refermée (quote/parenthèse ouverte, fermante orpheline, instance vide) → `"fail"`** ;
   2. Matcher `dmarc` comme **méthode en frontière de clause** (début de chaîne ou après `;`, espaces tolérés), valeur lue jusqu'au prochain espace/`;` ;
   3. Insensible à la casse.
   Note : la forme JMAP `:asText` renvoie l'en-tête **déplié et décodé** (RFC 8621) — aucun traitement du folding requis. Fixture dédiée : « commentaire injectant `dmarc=pass` ignoré ».

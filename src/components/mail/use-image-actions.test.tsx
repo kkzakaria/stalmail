@@ -78,11 +78,22 @@ describe("useImageActions", () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: ["thread", "t1"] })
   })
 
-  it("trustSender : message fail/none NON patché optimistiquement (gating #126)", async () => {
+  it("trustSender : message fail NON patché optimistiquement (gating #126)", async () => {
     const { qc, result } = setup()
     qc.setQueryData<AppThreadDetail>(["thread", "t1"], {
       ...detail,
       messages: [{ ...detail.messages[0], authVerdict: "fail" }],
+    })
+    await result.current.trustSender("bob@x.io")
+    const d = qc.getQueryData<AppThreadDetail>(["thread", "t1"])
+    expect(d?.messages[0].imageDecision).toBe("blocked")
+  })
+
+  it("trustSender : message none NON patché optimistiquement (gating #126)", async () => {
+    const { qc, result } = setup()
+    qc.setQueryData<AppThreadDetail>(["thread", "t1"], {
+      ...detail,
+      messages: [{ ...detail.messages[0], authVerdict: "none" }],
     })
     await result.current.trustSender("bob@x.io")
     const d = qc.getQueryData<AppThreadDetail>(["thread", "t1"])

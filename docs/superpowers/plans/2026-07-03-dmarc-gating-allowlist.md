@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Bun uniquement** : `bun run lint`, `bun run typecheck`, `bun run test` (jamais npm/yarn/pnpm). Le pre-commit lance les trois → **chaque commit doit être vert**.
-- **Fail-closed partout** : verdict illisible/absent → `"none"` ; `authVerdict` absent → `"none"` ; domaines vides → jamais d'upgrade ; patch optimiste client conditionné à `"pass"`.
+- **Fail-closed partout** : instance absente → `"none"` ; instance présente sans clause `dmarc=` (ou vide/malformée) → `"fail"` ; `authVerdict` absent → `"none"` ; domaines vides → jamais d'upgrade ; patch optimiste client conditionné à `"pass"`.
 - `localDomain` dérivé de la session côté serveur (`accountName`), **jamais du client**, **jamais persisté** dans `image-prefs.json` (assemblé au point d'appel `readThreadFn`).
 - Parseur : **strip des commentaires CFWS avant tout match**, `dmarc` en **frontière de clause** (début ou après `;`), `pass` → `"pass"`, toute autre valeur → `"fail"`, clause/instance absente → `"none"`.
 - Clé JMAP **littérale** : `header:Authentication-Results:asText:all` (demande ET lecture de la réponse).
@@ -99,8 +99,8 @@ describe("parseDmarcVerdict", () => {
     expect(parseDmarcVerdict(["srv; DMARC = Pass ; spf=fail"])).toBe("pass")
   })
 
-  it("pas de clause dmarc → none", () => {
-    expect(parseDmarcVerdict(["srv; spf=pass; dkim=pass"])).toBe("none")
+  it("instance présente SANS clause dmarc → fail (ne pas ouvrir l'exemption locale)", () => {
+    expect(parseDmarcVerdict(["srv; spf=pass; dkim=pass"])).toBe("fail")
   })
 
   it("tableau vide / null / undefined → none", () => {
@@ -170,8 +170,9 @@ function stripComments(value: string): string {
 // les instances forgées sont en dessous — spec §2/§3.2). `dmarc` est matché en frontière
 // de clause (début ou après ';') pour ignorer un `dmarc=` niché dans une valeur de
 // propriété. pass → "pass" ; fail/none/temperror/permerror… → "fail" (fail-closed :
-// dmarc=none = domaine sans politique, aucune protection anti-usurpation) ; clause ou
-// instance absente → "none".
+// dmarc=none = domaine sans politique, aucune protection anti-usurpation) ; instance
+// absente → "none" ; instance présente sans clause dmarc= (ou vide/malformée) → "fail"
+// (ne jamais ouvrir l'exemption locale sur une instance illisible).
 export function parseDmarcVerdict(
   headers: string[] | null | undefined
 ): AuthVerdict {
@@ -179,7 +180,7 @@ export function parseDmarcVerdict(
   if (!first) return "none"
   const cleaned = stripComments(first)
   const m = /(?:^|;)\s*dmarc\s*=\s*([a-z0-9]+)/i.exec(cleaned)
-  if (!m) return "none"
+  if (!m) return "fail"
   return m[1].toLowerCase() === "pass" ? "pass" : "fail"
 }
 ```

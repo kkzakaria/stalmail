@@ -37,6 +37,10 @@ describe("parseDmarcVerdict", () => {
     expect(parseDmarcVerdict(undefined)).toBe("none")
   })
 
+  it("première instance chaîne vide → fail (présente mais illisible)", () => {
+    expect(parseDmarcVerdict([""])).toBe("fail")
+  })
+
   it("SEULE la première instance compte (forgée en 2e position ignorée)", () => {
     expect(
       parseDmarcVerdict([
