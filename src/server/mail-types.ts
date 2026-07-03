@@ -53,6 +53,10 @@ export interface AppAttachment {
 
 export type ImageDecision = "sender-allowed" | "message-allowed" | "blocked"
 
+// Verdict DMARC extrait d'Authentication-Results (#126). "none" = pas de verdict
+// (courrier interne via soumission, ou en-tête absent/illisible — fail-closed).
+export type AuthVerdict = "pass" | "fail" | "none"
+
 export interface AppMessage {
   id: string
   messageId: string | null // Message-ID RFC (ex. "<abc@host>"), null si absent
