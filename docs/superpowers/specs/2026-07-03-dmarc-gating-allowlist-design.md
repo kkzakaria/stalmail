@@ -110,7 +110,7 @@ Nouveau `src/server/image-prefs-rate-limit.ts`, **calqué sur `send-rate-limit.t
 - `image-prefs.test.ts` : matrice `resolveImageDecision` (pass+allowlisté ✅ ; fail+allowlisté ❌ ; none+même domaine ✅ ; none+domaine externe ❌ ; **none+domaines vides ❌ (anti-fail-open)** ; non-allowlisté ❌ quel que soit le verdict ; précédence keyword inchangée) ; `senderDomain` (avec/sans `@`, casse).
 - `mail-actions.test.ts` : property `header:Authentication-Results:asText:all` présente dans `buildReadThreadCalls` ; `parseThreadDetail` pose `authVerdict`.
 - `image-prefs-rate-limit.test.ts` : miroir de `send-rate-limit.test.ts` (cap, fenêtre, atomicité, reset).
-- Handler : `trustSenderFn` refuse au-delà du cap (erreur générique).
+- Rate-limit : couverture au niveau module (cap, fenêtre, atomicité, refus) — le handler n'ajoute que 3 lignes de câblage, non testé isolément (précédent `sendMailFn`/`consumeSendSlot`).
 - `use-image-actions.test.tsx` : `trustSender` ne patche que les messages `authVerdict === "pass"` ; invalidation au succès.
 
 ## 7. Hors périmètre

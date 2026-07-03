@@ -594,6 +594,12 @@ export const trustSenderFn = createServerFn({ method: "POST" })
     try {
       const { addSender } = await import("./image-prefs-store")
       const { accountId } = await requireSession()
+      const { consumeMutationSlot } = await import("./image-prefs-rate-limit")
+      // Consommation SYNCHRONE immédiatement après requireSession (patron sendMailFn) :
+      // aucun await entre vérification et enregistrement.
+      if (!consumeMutationSlot(accountId)) {
+        throw new Error("prefs mutation rate limited")
+      }
       addSender(accountId, normalizeSender(data.sender))
       return { ok: true }
     } catch (e) {
@@ -609,6 +615,12 @@ export const untrustSenderFn = createServerFn({ method: "POST" })
     try {
       const { removeSender } = await import("./image-prefs-store")
       const { accountId } = await requireSession()
+      const { consumeMutationSlot } = await import("./image-prefs-rate-limit")
+      // Consommation SYNCHRONE immédiatement après requireSession (patron sendMailFn) :
+      // aucun await entre vérification et enregistrement.
+      if (!consumeMutationSlot(accountId)) {
+        throw new Error("prefs mutation rate limited")
+      }
       removeSender(accountId, normalizeSender(data.sender))
       return { ok: true }
     } catch (e) {
