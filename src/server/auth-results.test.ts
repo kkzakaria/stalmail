@@ -65,4 +65,26 @@ describe("parseDmarcVerdict", () => {
   it("commentaires imbriqués strippés", () => {
     expect(parseDmarcVerdict(["srv (a (b) c); dmarc=pass"])).toBe("pass")
   })
+
+  it("quoted-string injectant '; dmarc=pass' neutralisée (revue #126)", () => {
+    expect(
+      parseDmarcVerdict([
+        'srv; spf=pass reason="oops) ; dmarc=pass (ignore"; dmarc=fail header.from=x.io',
+      ])
+    ).toBe("fail")
+  })
+
+  it("structure malformée → fail (jamais none : ne pas ouvrir l'exemption locale)", () => {
+    expect(parseDmarcVerdict(["srv (oops; dmarc=pass"])).toBe("fail") // parenthèse jamais refermée
+    expect(parseDmarcVerdict(["srv ); dmarc=pass"])).toBe("fail") // fermante orpheline
+    expect(parseDmarcVerdict(['srv; reason="oops; dmarc=pass'])).toBe("fail") // quote jamais refermée
+  })
+
+  it("quote échappée dans une quoted-string gérée", () => {
+    expect(parseDmarcVerdict(['srv; reason="a\\"b"; dmarc=pass'])).toBe("pass")
+  })
+
+  it("quote DANS un commentaire = simple texte", () => {
+    expect(parseDmarcVerdict(['srv (say "hi); dmarc=pass'])).toBe("pass")
+  })
 })
