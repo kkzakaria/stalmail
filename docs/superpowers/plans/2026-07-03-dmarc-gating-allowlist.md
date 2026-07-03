@@ -13,7 +13,7 @@
 - **Bun uniquement** : `bun run lint`, `bun run typecheck`, `bun run test` (jamais npm/yarn/pnpm). Le pre-commit lance les trois → **chaque commit doit être vert**.
 - **Fail-closed partout** : instance absente → `"none"` ; instance présente sans clause `dmarc=` (ou vide/malformée) → `"fail"` ; `authVerdict` absent → `"none"` ; domaines vides → jamais d'upgrade ; patch optimiste client conditionné à `"pass"`.
 - `localDomain` dérivé de la session côté serveur (`accountName`), **jamais du client**, **jamais persisté** dans `image-prefs.json` (assemblé au point d'appel `readThreadFn`).
-- Parseur : **strip des commentaires CFWS avant tout match**, `dmarc` en **frontière de clause** (début ou après `;`), `pass` → `"pass"`, toute autre valeur → `"fail"`, clause/instance absente → `"none"`.
+- Parseur : **neutralisation à états (commentaires imbriqués + quoted-strings + échappements) avant tout match**, `dmarc` en **frontière de clause** (début ou après `;`), `pass` → `"pass"`, toute autre valeur → `"fail"` ; cf. la règle fail-closed ci-dessus pour les cas absente/sans-clause/malformée.
 - Clé JMAP **littérale** : `header:Authentication-Results:asText:all` (demande ET lecture de la réponse).
 - Le keyword par-message `stalmail_showimages` est **inchangé** (non gouverné par le verdict) ; précédence existante conservée.
 - Rate-limit : `requireSession()` d'abord, puis consommation **synchrone** (aucun `await` entre check et enregistrement) — patron `consumeSendSlot`/`sendMailFn`.
@@ -23,7 +23,7 @@
 
 ## File Structure
 
-- **Créé** `src/server/auth-results.ts` — parseur pur `parseDmarcVerdict` (+ `stripComments` interne).
+- **Créé** `src/server/auth-results.ts` — parseur pur `parseDmarcVerdict` (+ neutralisation à états interne ; le code du Step 4 ci-dessous est l'état INITIAL du plan, durci en revue — cf. Global Constraints et spec §3.2 pour le contrat final : `neutralize` à états, chaîne vide/malformée → fail).
 - **Créé** `src/server/auth-results.test.ts`.
 - **Créé** `src/server/image-prefs-rate-limit.ts` — miroir de `send-rate-limit.ts` (fenêtre 60 min, cap 60).
 - **Créé** `src/server/image-prefs-rate-limit.test.ts`.
