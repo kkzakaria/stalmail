@@ -53,8 +53,9 @@ export interface AppAttachment {
 
 export type ImageDecision = "sender-allowed" | "message-allowed" | "blocked"
 
-// Verdict DMARC extrait d'Authentication-Results (#126). "none" = pas de verdict
-// (courrier interne via soumission, ou en-tête absent/illisible — fail-closed).
+// Verdict DMARC extrait d'Authentication-Results (#126). "none" = AUCUNE instance
+// (courrier interne via soumission — pas de verdict). Instance présente mais
+// illisible/malformée → "fail" (jamais "none" : ne pas ouvrir l'exemption locale).
 export type AuthVerdict = "pass" | "fail" | "none"
 
 export interface AppMessage {
@@ -73,6 +74,8 @@ export interface AppMessage {
   // Décision d'affichage des images distantes, résolue côté serveur (readThreadFn).
   // Absent (client bundle / factories de test) → traité comme "blocked" (défaut sûr).
   imageDecision?: ImageDecision
+  // Verdict DMARC du message (#126), posé par parseThreadDetail. Absent ⇒ "none".
+  authVerdict?: AuthVerdict
 }
 
 export interface AppThreadDetail {

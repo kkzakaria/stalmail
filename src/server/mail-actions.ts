@@ -23,6 +23,7 @@ import {
   SHOW_IMAGES_KEYWORD,
   applyImagePrefs,
   normalizeSender,
+  senderDomain,
 } from "./image-prefs"
 
 interface RawMailbox {
@@ -66,14 +67,24 @@ export function mailboxRefs(responses: JmapMethodResponse[]): MailboxRef[] {
 }
 
 // Récupère sid + accountId depuis la session (server-only).
-async function requireSession(): Promise<{ sid: string; accountId: string }> {
+async function requireSession(): Promise<{
+  sid: string
+  accountId: string
+  // Username du principal (email sur notre déploiement — sinon senderDomain rend ""
+  // et l'exemption locale #126 est simplement inopérante, fail-closed).
+  accountName: string
+}> {
   const { readSid } = await import("./session-cookie")
   const { currentSession } = await import("./session")
   const { redirect } = await import("@tanstack/react-router")
   const sid = readSid()
   const session = currentSession(sid)
   if (!sid || !session) throw redirect({ to: "/login" })
-  return { sid, accountId: session.accountId }
+  return {
+    sid,
+    accountId: session.accountId,
+    accountName: session.accountName,
+  }
 }
 
 export const mailboxesFn = createServerFn({ method: "GET" }).handler(
@@ -784,13 +795,18 @@ export const readThreadFn = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<AppThreadDetail> => {
     try {
       const { jmapUserCall } = await import("./jmap-user")
-      const { sid, accountId } = await requireSession()
+      const { sid, accountId, accountName } = await requireSession()
       const responses = await jmapUserCall(
         sid,
         buildReadThreadCalls(accountId, data.threadId)
       )
       const { getPrefs } = await import("./image-prefs-store")
-      return applyImagePrefs(parseThreadDetail(responses), getPrefs(accountId))
+      // Exemption locale (#126) : domaine du compte, dérivé de la session — jamais du
+      // client. Assemblé ici : le store ne persiste QUE allowedSenders.
+      return applyImagePrefs(parseThreadDetail(responses), {
+        ...getPrefs(accountId),
+        localDomain: senderDomain(accountName),
+      })
     } catch (e) {
       if (isRedirect(e)) throw e
       console.error("mail action failed", e)
