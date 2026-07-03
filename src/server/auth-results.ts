@@ -46,10 +46,10 @@ function neutralize(value: string): string | null {
 // les instances forgées sont en dessous — spec §2/§3.2). `dmarc` est matché en frontière
 // de clause (début ou après ';') pour ignorer un `dmarc=` niché dans une valeur de
 // propriété. pass → "pass" ; fail/none/temperror/permerror… → "fail" (fail-closed :
-// dmarc=none = domaine sans politique, aucune protection anti-usurpation) ; clause ou
-// instance absente → "none" ; instance présente mais structure malformée (quote/parenthèse
-// non refermée) → "fail" (jamais "none" : le mail est passé par le port 25, une structure
-// illisible ne doit jamais ouvrir l'exemption locale — revue #126).
+// dmarc=none = domaine sans politique, aucune protection anti-usurpation) ; instance
+// présente SANS clause dmarc= → "fail" (message tamponné port 25 sans verdict : ne
+// JAMAIS ouvrir l'exemption locale — audit #126 F1) ; aucune instance → "none" (seul
+// cas éligible à l'exemption locale §3.3) ; structure malformée → "fail" (jamais "none").
 export function parseDmarcVerdict(
   headers: string[] | null | undefined
 ): AuthVerdict {
@@ -58,6 +58,6 @@ export function parseDmarcVerdict(
   const cleaned = neutralize(first)
   if (cleaned === null) return "fail"
   const m = /(?:^|;)\s*dmarc\s*=\s*([a-z0-9]+)/i.exec(cleaned)
-  if (!m) return "none"
+  if (!m) return "fail"
   return m[1].toLowerCase() === "pass" ? "pass" : "fail"
 }

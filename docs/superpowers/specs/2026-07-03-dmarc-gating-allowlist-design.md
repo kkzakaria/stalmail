@@ -40,7 +40,7 @@ parseDmarcVerdict(headers: string[] | null | undefined): "pass" | "fail" | "none
   2. Matcher `dmarc` comme **méthode en frontière de clause** (début de chaîne ou après `;`, espaces tolérés), valeur lue jusqu'au prochain espace/`;` ;
   3. Insensible à la casse.
   Note : la forme JMAP `:asText` renvoie l'en-tête **déplié et décodé** (RFC 8621) — aucun traitement du folding requis. Fixture dédiée : « commentaire injectant `dmarc=pass` ignoré ».
-- `dmarc=pass` → `"pass"` ; toute autre valeur (`fail`, `none`, `temperror`, `permerror`…) → `"fail"` ; pas d'instance ou pas de clause `dmarc=` → `"none"`.
+- `dmarc=pass` → `"pass"` ; toute autre valeur (`fail`, `none`, `temperror`, `permerror`…) → `"fail"` ; **instance présente sans clause `dmarc=` → `"fail"`** (message tamponné port 25 sans verdict — audit F1 : ne pas ouvrir l'exemption locale) ; **aucune instance → `"none"`** (seul cas éligible à l'exemption locale §3.3).
 - **Pas de vérification d'authserv-id en v1** : la première instance est la nôtre par construction (port 25). Une **sonde sur un mail réel** (JMAP, boîte de prod) à l'implémentation confirme le format exact produit par Stalwart avant d'écrire les fixtures.
 
 ### 3.3 Politique « exemption locale » pour le courrier sans verdict

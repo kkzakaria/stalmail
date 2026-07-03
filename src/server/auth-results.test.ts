@@ -27,8 +27,8 @@ describe("parseDmarcVerdict", () => {
     expect(parseDmarcVerdict(["srv; DMARC = Pass ; spf=fail"])).toBe("pass")
   })
 
-  it("pas de clause dmarc → none", () => {
-    expect(parseDmarcVerdict(["srv; spf=pass; dkim=pass"])).toBe("none")
+  it("instance présente SANS clause dmarc → fail (audit F1 : ne pas ouvrir l'exemption locale)", () => {
+    expect(parseDmarcVerdict(["srv; spf=pass; dkim=pass"])).toBe("fail")
   })
 
   it("tableau vide / null / undefined → none", () => {
