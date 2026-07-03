@@ -119,7 +119,9 @@ export function MessageItem({
               note={t("mail.reader.imagesShown")}
               actions={[
                 {
-                  label: t("mail.reader.blockSender"),
+                  // Clé dédiée (≠ blockSender) : cette action ne retire QUE le keyword
+                  // par-message, pas la confiance expéditeur (CodeRabbit #128).
+                  label: t("mail.reader.blockImages"),
                   onClick: () => onHideImages?.(message.id),
                 },
               ]}
