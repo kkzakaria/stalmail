@@ -438,6 +438,11 @@ export function parseThreadDetail(
       (e.keywords ?? {})[SHOW_IMAGES_KEYWORD] === true
         ? "message-allowed"
         : "blocked",
+    // PRÉREQUIS OPÉRATEUR (spec #126 §3.2) : parseDmarcVerdict lit la PREMIÈRE instance,
+    // fiable uniquement parce que Stalwart préfixe la sienne sur le port 25
+    // (addAuthResultsHeader, défaut local_port==25). Si cet ajout était désactivé,
+    // une instance amont (forgeable) deviendrait première — ne pas désactiver sans
+    // ajouter une vérification d'authserv-id ici.
     authVerdict: parseDmarcVerdict(
       e["header:Authentication-Results:asText:all"]
     ),
