@@ -1459,39 +1459,72 @@
   border: 0;
   background: #fff;
 }
+/* Bandeau images distantes — deux tons : "shielded" (blocage actif = état sain,
+   neutre et silencieux) et .exposed (contenu distant chargé = pixels de tracking
+   possibles → teinte ambre discrète, cohérente avec .act-warn). L'ancien style
+   mettait l'ambre sur l'état bloqué : sémantique inversée. */
 .img-block-banner {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px 10px;
   padding: 8px 12px;
-  margin-bottom: 10px;
-  font-size: 13px;
-  background: var(--surface-2, #f3f4f6);
-  border-radius: 8px;
-  color: var(--ink-2, #4b5563);
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
-/* Avertissement de confidentialité : italique + jaune orangé "warn" (cohérent avec .act-warn). */
+.img-block-banner .banner-ico {
+  flex: none;
+  color: var(--muted);
+}
 .img-block-banner .banner-note {
-  font-style: italic;
+  flex: 1 1 auto;
+  min-width: 140px;
+}
+.img-block-banner.exposed {
+  border-color: color-mix(in oklab, #c98a17 30%, var(--line));
+  background: color-mix(in oklab, #c98a17 8%, var(--surface));
+}
+.img-block-banner.exposed .banner-ico {
   color: #c98a17;
 }
-/* Bouton texte du bandeau (≠ .mini-btn qui est un carré icône 28px) : largeur auto,
-   sur une ligne, poussé à droite. Évite l'écrasement du libellé en 3 lignes. */
-.img-block-banner .banner-btn {
+.img-block-banner .banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-left: auto;
+}
+/* Boutons texte du bandeau (≠ .mini-btn carré icône 28px). Hiérarchie : l'action
+   ponctuelle est .primary (bordée, accent) ; l'engagement durable reste en ghost. */
+.img-block-banner .banner-btn {
   flex: none;
   white-space: nowrap;
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
   cursor: pointer;
 }
 .img-block-banner .banner-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.img-block-banner .banner-btn.primary {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--accent);
+}
+.img-block-banner .banner-btn.primary:hover {
   border-color: var(--accent);
   background: var(--hover);
+}
+.img-block-banner .banner-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

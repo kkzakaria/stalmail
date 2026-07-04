@@ -54,6 +54,12 @@ const ICON_PATHS: Record<string, string> = {
   list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
   listOrdered:
     '<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>',
+  // Bandeau images distantes : même silhouette de bouclier que `spam` (famille cohérente),
+  // coche = protection active ; `image` = contenu distant chargé.
+  "shield-check":
+    '<path d="M12 3.5l8.5 4.5v4c0 4.7-3.4 7.7-8.5 9-5.1-1.3-8.5-4.3-8.5-9V8z"/><path d="M9.2 12l2 2 3.6-4"/>',
+  image:
+    '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.4" fill="currentColor" stroke="none"/><path d="M5 16.5l4-4 3 3 2.5-2.5 4.5 4.5"/>',
 }
 
 export function Icon({
