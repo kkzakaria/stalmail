@@ -12,6 +12,9 @@
   --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
   --accent-softer: color-mix(in oklab, var(--accent) 7%, transparent);
 
+  /* avertissement (actions "warn", bandeau images exposé) */
+  --warn: #c98a17;
+
   /* densité (surchargée par Tweaks) */
   --row-pad-y: 9px;
   --list-line: 1.35;
@@ -665,12 +668,12 @@
 /* couleurs sémantiques des actions du lecteur */
 .icon-btn.act-accent  { color: var(--accent); }
 .icon-btn.act-pos     { color: #2f9e64; }
-.icon-btn.act-warn    { color: #c98a17; }
+.icon-btn.act-warn    { color: var(--warn); }
 .icon-btn.act-danger  { color: #d6493b; }
 .icon-btn.act-star    { color: #d99a2b; }
 .icon-btn.act-accent:hover  { color: var(--accent); background: var(--accent-soft); }
 .icon-btn.act-pos:hover     { color: #2f9e64; background: color-mix(in oklab, #2f9e64 14%, transparent); }
-.icon-btn.act-warn:hover    { color: #c98a17; background: color-mix(in oklab, #c98a17 16%, transparent); }
+.icon-btn.act-warn:hover    { color: var(--warn); background: color-mix(in oklab, var(--warn) 16%, transparent); }
 .icon-btn.act-danger:hover  { color: #d6493b; background: color-mix(in oklab, #d6493b 13%, transparent); }
 .icon-btn.act-star:hover    { color: #e8b23a; background: color-mix(in oklab, #e8b23a 17%, transparent); }
 
@@ -1461,7 +1464,7 @@
 }
 /* Bandeau images distantes — deux tons : "shielded" (blocage actif = état sain,
    neutre et silencieux) et .exposed (contenu distant chargé = pixels de tracking
-   possibles → teinte ambre discrète, cohérente avec .act-warn). L'ancien style
+   possibles → teinte ambre var(--warn), cohérente avec .act-warn). L'ancien style
    mettait l'ambre sur l'état bloqué : sémantique inversée. */
 .img-block-banner {
   display: flex;
@@ -1485,11 +1488,11 @@
   min-width: 140px;
 }
 .img-block-banner.exposed {
-  border-color: color-mix(in oklab, #c98a17 30%, var(--line));
-  background: color-mix(in oklab, #c98a17 8%, var(--surface));
+  border-color: color-mix(in oklab, var(--warn) 30%, var(--line));
+  background: color-mix(in oklab, var(--warn) 8%, var(--surface));
 }
 .img-block-banner.exposed .banner-ico {
-  color: #c98a17;
+  color: var(--warn);
 }
 .img-block-banner .banner-actions {
   display: flex;

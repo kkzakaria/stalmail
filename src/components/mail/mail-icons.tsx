@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react"
 
-const ICON_PATHS: Record<string, string> = {
+// `satisfies` (pas d'annotation Record) : les clés restent littérales → IconName
+// donne la complétion et attrape les typos à la compilation (CodeRabbit #134).
+const ICON_PATHS = {
   inbox:
     '<path d="M3 13l2.5-7.5A2 2 0 0 1 7.4 4h9.2a2 2 0 0 1 1.9 1.5L21 13M3 13v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5M3 13h5l1.5 2.5h5L16 13h5"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.86-4.25 4.14 1 5.86L12 17.1 6.75 19.7l1-5.86L3.5 9.66l5.9-.86z"/>',
@@ -60,7 +62,9 @@ const ICON_PATHS: Record<string, string> = {
     '<path d="M12 3.5l8.5 4.5v4c0 4.7-3.4 7.7-8.5 9-5.1-1.3-8.5-4.3-8.5-9V8z"/><path d="M9.2 12l2 2 3.6-4"/>',
   image:
     '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.4" fill="currentColor" stroke="none"/><path d="M5 16.5l4-4 3 3 2.5-2.5 4.5 4.5"/>',
-}
+} satisfies Record<string, string>
+
+export type IconName = keyof typeof ICON_PATHS
 
 export function Icon({
   name,
@@ -68,7 +72,7 @@ export function Icon({
   style,
   className,
 }: {
-  name: keyof typeof ICON_PATHS | string
+  name: IconName | string
   size?: number
   style?: CSSProperties
   className?: string
@@ -86,7 +90,9 @@ export function Icon({
       className={className}
       style={style}
       aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: ICON_PATHS[name] ?? "" }}
+      dangerouslySetInnerHTML={{
+        __html: (ICON_PATHS as Record<string, string>)[name] ?? "",
+      }}
     />
   )
 }

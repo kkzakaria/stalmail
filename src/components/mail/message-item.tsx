@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon, Avatar } from "./mail-icons"
+import type { IconName } from "./mail-icons"
 import { formatThreadDate } from "./format-date"
 import { pickBody, buildFrameDoc, hasRemoteImages } from "./email-body"
 import type { AppMessage } from "../../server/mail-types"
@@ -16,7 +17,7 @@ function ImageBanner({
   actions,
 }: {
   tone: "shielded" | "exposed"
-  icon: string
+  icon: IconName
   note: string
   actions: { label: string; onClick: () => void; primary?: boolean }[]
 }) {
