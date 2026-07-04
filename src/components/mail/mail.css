@@ -12,6 +12,9 @@
   --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
   --accent-softer: color-mix(in oklab, var(--accent) 7%, transparent);
 
+  /* avertissement (actions "warn", bandeau images exposé) */
+  --warn: #c98a17;
+
   /* densité (surchargée par Tweaks) */
   --row-pad-y: 9px;
   --list-line: 1.35;
@@ -665,12 +668,12 @@
 /* couleurs sémantiques des actions du lecteur */
 .icon-btn.act-accent  { color: var(--accent); }
 .icon-btn.act-pos     { color: #2f9e64; }
-.icon-btn.act-warn    { color: #c98a17; }
+.icon-btn.act-warn    { color: var(--warn); }
 .icon-btn.act-danger  { color: #d6493b; }
 .icon-btn.act-star    { color: #d99a2b; }
 .icon-btn.act-accent:hover  { color: var(--accent); background: var(--accent-soft); }
 .icon-btn.act-pos:hover     { color: #2f9e64; background: color-mix(in oklab, #2f9e64 14%, transparent); }
-.icon-btn.act-warn:hover    { color: #c98a17; background: color-mix(in oklab, #c98a17 16%, transparent); }
+.icon-btn.act-warn:hover    { color: var(--warn); background: color-mix(in oklab, var(--warn) 16%, transparent); }
 .icon-btn.act-danger:hover  { color: #d6493b; background: color-mix(in oklab, #d6493b 13%, transparent); }
 .icon-btn.act-star:hover    { color: #e8b23a; background: color-mix(in oklab, #e8b23a 17%, transparent); }
 
@@ -1459,39 +1462,72 @@
   border: 0;
   background: #fff;
 }
+/* Bandeau images distantes — deux tons : "shielded" (blocage actif = état sain,
+   neutre et silencieux) et .exposed (contenu distant chargé = pixels de tracking
+   possibles → teinte ambre var(--warn), cohérente avec .act-warn). L'ancien style
+   mettait l'ambre sur l'état bloqué : sémantique inversée. */
 .img-block-banner {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px 10px;
   padding: 8px 12px;
-  margin-bottom: 10px;
-  font-size: 13px;
-  background: var(--surface-2, #f3f4f6);
-  border-radius: 8px;
-  color: var(--ink-2, #4b5563);
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
-/* Avertissement de confidentialité : italique + jaune orangé "warn" (cohérent avec .act-warn). */
+.img-block-banner .banner-ico {
+  flex: none;
+  color: var(--muted);
+}
 .img-block-banner .banner-note {
-  font-style: italic;
-  color: #c98a17;
+  flex: 1 1 auto;
+  min-width: 140px;
 }
-/* Bouton texte du bandeau (≠ .mini-btn qui est un carré icône 28px) : largeur auto,
-   sur une ligne, poussé à droite. Évite l'écrasement du libellé en 3 lignes. */
-.img-block-banner .banner-btn {
+.img-block-banner.exposed {
+  border-color: color-mix(in oklab, var(--warn) 30%, var(--line));
+  background: color-mix(in oklab, var(--warn) 8%, var(--surface));
+}
+.img-block-banner.exposed .banner-ico {
+  color: var(--warn);
+}
+.img-block-banner .banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-left: auto;
+}
+/* Boutons texte du bandeau (≠ .mini-btn carré icône 28px). Hiérarchie : l'action
+   ponctuelle est .primary (bordée, accent) ; l'engagement durable reste en ghost. */
+.img-block-banner .banner-btn {
   flex: none;
   white-space: nowrap;
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
   cursor: pointer;
 }
 .img-block-banner .banner-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.img-block-banner .banner-btn.primary {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--accent);
+}
+.img-block-banner .banner-btn.primary:hover {
   border-color: var(--accent);
   background: var(--hover);
+}
+.img-block-banner .banner-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

@@ -1,32 +1,45 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon, Avatar } from "./mail-icons"
+import type { IconName } from "./mail-icons"
 import { formatThreadDate } from "./format-date"
 import { pickBody, buildFrameDoc, hasRemoteImages } from "./email-body"
 import type { AppMessage } from "../../server/mail-types"
 
 // Bandeau images factorisé (CodeRabbit #128) : les 3 variantes (blocked / message-allowed /
-// sender-allowed) ne diffèrent que par la note et les actions.
+// sender-allowed) ne diffèrent que par le ton, l'icône, la note et les actions.
+// Deux tons honnêtes : "shielded" (blocage actif = état sain, neutre) et "exposed"
+// (contenu distant chargé = pixels de tracking possibles → c'est LUI qui porte le signal).
 function ImageBanner({
+  tone,
+  icon,
   note,
   actions,
 }: {
+  tone: "shielded" | "exposed"
+  icon: IconName
   note: string
-  actions: { label: string; onClick: () => void }[]
+  actions: { label: string; onClick: () => void; primary?: boolean }[]
 }) {
   return (
-    <div className="img-block-banner">
-      <span className="banner-note">{note}</span>{" "}
-      {actions.map((a) => (
-        <button
-          key={a.label}
-          type="button"
-          className="banner-btn"
-          onClick={a.onClick}
-        >
-          {a.label}
-        </button>
-      ))}
+    <div
+      className={"img-block-banner" + (tone === "exposed" ? " exposed" : "")}
+      role="note"
+    >
+      <Icon name={icon} size={16} className="banner-ico" />
+      <span className="banner-note">{note}</span>
+      <span className="banner-actions">
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            className={"banner-btn" + (a.primary ? " primary" : "")}
+            onClick={a.onClick}
+          >
+            {a.label}
+          </button>
+        ))}
+      </span>
     </div>
   )
 }
@@ -95,12 +108,12 @@ export function MessageItem({
         <div className="msg-body">
           {remote && decision === "blocked" && (
             <ImageBanner
+              tone="shielded"
+              icon="shield-check"
               note={t("mail.reader.imagesBlocked")}
               actions={[
-                {
-                  label: t("mail.reader.showImages"),
-                  onClick: () => onShowOnce?.(message.id),
-                },
+                // L'engagement (trust durable) reste discret ; l'action ponctuelle
+                // « Afficher les images » est la primaire, au bord droit.
                 ...(senderEmail
                   ? [
                       {
@@ -111,11 +124,18 @@ export function MessageItem({
                       },
                     ]
                   : []),
+                {
+                  label: t("mail.reader.showImages"),
+                  onClick: () => onShowOnce?.(message.id),
+                  primary: true,
+                },
               ]}
             />
           )}
           {remote && decision === "message-allowed" && (
             <ImageBanner
+              tone="exposed"
+              icon="image"
               note={t("mail.reader.imagesShown")}
               actions={[
                 {
@@ -129,6 +149,8 @@ export function MessageItem({
           )}
           {remote && decision === "sender-allowed" && senderEmail && (
             <ImageBanner
+              tone="exposed"
+              icon="image"
               note={t("mail.reader.imagesFromSenderShown", {
                 sender: senderEmail,
               })}
