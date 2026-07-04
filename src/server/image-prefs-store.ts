@@ -96,6 +96,10 @@ export function removeSender(accountId: string, sender: string): void {
   persist(m)
 }
 
+// Purge des prefs d'un compte. PAS de point de câblage aujourd'hui : l'app n'a aucun
+// flux de suppression de compte (gestion des principals = Stalwart admin), et le
+// câbler au logout serait faux (les prefs doivent survivre à la déconnexion — c'est
+// la feature). À appeler depuis le futur flux de gestion de comptes (phase settings).
 export function deleteAllForAccount(accountId: string): void {
   const m = load()
   if (m.delete(accountId)) persist(m)

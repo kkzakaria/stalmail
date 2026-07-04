@@ -23,7 +23,9 @@ import {
   SHOW_IMAGES_KEYWORD,
   applyImagePrefs,
   normalizeSender,
+  senderDomain,
 } from "./image-prefs"
+import { parseDmarcVerdict } from "./auth-results"
 
 interface RawMailbox {
   id: string
@@ -66,14 +68,24 @@ export function mailboxRefs(responses: JmapMethodResponse[]): MailboxRef[] {
 }
 
 // Récupère sid + accountId depuis la session (server-only).
-async function requireSession(): Promise<{ sid: string; accountId: string }> {
+async function requireSession(): Promise<{
+  sid: string
+  accountId: string
+  // Username du principal (email sur notre déploiement — sinon senderDomain rend ""
+  // et l'exemption locale #126 est simplement inopérante, fail-closed).
+  accountName: string
+}> {
   const { readSid } = await import("./session-cookie")
   const { currentSession } = await import("./session")
   const { redirect } = await import("@tanstack/react-router")
   const sid = readSid()
   const session = currentSession(sid)
   if (!sid || !session) throw redirect({ to: "/login" })
-  return { sid, accountId: session.accountId }
+  return {
+    sid,
+    accountId: session.accountId,
+    accountName: session.accountName,
+  }
 }
 
 export const mailboxesFn = createServerFn({ method: "GET" }).handler(
@@ -318,6 +330,7 @@ interface RawDetailEmail {
   subject?: string
   receivedAt?: string
   keywords?: Record<string, boolean>
+  "header:Authentication-Results:asText:all"?: string[] | null
   hasAttachment?: boolean
   textBody?: RawBodyPart[]
   htmlBody?: RawBodyPart[]
@@ -368,6 +381,9 @@ export function buildReadThreadCalls(
           "subject",
           "receivedAt",
           "keywords",
+          // Verdict DMARC (#126) — clé LITTÉRALE : la réponse JMAP renvoie la valeur
+          // sous exactement ce nom (RFC 8621 §4.1.2).
+          "header:Authentication-Results:asText:all",
           "hasAttachment",
           "textBody",
           "htmlBody",
@@ -422,6 +438,14 @@ export function parseThreadDetail(
       (e.keywords ?? {})[SHOW_IMAGES_KEYWORD] === true
         ? "message-allowed"
         : "blocked",
+    // PRÉREQUIS OPÉRATEUR (spec #126 §3.2) : parseDmarcVerdict lit la PREMIÈRE instance,
+    // fiable uniquement parce que Stalwart préfixe la sienne sur le port 25
+    // (addAuthResultsHeader, défaut local_port==25). Si cet ajout était désactivé,
+    // une instance amont (forgeable) deviendrait première — ne pas désactiver sans
+    // ajouter une vérification d'authserv-id ici.
+    authVerdict: parseDmarcVerdict(
+      e["header:Authentication-Results:asText:all"]
+    ),
     hasAttachment: e.hasAttachment === true,
     textBody: resolveBody(e.textBody, e.bodyValues, "text/plain"),
     htmlBody: resolveBody(e.htmlBody, e.bodyValues, "text/html"),
@@ -575,6 +599,12 @@ export const trustSenderFn = createServerFn({ method: "POST" })
     try {
       const { addSender } = await import("./image-prefs-store")
       const { accountId } = await requireSession()
+      const { consumeMutationSlot } = await import("./image-prefs-rate-limit")
+      // Consommation SYNCHRONE immédiatement après requireSession (patron sendMailFn) :
+      // aucun await entre vérification et enregistrement.
+      if (!consumeMutationSlot(accountId)) {
+        throw new Error("prefs mutation rate limited")
+      }
       addSender(accountId, normalizeSender(data.sender))
       return { ok: true }
     } catch (e) {
@@ -590,6 +620,12 @@ export const untrustSenderFn = createServerFn({ method: "POST" })
     try {
       const { removeSender } = await import("./image-prefs-store")
       const { accountId } = await requireSession()
+      const { consumeMutationSlot } = await import("./image-prefs-rate-limit")
+      // Consommation SYNCHRONE immédiatement après requireSession (patron sendMailFn) :
+      // aucun await entre vérification et enregistrement.
+      if (!consumeMutationSlot(accountId)) {
+        throw new Error("prefs mutation rate limited")
+      }
       removeSender(accountId, normalizeSender(data.sender))
       return { ok: true }
     } catch (e) {
@@ -784,13 +820,18 @@ export const readThreadFn = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<AppThreadDetail> => {
     try {
       const { jmapUserCall } = await import("./jmap-user")
-      const { sid, accountId } = await requireSession()
+      const { sid, accountId, accountName } = await requireSession()
       const responses = await jmapUserCall(
         sid,
         buildReadThreadCalls(accountId, data.threadId)
       )
       const { getPrefs } = await import("./image-prefs-store")
-      return applyImagePrefs(parseThreadDetail(responses), getPrefs(accountId))
+      // Exemption locale (#126) : domaine du compte, dérivé de la session — jamais du
+      // client. Assemblé ici : le store ne persiste QUE allowedSenders.
+      return applyImagePrefs(parseThreadDetail(responses), {
+        ...getPrefs(accountId),
+        localDomain: senderDomain(accountName),
+      })
     } catch (e) {
       if (isRedirect(e)) throw e
       console.error("mail action failed", e)

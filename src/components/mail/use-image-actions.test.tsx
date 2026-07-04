@@ -45,6 +45,7 @@ const detail: AppThreadDetail = {
       htmlBody: null,
       attachments: [],
       imageDecision: "blocked",
+      authVerdict: "pass",
     },
   ],
 }
@@ -67,12 +68,36 @@ describe("useImageActions", () => {
     expect(d?.messages[0].imageDecision).toBe("message-allowed")
   })
 
-  it("trustSender : patch optimiste sender-allowed sur les messages de l'expéditeur", async () => {
+  it("trustSender : patch optimiste UNIQUEMENT des messages pass + invalidation au succès", async () => {
     const { qc, result } = setup()
+    const spy = vi.spyOn(qc, "invalidateQueries")
     await result.current.trustSender("Bob@x.io")
     expect(trust).toHaveBeenCalledWith({ data: { sender: "Bob@x.io" } })
     const d = qc.getQueryData<AppThreadDetail>(["thread", "t1"])
-    expect(d?.messages[0].imageDecision).toBe("sender-allowed")
+    expect(d?.messages[0].imageDecision).toBe("sender-allowed") // authVerdict: "pass"
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["thread", "t1"] })
+  })
+
+  it("trustSender : message fail NON patché optimistiquement (gating #126)", async () => {
+    const { qc, result } = setup()
+    qc.setQueryData<AppThreadDetail>(["thread", "t1"], {
+      ...detail,
+      messages: [{ ...detail.messages[0], authVerdict: "fail" }],
+    })
+    await result.current.trustSender("bob@x.io")
+    const d = qc.getQueryData<AppThreadDetail>(["thread", "t1"])
+    expect(d?.messages[0].imageDecision).toBe("blocked")
+  })
+
+  it("trustSender : message none NON patché optimistiquement (gating #126)", async () => {
+    const { qc, result } = setup()
+    qc.setQueryData<AppThreadDetail>(["thread", "t1"], {
+      ...detail,
+      messages: [{ ...detail.messages[0], authVerdict: "none" }],
+    })
+    await result.current.trustSender("bob@x.io")
+    const d = qc.getQueryData<AppThreadDetail>(["thread", "t1"])
+    expect(d?.messages[0].imageDecision).toBe("blocked")
   })
 
   it("hideImages : patch optimiste blocked + appelle le serveur (révocation par-message)", async () => {

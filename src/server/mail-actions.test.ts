@@ -523,6 +523,41 @@ describe("parseThreadDetail", () => {
       "blocked"
     )
   })
+
+  it("authVerdict = pass quand l'en-tête Authentication-Results porte dmarc=pass", () => {
+    const withAuthHeader: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
+      [
+        "Email/get",
+        {
+          list: [
+            {
+              id: "e1",
+              from: [{ name: "Bob", email: "bob@gmail.com" }],
+              keywords: {},
+              "header:Authentication-Results:asText:all": [
+                "mail.getstalmail.com; dmarc=pass header.from=gmail.com",
+              ],
+            },
+          ],
+        },
+        "1",
+      ],
+    ]
+    expect(parseThreadDetail(withAuthHeader).messages[0].authVerdict).toBe(
+      "pass"
+    )
+  })
+
+  it("authVerdict = none sans en-tête Authentication-Results", () => {
+    const withoutAuthHeader: JmapMethodResponse[] = [
+      ["Thread/get", { list: [{ id: "t1", emailIds: ["e1"] }] }, "0"],
+      ["Email/get", { list: [{ id: "e1", from: [], keywords: {} }] }, "1"],
+    ]
+    expect(parseThreadDetail(withoutAuthHeader).messages[0].authVerdict).toBe(
+      "none"
+    )
+  })
 })
 
 describe("buildSetFlagsCall", () => {
@@ -576,6 +611,12 @@ describe("buildReadThreadCalls", () => {
     expect(emailGet.properties).toContain("bodyValues")
     expect(emailGet.properties).toContain("messageId")
     expect(emailGet.properties).not.toContain("mailboxIds")
+  })
+
+  it("fetch l'en-tête Authentication-Results (clé littérale exacte)", () => {
+    const [, emailGet] = buildReadThreadCalls("acc", "t1")
+    const props = (emailGet[1] as { properties: string[] }).properties
+    expect(props).toContain("header:Authentication-Results:asText:all")
   })
 })
 
