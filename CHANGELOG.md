@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.44](https://github.com/kkzakaria/stalmail/compare/v0.1.43...v0.1.44) (2026-07-04)
+
+
+### Features
+
+* **reader:** gating DMARC de l'allowlist images + durcissements ([#126](https://github.com/kkzakaria/stalmail/issues/126)) ([#132](https://github.com/kkzakaria/stalmail/issues/132)) ([6481f52](https://github.com/kkzakaria/stalmail/commit/6481f529779101aa5055ab0c37a1afbae19cb396))
+
 ## [0.1.43](https://github.com/kkzakaria/stalmail/compare/v0.1.42...v0.1.43) (2026-07-03)
 
 
