@@ -12,8 +12,19 @@
   --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
   --accent-softer: color-mix(in oklab, var(--accent) 7%, transparent);
 
-  /* avertissement (actions "warn", bandeau images exposé) */
-  --warn: #c98a17;
+  /* Échelle d'avertissement — palette « Warning Wavelengths »
+     (colordrop.io/palette/39425), du jaune soleil à l'orange brûlé.
+     Réutilisable pour tout signal warn : bandeau images exposé, .act-warn,
+     futurs badges/toasts. --warn = ton principal, --warn-strong = insistance. */
+  --warn-100: #f9f871; /* Marigold Yellow */
+  --warn-200: #f9e84d; /* Candy Corn */
+  --warn-300: #f9d02e; /* Saffron */
+  --warn-400: #f9b600; /* Selective Yellow */
+  --warn-500: #f78c00; /* Tangerine */
+  --warn-600: #f75b00; /* Blaze Orange */
+  --warn-700: #e24e00; /* Trinidad */
+  --warn: var(--warn-500);
+  --warn-strong: var(--warn-700);
 
   /* densité (surchargée par Tweaks) */
   --row-pad-y: 9px;
@@ -1486,9 +1497,10 @@
   flex: 1 1 auto;
   min-width: 140px;
 }
+/* Exposé : lueur de fond Saffron (--warn-300), bordure/icône Tangerine (--warn). */
 .img-block-banner.exposed {
-  border-color: color-mix(in oklab, var(--warn) 38%, var(--line));
-  background: color-mix(in oklab, var(--warn) 10%, var(--surface));
+  border-color: color-mix(in oklab, var(--warn) 45%, var(--line));
+  background: color-mix(in oklab, var(--warn-300) 12%, var(--surface));
 }
 .img-block-banner.exposed .banner-ico {
   color: var(--warn);
