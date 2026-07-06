@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.45](https://github.com/kkzakaria/stalmail/compare/v0.1.44...v0.1.45) (2026-07-06)
+
+
+### Features
+
+* **reader:** reusable warning color scale from the Warning Wavelengths palette ([#136](https://github.com/kkzakaria/stalmail/issues/136)) ([6f2b978](https://github.com/kkzakaria/stalmail/commit/6f2b978ec80b610f4ebd592366f7a7352cd90b60))
+
 ## [0.1.44](https://github.com/kkzakaria/stalmail/compare/v0.1.43...v0.1.44) (2026-07-04)
 
 
