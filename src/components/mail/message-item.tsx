@@ -19,7 +19,13 @@ function ImageBanner({
   tone: "shielded" | "exposed"
   icon: IconName
   note: string
-  actions: { label: string; onClick: () => void; primary?: boolean }[]
+  // Trois poids d'action : "primary" (ponctuel, plein accent), "tonal" (engagement,
+  // accent doux) et défaut (neutre bordé — révocations).
+  actions: {
+    label: string
+    onClick: () => void
+    variant?: "primary" | "tonal"
+  }[]
 }) {
   return (
     <div
@@ -33,7 +39,7 @@ function ImageBanner({
           <button
             key={a.label}
             type="button"
-            className={"banner-btn" + (a.primary ? " primary" : "")}
+            className={"banner-btn" + (a.variant ? ` ${a.variant}` : "")}
             onClick={a.onClick}
           >
             {a.label}
@@ -112,8 +118,8 @@ export function MessageItem({
               icon="shield-check"
               note={t("mail.reader.imagesBlocked")}
               actions={[
-                // L'engagement (trust durable) reste discret ; l'action ponctuelle
-                // « Afficher les images » est la primaire, au bord droit.
+                // Deux styles distincts : l'engagement durable en tonal (accent doux),
+                // l'action ponctuelle « Afficher les images » en primaire pleine, au bord droit.
                 ...(senderEmail
                   ? [
                       {
@@ -121,13 +127,14 @@ export function MessageItem({
                           sender: senderEmail,
                         }),
                         onClick: () => onTrustSender?.(senderEmail),
+                        variant: "tonal" as const,
                       },
                     ]
                   : []),
                 {
                   label: t("mail.reader.showImages"),
                   onClick: () => onShowOnce?.(message.id),
-                  primary: true,
+                  variant: "primary" as const,
                 },
               ]}
             />
