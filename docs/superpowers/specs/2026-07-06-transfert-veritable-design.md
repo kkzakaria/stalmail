@@ -142,8 +142,27 @@ Pas de nouvelle server function — extension de la chaîne existante :
 
 - `ComposerDraft` (`use-composer.ts`) gagne `attachments: AppAttachment[]`
   (vide par défaut ; le composer « nouveau message » n'en met jamais).
-- `sendMailSchema` (`mail-actions.ts`) gagne
-  `attachments: array({ blobId, type, name, size }).max(50).default([])`.
+- `sendMailSchema` (`mail-actions.ts`) gagne un champ `attachments` avec des
+  **contraintes par champ obligatoires** (audit sécurité F1 : `name` et `type`
+  finissent dans les en-têtes MIME `Content-Disposition`/`Content-Type` de la
+  part — sans re-traitement serveur au-delà de Zod, ce schéma EST le contrôle
+  autoritaire contre l'injection d'en-têtes CRLF, au même titre que
+  `isCleanHeaderValue` sur le sujet et les adresses) :
+
+  ```ts
+  attachments: z
+    .array(
+      z.object({
+        blobId: z.string().min(1).max(256).regex(/^[A-Za-z0-9_-]+$/),
+        name: z.string().max(255).refine(isCleanHeaderValue),
+        type: z.string().max(127).regex(/^[\w.+-]+\/[\w.+-]+$/),
+        size: z.number().int().nonnegative(),
+      })
+    )
+    .max(50)
+    .default([])
+  ```
+
   La limite de 50 est un garde-fou de forme ; la taille réelle est vérifiée
   par Stalwart à la soumission (le `size` client n'est pas une donnée de
   confiance, le serveur mail recalcule).
@@ -165,16 +184,40 @@ Pas de nouvelle server function — extension de la chaîne existante :
 
 ## Sécurité
 
+Un audit de conception (`security-reviewer`, OWASP Top 10) a été passé sur ce
+design le 2026-07-06. Synthèse :
+
 Les deux barrières existantes couvrent le nouveau flux :
 
 - **B1 (client, défense en profondeur)** : échappement des champs interpolés
   + `sanitizeComposeHtml` du bloc complet dans `buildForwardContext`.
+  L'audit confirme l'absence de risque mXSS/double-décodage : l'ordre
+  échapper → concaténer → sanitiser est correct et l'allowlist DOMPurify est
+  restrictive (pas de `svg`/`math`/`style`/`template`).
 - **B2 (serveur, autoritaire)** : `sendMailFn` re-sanitise le HTML reçu, quoi
-  qu'ait fait le client.
-- **Blobs** : attachés via le Bearer de l'utilisateur — un `blobId` forgé
-  pointant vers un autre compte est rejeté par Stalwart. Aucun secret nouveau
-  côté client.
-- Passage du sous-agent `security-reviewer` en fin d'implémentation.
+  qu'ait fait le client. Pour les métadonnées d'attachment (`name`, `type`),
+  le contrôle autoritaire est le schéma Zod durci ci-dessus (F1) — seule
+  entrée de `sendMailFn` qui ne subit pas de re-traitement au-delà de Zod.
+- **Blobs (hypothèse vérifiée dans le code)** : tout le flux d'envoi passe
+  par `jmapUserCall` (Bearer utilisateur, `jmap-user.ts`) avec l'`accountId`
+  issu de `requireSession` — jamais du client, jamais le Bearer admin
+  (`jmap.ts` n'est pas référencé par `mail-actions.ts`). Un `blobId` forgé
+  pointant vers un autre compte est donc rejeté par Stalwart
+  (`blobNotFound` → échec d'envoi propre, sans fuite). **Dépendance de
+  sécurité explicite** : ce modèle repose sur l'ACL blob par-compte de
+  Stalwart ; un test de non-régression « blobId d'un autre compte → envoi
+  échoue » est à prévoir.
+- **Injection JSON via `blobId`** : impossible, le batch JMAP est sérialisé
+  par `JSON.stringify` ; la regex Zod sert de durcissement.
+- **Taille (F2)** : `.max(50)` borne le nombre, pas la taille agrégée (50×
+  le même gros blob = amplification). La limite autoritaire est le
+  `max-message-size` de Stalwart — prérequis de configuration à documenter ;
+  le rate-limit d'envoi existant (30/h/compte) borne la fréquence.
+- **Parts inline reprises (F3)** : `message.attachments` (RFC 8621) inclut
+  les parts inline (`cid:`, pixels). Elles sont ré-attachées par défaut —
+  acceptable car la rangée de puces les rend toutes visibles et retirables
+  avant envoi ; ce point motive l'affichage exhaustif des puces.
+- Second passage du sous-agent `security-reviewer` en fin d'implémentation.
 
 ## Erreurs et limites connues
 
@@ -196,6 +239,12 @@ Fonctions pures d'abord (stratégie du projet, vitest) :
   attachments.
 - `buildSendMethodCalls` : présence et forme de `attachments[]`
   (`disposition: "attachment"`), absence quand la liste est vide.
+- `sendMailSchema` : rejet des métadonnées hostiles — `name` avec CR/LF
+  (injection d'en-tête MIME), `type` hors forme `type/subtype`, `blobId`
+  hors alphabet autorisé (F1).
+- Non-régression scoping blob : envoi avec un `blobId` étranger au compte →
+  échec propre (test d'intégration ou test contractuel sur le mapping
+  d'erreur `parseSendResult`).
 - `buildReplyContext` : rétrécissement de `mode` ; les tests forward
   existants migrent vers `buildForwardContext`.
 - Composants : `MessageItem` (bouton ↪ présent quand ouvert, `onForward`
