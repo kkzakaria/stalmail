@@ -12,6 +12,7 @@ const ALLOWED_TAGS = [
   "li",
   "p",
   "br",
+  "blockquote",
 ]
 const ALLOWED_ATTR = ["href"]
 

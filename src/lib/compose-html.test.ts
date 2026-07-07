@@ -55,6 +55,12 @@ describe("sanitizeComposeHtml", () => {
       sanitizeComposeHtml('<a href="mailto:a@b.fr?bcc=x@y.fr">l</a>')
     ).toBe('<a href="mailto:a@b.fr">l</a>')
   })
+
+  it("conserve blockquote (citation reply/forward)", () => {
+    const out = sanitizeComposeHtml("<blockquote><p>cité</p></blockquote>")
+    expect(out).toContain("<blockquote>")
+    expect(out).toContain("cité")
+  })
 })
 
 describe("htmlToPlainText", () => {
