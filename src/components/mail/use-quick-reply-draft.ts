@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   buildReplyContext,
@@ -35,57 +35,69 @@ export function useQuickReplyDraft(
   const { t, i18n } = useTranslation()
   const [draft, setDraft] = useState<ComposerDraft | null>(null)
 
-  function openReply(mode: "reply" | "replyAll"): void {
-    if (!detail) return
-    const last = detail.messages.at(-1)
-    const ctx = buildReplyContext(
-      detail,
-      mode,
-      selfEmail,
-      last?.messageId ?? undefined
-    )
-    setDraft({
-      mode,
-      to: formatAddrs(ctx.to),
-      cc: formatAddrs(ctx.cc),
-      bcc: "",
-      subject: ctx.subject,
-      html: ctx.quotedHtml,
-      inReplyTo: ctx.inReplyTo,
-      references: ctx.references,
-      attachments: [],
-    })
-  }
+  // Identités stables (useCallback) : la liste de messages ne doit pas se
+  // re-rendre à chaque frappe dans l'éditeur (CodeRabbit #138).
+  const openReply = useCallback(
+    (mode: "reply" | "replyAll"): void => {
+      if (!detail) return
+      const last = detail.messages.at(-1)
+      const ctx = buildReplyContext(
+        detail,
+        mode,
+        selfEmail,
+        last?.messageId ?? undefined
+      )
+      setDraft({
+        mode,
+        to: formatAddrs(ctx.to),
+        cc: formatAddrs(ctx.cc),
+        bcc: "",
+        subject: ctx.subject,
+        html: ctx.quotedHtml,
+        inReplyTo: ctx.inReplyTo,
+        references: ctx.references,
+        attachments: [],
+      })
+    },
+    [detail, selfEmail]
+  )
 
-  function openForward(message: AppMessage): void {
-    if (!detail) return
-    const ctx = buildForwardContext(
-      message,
-      detail.subject,
-      {
-        forwarded: t("mail.compose.fwdForwarded"),
-        from: t("mail.compose.fwdFrom"),
-        date: t("mail.compose.fwdDate"),
-        subject: t("mail.compose.fwdSubject"),
-        to: t("mail.compose.fwdTo"),
-        cc: t("mail.compose.fwdCc"),
-      },
-      i18n.language
-    )
-    setDraft({
-      mode: "forward",
-      to: "",
-      cc: "",
-      bcc: "",
-      subject: ctx.subject,
-      html: ctx.quotedHtml,
-      references: [],
-      attachments: ctx.attachments,
-    })
-  }
+  const openForward = useCallback(
+    (message: AppMessage): void => {
+      if (!detail) return
+      const ctx = buildForwardContext(
+        message,
+        detail.subject,
+        {
+          forwarded: t("mail.compose.fwdForwarded"),
+          from: t("mail.compose.fwdFrom"),
+          date: t("mail.compose.fwdDate"),
+          subject: t("mail.compose.fwdSubject"),
+          to: t("mail.compose.fwdTo"),
+          cc: t("mail.compose.fwdCc"),
+        },
+        i18n.language
+      )
+      setDraft({
+        mode: "forward",
+        to: "",
+        cc: "",
+        bcc: "",
+        subject: ctx.subject,
+        html: ctx.quotedHtml,
+        references: [],
+        attachments: ctx.attachments,
+      })
+    },
+    [detail, t, i18n.language]
+  )
 
-  const patch = (p: Partial<ComposerDraft>) =>
-    setDraft((d) => (d ? { ...d, ...p } : d))
+  const patch = useCallback(
+    (p: Partial<ComposerDraft>) => setDraft((d) => (d ? { ...d, ...p } : d)),
+    []
+  )
 
-  return { draft, openReply, openForward, patch, close: () => setDraft(null) }
+  const close = useCallback(() => setDraft(null), [])
+
+  return { draft, openReply, openForward, patch, close }
 }

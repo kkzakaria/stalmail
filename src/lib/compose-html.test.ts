@@ -74,4 +74,8 @@ describe("htmlToPlainText", () => {
   it("décode les entités HTML", () => {
     expect(htmlToPlainText("<p>a &amp; b &lt; c</p>")).toBe("a & b < c")
   })
+
+  it("ne double-décode pas les entités (&amp;lt; reste &lt;)", () => {
+    expect(htmlToPlainText("<p>a &amp;lt; b</p>")).toBe("a &lt; b")
+  })
 })

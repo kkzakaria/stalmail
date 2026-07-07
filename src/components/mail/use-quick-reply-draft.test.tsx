@@ -49,6 +49,31 @@ describe("useQuickReplyDraft", () => {
     })
   })
 
+  it("openReply(replyAll) : cc = destinataires + cc du message, moi et l'expéditeur exclus", () => {
+    const detailReplyAll: AppThreadDetail = {
+      ...detail,
+      messages: [
+        {
+          ...detail.messages[0],
+          to: [{ name: "Alice", email: "alice@x.fr" }],
+          cc: [
+            { name: "Moi", email: "me@x.fr" },
+            { name: "Bob", email: "bob@x.fr" },
+          ],
+        },
+      ],
+    }
+    const { result } = renderHook(() =>
+      useQuickReplyDraft(detailReplyAll, "me@x.fr")
+    )
+    act(() => result.current.openReply("replyAll"))
+    expect(result.current.draft).toMatchObject({
+      mode: "replyAll",
+      to: "Alice <alice@x.fr>",
+      cc: "Bob <bob@x.fr>",
+    })
+  })
+
   it("openForward : brouillon forward (Fwd:, À vide, en-tête cité, PJ reprises)", () => {
     const { result } = renderHook(() => useQuickReplyDraft(detail, "me@x.fr"))
     act(() => result.current.openForward(detail.messages[0]))
