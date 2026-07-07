@@ -15,6 +15,7 @@ const initial: ComposerDraft = {
   subject: "",
   html: "",
   references: [],
+  attachments: [],
 }
 
 describe("Composer", () => {

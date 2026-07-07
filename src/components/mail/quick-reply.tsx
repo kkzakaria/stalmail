@@ -48,6 +48,8 @@ export function QuickReply({
       html: ctx.quotedHtml,
       inReplyTo: ctx.inReplyTo,
       references: ctx.references,
+      // Pièces jointes : QuickReply n'en propose pas encore (réécrit en T6).
+      attachments: [],
     })
   }
 

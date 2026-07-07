@@ -128,6 +128,7 @@ export function MailPage({
                   subject: "",
                   html: "",
                   references: [],
+                  attachments: [],
                 }}
                 sending={composer.sending}
                 onSend={async (draft) => {
