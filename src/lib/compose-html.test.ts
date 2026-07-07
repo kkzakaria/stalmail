@@ -55,6 +55,12 @@ describe("sanitizeComposeHtml", () => {
       sanitizeComposeHtml('<a href="mailto:a@b.fr?bcc=x@y.fr">l</a>')
     ).toBe('<a href="mailto:a@b.fr">l</a>')
   })
+
+  it("conserve blockquote (citation reply/forward)", () => {
+    const out = sanitizeComposeHtml("<blockquote><p>cité</p></blockquote>")
+    expect(out).toContain("<blockquote>")
+    expect(out).toContain("cité")
+  })
 })
 
 describe("htmlToPlainText", () => {
@@ -67,5 +73,9 @@ describe("htmlToPlainText", () => {
 
   it("décode les entités HTML", () => {
     expect(htmlToPlainText("<p>a &amp; b &lt; c</p>")).toBe("a & b < c")
+  })
+
+  it("ne double-décode pas les entités (&amp;lt; reste &lt;)", () => {
+    expect(htmlToPlainText("<p>a &amp;lt; b</p>")).toBe("a &lt; b")
   })
 })

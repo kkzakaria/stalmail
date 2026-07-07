@@ -2,8 +2,9 @@ import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import { sendMailFn } from "../../server/mail-actions"
-import { parseAddressList  } from "../../server/compose-build"
-import type {ComposeMode} from "../../server/compose-build";
+import { parseAddressList } from "../../server/compose-build"
+import type { ComposeMode } from "../../server/compose-build"
+import type { AppAttachment } from "../../server/mail-types"
 import { useToast } from "./toast"
 
 export interface ComposerDraft {
@@ -15,6 +16,7 @@ export interface ComposerDraft {
   html: string
   inReplyTo?: string
   references: string[]
+  attachments: AppAttachment[]
 }
 
 export interface UseComposer {
@@ -55,6 +57,7 @@ export function useComposer(folder: string): UseComposer {
           html: draft.html,
           inReplyTo: draft.inReplyTo,
           references: draft.references,
+          attachments: draft.attachments,
         },
       })
       notify(t("mail.compose.sent"), "success")

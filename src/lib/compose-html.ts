@@ -12,6 +12,7 @@ const ALLOWED_TAGS = [
   "li",
   "p",
   "br",
+  "blockquote",
 ]
 const ALLOWED_ATTR = ["href"]
 
@@ -63,12 +64,14 @@ export function htmlToPlainText(html: string): string {
     .replace(/<\/(p|div|li|ul|ol)>/gi, "\n") //    fermeture bloc → \n
     .replace(/<br\s*\/?>/gi, "\n")
   const stripped = withBreaks.replace(/<[^>]+>/g, "")
+  // &amp; est décodé EN DERNIER : sinon un texte source contenant littéralement
+  // "&amp;lt;" serait double-décodé en "<" au lieu de "&lt;" (CodeRabbit #138).
   const decoded = stripped
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
   return decoded.replace(/\n{3,}/g, "\n\n").trim()
 }

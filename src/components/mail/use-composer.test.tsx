@@ -30,6 +30,7 @@ const draft = {
   subject: "Bonjour",
   html: "<p>Salut</p>",
   references: [] as string[],
+  attachments: [],
 }
 
 describe("useComposer", () => {
@@ -97,5 +98,19 @@ describe("useComposer", () => {
     expect(await first).toBe(true)
     expect(await second).toBe(false) // bloqué par inFlight
     expect(sendMail).toHaveBeenCalledTimes(1) // un seul envoi réel
+  })
+
+  it("transmet les attachments du brouillon à sendMailFn", async () => {
+    sendMail.mockResolvedValue({ ok: true, emailId: "e1" })
+    const atts = [
+      { blobId: "b1", name: "f.pdf", type: "application/pdf", size: 10 },
+    ]
+    const { result } = renderHook(() => useComposer("inbox"), { wrapper })
+    await act(async () => {
+      await result.current.send({ ...draft, attachments: atts })
+    })
+    expect(sendMail).toHaveBeenCalledWith({
+      data: expect.objectContaining({ attachments: atts }),
+    })
   })
 })

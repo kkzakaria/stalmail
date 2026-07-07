@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { memo, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon, Avatar } from "./mail-icons"
 import type { IconName } from "./mail-icons"
@@ -50,13 +50,17 @@ function ImageBanner({
   )
 }
 
-export function MessageItem({
+// React.memo : évite le re-rendu de chaque message du thread à chaque frappe
+// dans l'éditeur de réponse rapide (CodeRabbit #138) — combiné aux callbacks
+// mémoïsés de useQuickReplyDraft.
+export const MessageItem = memo(function MessageItem({
   message,
   defaultOpen = false,
   onShowOnce,
   onHideImages,
   onTrustSender,
   onUntrustSender,
+  onForward,
 }: {
   message: AppMessage
   defaultOpen?: boolean
@@ -64,6 +68,7 @@ export function MessageItem({
   onHideImages?: (emailId: string) => void
   onTrustSender?: (sender: string) => void
   onUntrustSender?: (sender: string) => void
+  onForward?: (message: AppMessage) => void
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(defaultOpen)
@@ -108,6 +113,22 @@ export function MessageItem({
           )}
         </div>
         <div className="when">{formatThreadDate(message.receivedAt)}</div>
+        {open && onForward && (
+          <button
+            type="button"
+            className="icon-btn sm"
+            aria-label={t("mail.compose.forwardMessage", { sender: leadName })}
+            title={t("mail.compose.forwardMessage", { sender: leadName })}
+            onClick={(e) => {
+              // Le header parent est cliquable (toggle repli) : on isole le bouton.
+              e.stopPropagation()
+              onForward(message)
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <Icon name="forward" size={16} />
+          </button>
+        )}
       </div>
 
       {open && (
@@ -216,4 +237,4 @@ export function MessageItem({
       )}
     </div>
   )
-}
+})

@@ -2,54 +2,30 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { RteEditor } from "./rte-editor"
-import { buildReplyContext } from "../../server/compose-build"
-import type { ComposeMode } from "../../server/compose-build"
-import type { AppThreadDetail, MailAddress } from "../../server/mail-types"
 import type { ComposerDraft } from "./use-composer"
 
 export interface QuickReplyProps {
-  detail: AppThreadDetail
-  selfEmail: string
+  draft: ComposerDraft | null
   sending: boolean
+  onOpenReply: (mode: "reply" | "replyAll") => void
+  onPatch: (patch: Partial<ComposerDraft>) => void
+  onClose: () => void
   // Retourne true si l'envoi a réussi → la réponse rapide se réinitialise.
   onSend: (draft: ComposerDraft) => boolean | void | Promise<boolean | void>
 }
 
-function formatAddrs(addrs: MailAddress[]): string {
-  return addrs
-    .map((a) => (a.name ? `${a.name} <${a.email}>` : a.email))
-    .join(", ")
-}
-
+// Présentationnel : l'état du brouillon vit dans useQuickReplyDraft (Reader).
+// Le transfert n'a plus de bouton ici — il est par-message (MessageItem, #79).
 export function QuickReply({
-  detail,
-  selfEmail,
+  draft,
   sending,
+  onOpenReply,
+  onPatch,
+  onClose,
   onSend,
 }: QuickReplyProps) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState<ComposerDraft | null>(null)
   const [showFormat, setShowFormat] = useState(false)
-
-  function open(mode: ComposeMode) {
-    const last = detail.messages.at(-1)
-    const ctx = buildReplyContext(
-      detail,
-      mode,
-      selfEmail,
-      last?.messageId ?? undefined
-    )
-    setDraft({
-      mode,
-      to: formatAddrs(ctx.to),
-      cc: formatAddrs(ctx.cc),
-      bcc: "",
-      subject: ctx.subject,
-      html: ctx.quotedHtml,
-      inReplyTo: ctx.inReplyTo,
-      references: ctx.references,
-    })
-  }
 
   if (!draft) {
     return (
@@ -59,7 +35,7 @@ export function QuickReply({
           className="reply-bar-main"
           aria-label={t("mail.compose.reply")}
           title={t("mail.compose.reply")}
-          onClick={() => open("reply")}
+          onClick={() => onOpenReply("reply")}
         >
           <Icon name="reply" size={16} /> {t("mail.compose.reply")}
         </button>
@@ -68,25 +44,13 @@ export function QuickReply({
           className="icon-btn sm"
           aria-label={t("mail.compose.replyAll")}
           title={t("mail.compose.replyAll")}
-          onClick={() => open("replyAll")}
+          onClick={() => onOpenReply("replyAll")}
         >
           <Icon name="replyAll" size={17} />
-        </button>
-        <button
-          type="button"
-          className="icon-btn sm"
-          aria-label={t("mail.compose.forward")}
-          title={t("mail.compose.forward")}
-          onClick={() => open("forward")}
-        >
-          <Icon name="forward" size={17} />
         </button>
       </div>
     )
   }
-
-  const set = (patch: Partial<ComposerDraft>) =>
-    setDraft((d) => (d ? { ...d, ...patch } : d))
 
   const modeIcon =
     draft.mode === "forward"
@@ -111,21 +75,56 @@ export function QuickReply({
           className="qr-to"
           aria-label={t("mail.compose.to")}
           value={draft.to}
-          onChange={(e) => set({ to: e.target.value })}
+          onChange={(e) => onPatch({ to: e.target.value })}
         />
         <button
           type="button"
           className="icon-btn sm"
           aria-label={t("mail.compose.close")}
           title={t("mail.compose.close")}
-          onClick={() => setDraft(null)}
+          onClick={onClose}
         >
           <Icon name="x" size={16} />
         </button>
       </div>
+      {/* Puces des pièces jointes reprises (transfert) — retirables une à une. */}
+      {draft.attachments.length > 0 && (
+        <div className="attach-row">
+          {draft.attachments.map((a) => (
+            <div key={a.blobId} className="attach">
+              <div className="fi">
+                {(a.type.split("/")[1] ?? t("mail.reader.file")).slice(0, 4)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div className="fn">{a.name}</div>
+                <div className="fs">
+                  {Math.ceil(a.size / 1024)} {t("mail.reader.sizeKB")}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="attach-x"
+                aria-label={t("mail.compose.removeAttachment", {
+                  name: a.name,
+                })}
+                title={t("mail.compose.removeAttachment", { name: a.name })}
+                onClick={() =>
+                  onPatch({
+                    attachments: draft.attachments.filter(
+                      (x) => x.blobId !== a.blobId
+                    ),
+                  })
+                }
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <RteEditor
         value={draft.html}
-        onChange={(html) => set({ html })}
+        onChange={(html) => onPatch({ html })}
         ariaLabel={t("mail.compose.body")}
         showToolbar={showFormat}
       />
@@ -139,7 +138,7 @@ export function QuickReply({
             // Réinitialise la réponse rapide sur succès (sinon elle reste ouverte
             // avec le contenu envoyé). onSend renvoie true quand l'envoi a abouti.
             const ok = await onSend(draft)
-            if (ok) setDraft(null)
+            if (ok) onClose()
           }}
         >
           <Icon name="send" size={16} /> {t("mail.compose.send")}

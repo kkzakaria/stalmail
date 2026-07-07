@@ -1,4 +1,9 @@
-import type { MailAddress, AppThreadDetail } from "./mail-types"
+import type {
+  MailAddress,
+  AppThreadDetail,
+  AppMessage,
+  AppAttachment,
+} from "./mail-types"
 import { sanitizeComposeHtml } from "../lib/compose-html"
 import type { JmapMethodResponse, JmapMethodCall } from "./jmap"
 
@@ -70,11 +75,12 @@ function dedupeByEmail(
   return out
 }
 
-// Construit le contexte de réponse/transfert depuis le dernier message du fil.
+// Construit le contexte de réponse depuis le dernier message du fil. Le transfert
+// a son propre chemin (buildForwardContext, par-message — #79).
 // quotedHtml passe TOUJOURS par sanitizeComposeHtml : le htmlBody d'origine est non fiable (B1).
 export function buildReplyContext(
   detail: AppThreadDetail,
-  mode: ComposeMode,
+  mode: "reply" | "replyAll",
   selfEmail: string,
   lastMessageId?: string
 ): ReplyContext {
@@ -87,16 +93,6 @@ export function buildReplyContext(
         `<p><br></p><blockquote>${last.htmlBody}</blockquote>`
       )
     : ""
-
-  if (mode === "forward") {
-    return {
-      to: [],
-      cc: [],
-      subject: prefixSubject(detail.subject, "Fwd"),
-      references: [],
-      quotedHtml,
-    }
-  }
 
   const to = last.from
   const cc =
@@ -113,6 +109,78 @@ export function buildReplyContext(
     inReplyTo: lastMessageId,
     references,
     quotedHtml,
+  }
+}
+
+// Échappe une valeur non fiable avant interpolation dans le HTML du composer.
+// Requis pour la sécurité (nom d'expéditeur hostile) ET la correction : les
+// adresses "Nom <a@b>" seraient sinon avalées comme balises par DOMPurify.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+export interface ForwardLabels {
+  forwarded: string
+  from: string
+  date: string
+  subject: string
+  to: string
+  cc: string
+}
+
+export interface ForwardContext {
+  subject: string
+  quotedHtml: string
+  attachments: AppAttachment[]
+}
+
+// Contexte de transfert d'UN message (issue #79) : bloc d'en-tête + corps cité +
+// pièces jointes de l'original. Libellés injectés (i18n en couche UI, fonction pure).
+// quotedHtml passe TOUJOURS par sanitizeComposeHtml (B1) ; champs interpolés échappés.
+export function buildForwardContext(
+  message: AppMessage,
+  threadSubject: string,
+  labels: ForwardLabels,
+  locale: string
+): ForwardContext {
+  const addr = (a: MailAddress) => (a.name ? `${a.name} <${a.email}>` : a.email)
+  const list = (as: MailAddress[]) => as.map(addr).join(", ")
+  const date = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(message.receivedAt))
+
+  const lines = [
+    `---------- ${escapeHtml(labels.forwarded)} ----------`,
+    `${escapeHtml(labels.from)} : ${escapeHtml(list(message.from))}`,
+    `${escapeHtml(labels.date)} : ${escapeHtml(date)}`,
+    `${escapeHtml(labels.subject)} : ${escapeHtml(message.subject)}`,
+    `${escapeHtml(labels.to)} : ${escapeHtml(list(message.to))}`,
+  ]
+  if (message.cc.length > 0) {
+    lines.push(`${escapeHtml(labels.cc)} : ${escapeHtml(list(message.cc))}`)
+  }
+
+  const body = message.htmlBody
+    ? message.htmlBody
+    : `<p>${escapeHtml(message.textBody ?? "").replace(/\n/g, "<br>")}</p>`
+
+  const quotedHtml = sanitizeComposeHtml(
+    `<p><br></p><p>${lines.join("<br>")}</p><blockquote>${body}</blockquote>`
+  )
+
+  return {
+    subject: prefixSubject(threadSubject, "Fwd"),
+    quotedHtml,
+    attachments: message.attachments,
   }
 }
 
@@ -153,6 +221,7 @@ export interface SendBody {
   text: string
   inReplyTo?: string
   references: string[]
+  attachments: AppAttachment[]
 }
 
 const EMAIL_CREATE_ID = "draft"
@@ -183,6 +252,17 @@ export function buildSendMethodCalls(
     draft["header:In-Reply-To:asMessageIds"] = [body.inReplyTo]
   if (body.references.length > 0)
     draft["header:References:asMessageIds"] = body.references
+
+  // Transfert (#79) : blobs existants du compte référencés tels quels (RFC 8621,
+  // propriété de commodité). size jamais transmis — Stalwart le recalcule (F1/F2).
+  if (body.attachments.length > 0) {
+    draft.attachments = body.attachments.map((a) => ({
+      blobId: a.blobId,
+      type: a.type,
+      name: a.name,
+      disposition: "attachment",
+    }))
+  }
 
   // Enveloppe SMTP : tous les destinataires, bcc compris (mais jamais en en-tête).
   const rcptTo = [...body.to, ...body.cc, ...body.bcc].map((a) => ({

@@ -141,4 +141,50 @@ describe("MessageItem", () => {
     )
     expect(container.querySelector(".nm")?.textContent).toBe("—")
   })
+
+  it("affiche le bouton Transférer quand le message est ouvert et notifie onForward", () => {
+    const onForward = vi.fn()
+    const message = msg()
+    wrap(<MessageItem message={message} defaultOpen onForward={onForward} />)
+    fireEvent.click(
+      screen.getByRole("button", { name: /Transférer le message/ })
+    )
+    expect(onForward).toHaveBeenCalledWith(message)
+  })
+
+  it("le nom accessible du bouton Transférer inclut l'expéditeur (unique par message)", () => {
+    wrap(<MessageItem message={msg()} defaultOpen onForward={() => {}} />)
+    expect(
+      screen.getByRole("button", { name: "Transférer le message de Bob" })
+    ).toBeInTheDocument()
+  })
+
+  it("le clic sur Transférer ne replie pas le message", () => {
+    wrap(<MessageItem message={msg()} defaultOpen onForward={() => {}} />)
+    fireEvent.click(
+      screen.getByRole("button", { name: /Transférer le message/ })
+    )
+    // le corps reste visible → le toggle du header n'a pas été déclenché
+    expect(
+      screen.getByLabelText("Transférer le message de Bob")
+    ).toBeInTheDocument()
+    expect(document.querySelector(".msg.collapsed")).toBeNull()
+  })
+
+  it("pas de bouton Transférer quand le message est replié ou sans onForward", () => {
+    const { rerender } = wrap(
+      <MessageItem message={msg()} onForward={() => {}} />
+    )
+    expect(
+      screen.queryByRole("button", { name: /Transférer le message/ })
+    ).not.toBeInTheDocument()
+    rerender(
+      <I18nextProvider i18n={createI18n("fr")}>
+        <MessageItem message={msg()} defaultOpen />
+      </I18nextProvider>
+    )
+    expect(
+      screen.queryByRole("button", { name: /Transférer le message/ })
+    ).not.toBeInTheDocument()
+  })
 })

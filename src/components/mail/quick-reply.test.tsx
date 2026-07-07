@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { QuickReply } from "./quick-reply"
+import { useQuickReplyDraft } from "./use-quick-reply-draft"
 import type { AppThreadDetail } from "../../server/mail-types"
+import type { ComposerDraft } from "./use-composer"
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  useTranslation: () => ({
+    t: (k: string) => k,
+    i18n: { language: "fr-FR" },
+  }),
 }))
 
 const detail: AppThreadDetail = {
@@ -58,30 +63,39 @@ const detailWithCc: AppThreadDetail = {
   ],
 }
 
+// Harnais : QuickReply est présentationnel, l'état du brouillon vit dans le hook.
+function Harness({
+  detail: thread,
+  onSend,
+  sending = false,
+}: {
+  detail: AppThreadDetail
+  onSend: (d: ComposerDraft) => boolean | void | Promise<boolean | void>
+  sending?: boolean
+}) {
+  const qr = useQuickReplyDraft(thread, "me@x.fr")
+  return (
+    <QuickReply
+      draft={qr.draft}
+      sending={sending}
+      onOpenReply={qr.openReply}
+      onPatch={qr.patch}
+      onClose={qr.close}
+      onSend={onSend}
+    />
+  )
+}
+
 describe("QuickReply", () => {
   it("affiche la barre de réponse et passe en mode édition au clic", () => {
-    render(
-      <QuickReply
-        detail={detail}
-        selfEmail="me@x.fr"
-        sending={false}
-        onSend={() => {}}
-      />
-    )
+    render(<Harness detail={detail} onSend={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
     expect(screen.getByLabelText("mail.compose.body")).toBeInTheDocument()
   })
 
   it("envoie un brouillon de réponse pré-rempli (mode reply, objet Re:)", () => {
     const onSend = vi.fn()
-    render(
-      <QuickReply
-        detail={detail}
-        selfEmail="me@x.fr"
-        sending={false}
-        onSend={onSend}
-      />
-    )
+    render(<Harness detail={detail} onSend={onSend} />)
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
     expect(onSend).toHaveBeenCalledWith(
@@ -89,6 +103,7 @@ describe("QuickReply", () => {
         mode: "reply",
         to: "Alice <alice@x.fr>",
         subject: "Re: Sujet",
+        attachments: [],
       })
     )
   })
@@ -96,14 +111,7 @@ describe("QuickReply", () => {
   it("réinitialise la réponse rapide après un envoi réussi (onSend → true)", async () => {
     // Contrat async réel : onSend renvoie une Promise<boolean> (comme composer.send).
     const onSend = vi.fn().mockResolvedValue(true)
-    render(
-      <QuickReply
-        detail={detail}
-        selfEmail="me@x.fr"
-        sending={false}
-        onSend={onSend}
-      />
-    )
+    render(<Harness detail={detail} onSend={onSend} />)
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
     expect(screen.getByLabelText("mail.compose.body")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
@@ -120,14 +128,7 @@ describe("QuickReply", () => {
 
   it("garde la réponse rapide ouverte ET préserve le contenu si l'envoi échoue (onSend résout false)", async () => {
     const onSend = vi.fn().mockResolvedValue(false)
-    render(
-      <QuickReply
-        detail={detail}
-        selfEmail="me@x.fr"
-        sending={false}
-        onSend={onSend}
-      />
-    )
+    render(<Harness detail={detail} onSend={onSend} />)
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
     // La citation pré-remplie ("corps" du dernier message) est dans l'éditeur.
     expect(screen.getByLabelText("mail.compose.body")).toHaveTextContent(
@@ -143,14 +144,7 @@ describe("QuickReply", () => {
 
   it("threading reply : inReplyTo et references reprennent le Message-ID du dernier message", () => {
     const onSend = vi.fn()
-    render(
-      <QuickReply
-        detail={detailWithMessageId}
-        selfEmail="me@x.fr"
-        sending={false}
-        onSend={onSend}
-      />
-    )
+    render(<Harness detail={detailWithMessageId} onSend={onSend} />)
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.send" }))
     expect(onSend).toHaveBeenCalledWith(
@@ -163,14 +157,7 @@ describe("QuickReply", () => {
 
   it("replyAll : selfEmail est exclu du Cc du brouillon émis", () => {
     const onSend = vi.fn()
-    render(
-      <QuickReply
-        detail={detailWithCc}
-        selfEmail="me@x.fr"
-        sending={false}
-        onSend={onSend}
-      />
-    )
+    render(<Harness detail={detailWithCc} onSend={onSend} />)
     fireEvent.click(
       screen.getByRole("button", { name: "mail.compose.replyAll" })
     )
@@ -180,5 +167,59 @@ describe("QuickReply", () => {
     expect(draft.cc).not.toMatch(/me@x\.fr/)
     // Bob doit être présent
     expect(draft.cc).toMatch(/bob@x\.fr/)
+  })
+
+  it("n'affiche plus de bouton Transférer dans la barre", () => {
+    render(<Harness detail={detail} onSend={() => {}} />)
+    expect(
+      screen.queryByRole("button", { name: "mail.compose.forward" })
+    ).not.toBeInTheDocument()
+  })
+})
+
+// Harnais dédié : expose openForward (déclenché par MessageItem en T7, simulé ici).
+function ForwardHarness({ detail: thread }: { detail: AppThreadDetail }) {
+  const qr = useQuickReplyDraft(thread, "me@x.fr")
+  return (
+    <>
+      <button onClick={() => qr.openForward(thread.messages[0])}>fwd</button>
+      <QuickReply
+        draft={qr.draft}
+        sending={false}
+        onOpenReply={qr.openReply}
+        onPatch={qr.patch}
+        onClose={qr.close}
+        onSend={() => {}}
+      />
+    </>
+  )
+}
+
+const detailWithAttachment: AppThreadDetail = {
+  ...detail,
+  messages: [
+    {
+      ...detail.messages[0],
+      attachments: [
+        { blobId: "b1", name: "f.pdf", type: "application/pdf", size: 2048 },
+      ],
+    },
+  ],
+}
+
+describe("QuickReply — pièces jointes du transfert", () => {
+  it("forward : affiche les puces de pièces jointes reprises", () => {
+    render(<ForwardHarness detail={detailWithAttachment} />)
+    fireEvent.click(screen.getByText("fwd"))
+    expect(screen.getByText("f.pdf")).toBeInTheDocument()
+  })
+
+  it("forward : retire une pièce jointe via son bouton ×", () => {
+    render(<ForwardHarness detail={detailWithAttachment} />)
+    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(
+      screen.getByRole("button", { name: "mail.compose.removeAttachment" })
+    )
+    expect(screen.queryByText("f.pdf")).not.toBeInTheDocument()
   })
 })
