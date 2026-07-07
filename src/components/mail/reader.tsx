@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { MessageItem } from "./message-item"
 import { QuickReply } from "./quick-reply"
+import { useQuickReplyDraft } from "./use-quick-reply-draft"
 import type { AppThreadDetail } from "../../server/mail-types"
 import type { MoveTo } from "./use-thread-actions"
 import type { ComposerDraft } from "./use-composer"
@@ -42,6 +43,9 @@ export function Reader({
   onUntrustSender,
 }: ReaderProps) {
   const { t } = useTranslation()
+  // Instancié avant les early-returns (règle des hooks) : l'état du brouillon
+  // de réponse rapide vit ici pour être partagé avec le transfert par-message.
+  const quickReply = useQuickReplyDraft(detail, selfEmail ?? "")
 
   if (isError) {
     return (
@@ -185,9 +189,11 @@ export function Reader({
 
               {onSend && (
                 <QuickReply
-                  detail={detail}
-                  selfEmail={selfEmail ?? ""}
+                  draft={quickReply.draft}
                   sending={sending ?? false}
+                  onOpenReply={quickReply.openReply}
+                  onPatch={quickReply.patch}
+                  onClose={quickReply.close}
                   onSend={onSend}
                 />
               )}

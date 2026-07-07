@@ -779,6 +779,10 @@
 .quick-reply .qr-to { flex: 1; min-width: 0; border: none; background: none; font-family: inherit; font-size: 13.5px; color: var(--ink); }
 /* focus clavier visible (a11y) ; invisible à la souris via :focus-visible */
 .quick-reply .qr-to:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* puces de pièces jointes reprises au transfert (retirables) */
+.quick-reply .attach-row { padding: 10px 14px 0; }
+.attach-x { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; flex: none; display: grid; place-items: center; }
+.attach-x:hover { background: var(--hover); color: var(--ink); }
 .quick-reply textarea {
   width: 100%; border: none; background: none; outline: none; resize: none;
   font-family: inherit; font-size: 14px; color: var(--ink); padding: 14px; min-height: 84px; line-height: 1.6;
