@@ -1,4 +1,9 @@
-import type { MailAddress, AppThreadDetail } from "./mail-types"
+import type {
+  MailAddress,
+  AppThreadDetail,
+  AppMessage,
+  AppAttachment,
+} from "./mail-types"
 import { sanitizeComposeHtml } from "../lib/compose-html"
 import type { JmapMethodResponse, JmapMethodCall } from "./jmap"
 
@@ -113,6 +118,78 @@ export function buildReplyContext(
     inReplyTo: lastMessageId,
     references,
     quotedHtml,
+  }
+}
+
+// Échappe une valeur non fiable avant interpolation dans le HTML du composer.
+// Requis pour la sécurité (nom d'expéditeur hostile) ET la correction : les
+// adresses "Nom <a@b>" seraient sinon avalées comme balises par DOMPurify.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+export interface ForwardLabels {
+  forwarded: string
+  from: string
+  date: string
+  subject: string
+  to: string
+  cc: string
+}
+
+export interface ForwardContext {
+  subject: string
+  quotedHtml: string
+  attachments: AppAttachment[]
+}
+
+// Contexte de transfert d'UN message (issue #79) : bloc d'en-tête + corps cité +
+// pièces jointes de l'original. Libellés injectés (i18n en couche UI, fonction pure).
+// quotedHtml passe TOUJOURS par sanitizeComposeHtml (B1) ; champs interpolés échappés.
+export function buildForwardContext(
+  message: AppMessage,
+  threadSubject: string,
+  labels: ForwardLabels,
+  locale: string
+): ForwardContext {
+  const addr = (a: MailAddress) => (a.name ? `${a.name} <${a.email}>` : a.email)
+  const list = (as: MailAddress[]) => as.map(addr).join(", ")
+  const date = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(message.receivedAt))
+
+  const lines = [
+    `---------- ${escapeHtml(labels.forwarded)} ----------`,
+    `${escapeHtml(labels.from)} : ${escapeHtml(list(message.from))}`,
+    `${escapeHtml(labels.date)} : ${escapeHtml(date)}`,
+    `${escapeHtml(labels.subject)} : ${escapeHtml(message.subject)}`,
+    `${escapeHtml(labels.to)} : ${escapeHtml(list(message.to))}`,
+  ]
+  if (message.cc.length > 0) {
+    lines.push(`${escapeHtml(labels.cc)} : ${escapeHtml(list(message.cc))}`)
+  }
+
+  const body = message.htmlBody
+    ? message.htmlBody
+    : `<p>${escapeHtml(message.textBody ?? "").replace(/\n/g, "<br>")}</p>`
+
+  const quotedHtml = sanitizeComposeHtml(
+    `<p><br></p><p>${lines.join("<br>")}</p><blockquote>${body}</blockquote>`
+  )
+
+  return {
+    subject: prefixSubject(threadSubject, "Fwd"),
+    quotedHtml,
+    attachments: message.attachments,
   }
 }
 

@@ -3,6 +3,7 @@ import {
   parseAddressList,
   isCleanHeaderValue,
   buildReplyContext,
+  buildForwardContext,
   pickSendIdentity,
   buildSendMethodCalls,
   parseSendResult,
@@ -110,6 +111,86 @@ describe("buildReplyContext", () => {
       "me@x.fr"
     )
     expect(ctx.subject).toBe("Fwd: Sujet")
+  })
+})
+
+describe("buildForwardContext", () => {
+  const labels = {
+    forwarded: "Message transféré",
+    from: "De",
+    date: "Date",
+    subject: "Objet",
+    to: "À",
+    cc: "Cc",
+  }
+
+  it("génère l'en-tête de transfert complet (Fwd:, De, Date, Objet, À, Cc)", () => {
+    const ctx = buildForwardContext(msg(), "Sujet", labels, "fr-FR")
+    expect(ctx.subject).toBe("Fwd: Sujet")
+    expect(ctx.quotedHtml).toContain("Message transféré")
+    expect(ctx.quotedHtml).toContain("De : Alice &lt;alice@x.fr&gt;")
+    expect(ctx.quotedHtml).toContain("Objet : Sujet")
+    expect(ctx.quotedHtml).toContain("À : Moi &lt;me@x.fr&gt;")
+    expect(ctx.quotedHtml).toContain("Cc : Bob &lt;bob@x.fr&gt;")
+    expect(ctx.quotedHtml).toContain("2026") // date absolue localisée
+    expect(ctx.quotedHtml).toContain("<blockquote>")
+    expect(ctx.quotedHtml).toContain("corps")
+  })
+
+  it("omet la ligne Cc quand l'original n'en a pas", () => {
+    const ctx = buildForwardContext(msg({ cc: [] }), "Sujet", labels, "fr-FR")
+    expect(ctx.quotedHtml).not.toContain("Cc :")
+  })
+
+  it("ne double pas le préfixe Fwd: déjà présent", () => {
+    const ctx = buildForwardContext(msg(), "Fwd: Sujet", labels, "fr-FR")
+    expect(ctx.subject).toBe("Fwd: Sujet")
+  })
+
+  it("échappe le HTML hostile des champs du message (B1)", () => {
+    const evil = msg({
+      from: [{ name: '<img src=x onerror="alert(1)">', email: "e@x.fr" }],
+      subject: "</p><script>x()</script>",
+    })
+    const ctx = buildForwardContext(evil, "Sujet", labels, "fr-FR")
+    // Le nom devient du texte inerte : DOMPurify conserve `&lt;`/`&gt;` échappés (empêche
+    // toute balise réelle) mais désérialise `&quot;` en guillemet littéral dans un nœud
+    // texte (conforme HTML : les guillemets n'ont pas besoin d'échappement hors attribut).
+    // Le mot "onerror" reste donc visible en texte affiché, sans jamais devenir un
+    // attribut DOM actif — la garantie de sécurité est l'absence de balise, pas le mot.
+    expect(ctx.quotedHtml).not.toContain("<img")
+    expect(ctx.quotedHtml).toContain("&lt;img")
+    expect(ctx.quotedHtml).not.toContain("<script")
+  })
+
+  it("sanitise le corps HTML original (B1)", () => {
+    const evil = msg({ htmlBody: '<p>ok</p><img src=x onerror="alert(1)">' })
+    const ctx = buildForwardContext(evil, "Sujet", labels, "fr-FR")
+    expect(ctx.quotedHtml).not.toContain("onerror")
+    expect(ctx.quotedHtml).toContain("ok")
+  })
+
+  it("repli textBody échappé quand pas de corps HTML", () => {
+    const ctx = buildForwardContext(
+      msg({ htmlBody: "", textBody: "ligne1\nligne2 <tag>" }),
+      "Sujet",
+      labels,
+      "fr-FR"
+    )
+    expect(ctx.quotedHtml).toContain("ligne1<br>ligne2 &lt;tag&gt;")
+  })
+
+  it("transmet les pièces jointes de l'original telles quelles", () => {
+    const atts = [
+      { blobId: "b1", name: "rapport.pdf", type: "application/pdf", size: 5 },
+    ]
+    const ctx = buildForwardContext(
+      msg({ attachments: atts }),
+      "Sujet",
+      labels,
+      "fr-FR"
+    )
+    expect(ctx.attachments).toEqual(atts)
   })
 })
 
