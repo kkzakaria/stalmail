@@ -78,8 +78,10 @@ function buildForwardContext(
   fonction reste pure et testable isolément, l'i18n reste dans la couche UI.
 - **Sujet** : `prefixSubject(threadSubject, "Fwd")` (existant, ne double pas
   le préfixe).
-- **Corps généré** — uniquement des balises déjà autorisées par
-  `sanitizeComposeHtml` (`p`, `br`, `blockquote`) :
+- **Corps généré** — uniquement des balises autorisées par
+  `sanitizeComposeHtml` (`p`, `br`, plus `blockquote` **ajouté à l'allowlist**
+  au cours de l'implémentation — il n'y figurait pas et la citation reply
+  perdait silencieusement sa balise ; balise inerte, sans attribut) :
 
   ```html
   <p><br /></p>
