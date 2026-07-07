@@ -184,6 +184,7 @@ export function Reader({
                   onHideImages={onHideImages}
                   onTrustSender={onTrustSender}
                   onUntrustSender={onUntrustSender}
+                  onForward={onSend ? quickReply.openForward : undefined}
                 />
               ))}
 

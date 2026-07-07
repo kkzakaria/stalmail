@@ -57,6 +57,7 @@ export function MessageItem({
   onHideImages,
   onTrustSender,
   onUntrustSender,
+  onForward,
 }: {
   message: AppMessage
   defaultOpen?: boolean
@@ -64,6 +65,7 @@ export function MessageItem({
   onHideImages?: (emailId: string) => void
   onTrustSender?: (sender: string) => void
   onUntrustSender?: (sender: string) => void
+  onForward?: (message: AppMessage) => void
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(defaultOpen)
@@ -108,6 +110,22 @@ export function MessageItem({
           )}
         </div>
         <div className="when">{formatThreadDate(message.receivedAt)}</div>
+        {open && onForward && (
+          <button
+            type="button"
+            className="icon-btn sm"
+            aria-label={t("mail.compose.forward")}
+            title={t("mail.compose.forward")}
+            onClick={(e) => {
+              // Le header parent est cliquable (toggle repli) : on isole le bouton.
+              e.stopPropagation()
+              onForward(message)
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <Icon name="forward" size={16} />
+          </button>
+        )}
       </div>
 
       {open && (
