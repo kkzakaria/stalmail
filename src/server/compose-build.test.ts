@@ -61,14 +61,6 @@ describe("buildReplyContext", () => {
     expect(ctx.cc).toEqual([{ name: "Bob", email: "bob@x.fr" }])
   })
 
-  it("forward : to et cc vides, objet préfixé Fwd:", () => {
-    const ctx = buildReplyContext(detail([msg()]), "forward", "me@x.fr")
-    expect(ctx.to).toEqual([])
-    expect(ctx.cc).toEqual([])
-    expect(ctx.subject).toBe("Fwd: Sujet")
-    expect(ctx.quotedHtml).toContain("corps")
-  })
-
   it("sans lastMessageId : inReplyTo undefined, references vide", () => {
     const ctx = buildReplyContext(detail([msg()]), "reply", "me@x.fr")
     expect(ctx.inReplyTo).toBeUndefined()
@@ -102,15 +94,6 @@ describe("buildReplyContext", () => {
         "me@x.fr"
       )
     ).toThrow()
-  })
-
-  it("ne double pas le préfixe Fwd: déjà présent", () => {
-    const ctx = buildReplyContext(
-      detail([msg({ subject: "Fwd: Sujet" })]),
-      "forward",
-      "me@x.fr"
-    )
-    expect(ctx.subject).toBe("Fwd: Sujet")
   })
 })
 

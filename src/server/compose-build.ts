@@ -75,11 +75,12 @@ function dedupeByEmail(
   return out
 }
 
-// Construit le contexte de réponse/transfert depuis le dernier message du fil.
+// Construit le contexte de réponse depuis le dernier message du fil. Le transfert
+// a son propre chemin (buildForwardContext, par-message — #79).
 // quotedHtml passe TOUJOURS par sanitizeComposeHtml : le htmlBody d'origine est non fiable (B1).
 export function buildReplyContext(
   detail: AppThreadDetail,
-  mode: ComposeMode,
+  mode: "reply" | "replyAll",
   selfEmail: string,
   lastMessageId?: string
 ): ReplyContext {
@@ -92,16 +93,6 @@ export function buildReplyContext(
         `<p><br></p><blockquote>${last.htmlBody}</blockquote>`
       )
     : ""
-
-  if (mode === "forward") {
-    return {
-      to: [],
-      cc: [],
-      subject: prefixSubject(detail.subject, "Fwd"),
-      references: [],
-      quotedHtml,
-    }
-  }
 
   const to = last.from
   const cc =
