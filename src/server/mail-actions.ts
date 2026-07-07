@@ -856,6 +856,26 @@ const headerLine = z
 
 const messageId = z.string().min(3).max(998).refine(isCleanHeaderValue)
 
+// F1 (spec transfert) : name/type finissent dans les en-têtes MIME de la part.
+// Sans re-traitement serveur en aval, CE schéma est le contrôle autoritaire
+// anti-CRLF, au même titre que headerLine pour le sujet.
+const attachmentSchema = z.object({
+  blobId: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[A-Za-z0-9_-]+$/),
+  name: z
+    .string()
+    .max(255)
+    .refine(isCleanHeaderValue, "name: caractère interdit"),
+  type: z
+    .string()
+    .max(127)
+    .regex(/^[\w.+-]+\/[\w.+-]+$/),
+  size: z.number().int().nonnegative(),
+})
+
 export const sendMailSchema = z
   .object({
     mode: z.enum(["compose", "reply", "replyAll", "forward"]),
@@ -866,6 +886,7 @@ export const sendMailSchema = z
     html: z.string().max(256 * 1024),
     inReplyTo: messageId.optional(),
     references: z.array(messageId).max(50),
+    attachments: z.array(attachmentSchema).max(50).default([]),
   })
   .refine((d) => d.to.length + d.cc.length + d.bcc.length <= 100, {
     message: "trop de destinataires",
@@ -924,6 +945,7 @@ export const sendMailFn = createServerFn({ method: "POST" })
         text,
         inReplyTo: data.inReplyTo,
         references: data.references,
+        attachments: data.attachments,
       }
 
       const responses = await jmapUserCall(

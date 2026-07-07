@@ -294,6 +294,7 @@ const body = (over: Partial<SendBody> = {}): SendBody => ({
   html: "<p>Salut</p>",
   text: "Salut",
   references: [],
+  attachments: [],
   ...over,
 })
 
@@ -358,6 +359,32 @@ describe("buildSendMethodCalls", () => {
     )[0]
     expect(d["header:In-Reply-To:asMessageIds"]).toEqual(["<mid@x.fr>"])
     expect(d["header:References:asMessageIds"]).toEqual(["<mid@x.fr>"])
+  })
+
+  it("ajoute attachments[] (disposition attachment, sans size) quand non vide", () => {
+    const withAtt = body({
+      attachments: [
+        { blobId: "b1", name: "f.pdf", type: "application/pdf", size: 10 },
+      ],
+    })
+    const withAttCalls = buildSendMethodCalls("acc", withAtt, ctx)
+    const d = (
+      withAttCalls.find((c) => c[0] === "Email/set")![1] as {
+        create: Record<string, Record<string, unknown>>
+      }
+    ).create.draft
+    expect(d.attachments).toEqual([
+      {
+        blobId: "b1",
+        type: "application/pdf",
+        name: "f.pdf",
+        disposition: "attachment",
+      },
+    ])
+  })
+
+  it("pas de clé attachments quand la liste est vide", () => {
+    expect(draft.attachments).toBeUndefined()
   })
 })
 

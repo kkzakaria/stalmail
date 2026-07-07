@@ -230,6 +230,7 @@ export interface SendBody {
   text: string
   inReplyTo?: string
   references: string[]
+  attachments: AppAttachment[]
 }
 
 const EMAIL_CREATE_ID = "draft"
@@ -260,6 +261,17 @@ export function buildSendMethodCalls(
     draft["header:In-Reply-To:asMessageIds"] = [body.inReplyTo]
   if (body.references.length > 0)
     draft["header:References:asMessageIds"] = body.references
+
+  // Transfert (#79) : blobs existants du compte référencés tels quels (RFC 8621,
+  // propriété de commodité). size jamais transmis — Stalwart le recalcule (F1/F2).
+  if (body.attachments.length > 0) {
+    draft.attachments = body.attachments.map((a) => ({
+      blobId: a.blobId,
+      type: a.type,
+      name: a.name,
+      disposition: "attachment",
+    }))
+  }
 
   // Enveloppe SMTP : tous les destinataires, bcc compris (mais jamais en en-tête).
   const rcptTo = [...body.to, ...body.cc, ...body.bcc].map((a) => ({

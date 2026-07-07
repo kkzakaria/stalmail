@@ -2,8 +2,8 @@ import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import { sendMailFn } from "../../server/mail-actions"
-import { parseAddressList  } from "../../server/compose-build"
-import type {ComposeMode} from "../../server/compose-build";
+import { parseAddressList } from "../../server/compose-build"
+import type { ComposeMode } from "../../server/compose-build"
 import { useToast } from "./toast"
 
 export interface ComposerDraft {
@@ -55,6 +55,8 @@ export function useComposer(folder: string): UseComposer {
           html: draft.html,
           inReplyTo: draft.inReplyTo,
           references: draft.references,
+          // Pièces jointes de transfert : ComposerDraft ne les porte pas encore (T4).
+          attachments: [],
         },
       })
       notify(t("mail.compose.sent"), "success")

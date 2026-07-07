@@ -835,6 +835,58 @@ describe("sendMailSchema", () => {
       sendMailSchema.parse({ ...base, to: [{ name: "", email: "x" }] })
     ).toThrow()
   })
+
+  const att = {
+    blobId: "G-abc_123",
+    name: "rapport.pdf",
+    type: "application/pdf",
+    size: 1024,
+  }
+
+  it("attachments : accepte une pièce valide et vaut [] par défaut", () => {
+    expect(() =>
+      sendMailSchema.parse({ ...base, attachments: [att] })
+    ).not.toThrow()
+    expect(sendMailSchema.parse(base).attachments).toEqual([])
+  })
+
+  it("attachments : rejette un name avec CRLF (F1, injection d'en-tête MIME)", () => {
+    expect(() =>
+      sendMailSchema.parse({
+        ...base,
+        attachments: [{ ...att, name: "a.pdf\r\nX-Evil: 1" }],
+      })
+    ).toThrow()
+  })
+
+  it("attachments : rejette un type hors forme type/subtype (F1)", () => {
+    for (const type of [
+      "texthtml",
+      "text/html\r\nX: 1",
+      "text/html; charset=x",
+    ]) {
+      expect(() =>
+        sendMailSchema.parse({ ...base, attachments: [{ ...att, type }] })
+      ).toThrow()
+    }
+  })
+
+  it("attachments : rejette un blobId hors alphabet sûr (F1)", () => {
+    expect(() =>
+      sendMailSchema.parse({
+        ...base,
+        attachments: [{ ...att, blobId: 'a"b c' }],
+      })
+    ).toThrow()
+  })
+
+  it("attachments : rejette plus de 50 pièces", () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({
+      ...att,
+      blobId: `b${i}`,
+    }))
+    expect(() => sendMailSchema.parse({ ...base, attachments: many })).toThrow()
+  })
 })
 
 describe("buildShowImagesCall (pur)", () => {
