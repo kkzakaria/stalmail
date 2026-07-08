@@ -134,6 +134,10 @@ export function QuickReply({
             id="qr-cc"
             value={draft.cc}
             onChange={(e) => onPatch({ cc: e.target.value })}
+            // Rangée vide quittée → retour à la bascule (retour prod v0.1.47).
+            onBlur={() => {
+              if (draft.cc.trim() === "") setShowCc(false)
+            }}
           />
         </div>
       )}
@@ -144,6 +148,10 @@ export function QuickReply({
             id="qr-bcc"
             value={draft.bcc}
             onChange={(e) => onPatch({ bcc: e.target.value })}
+            // Rangée vide quittée → retour à la bascule (retour prod v0.1.47).
+            onBlur={() => {
+              if (draft.bcc.trim() === "") setShowBcc(false)
+            }}
           />
         </div>
       )}

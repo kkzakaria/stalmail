@@ -330,4 +330,37 @@ describe("QuickReply — bascules Cc/Cci (transfert uniquement)", () => {
       screen.getByRole("button", { name: "mail.compose.cc" })
     ).toBeInTheDocument()
   })
+
+  it("forward : referme la rangée Cc vide au blur (bascule de retour)", () => {
+    render(<ForwardHarness detail={detail} />)
+    fireEvent.click(screen.getByText("fwd A"))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.blur(screen.getByLabelText("mail.compose.cc"))
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+  })
+
+  it("forward : garde la rangée Cci ouverte au blur quand elle a une valeur", () => {
+    render(<ForwardHarness detail={detail} />)
+    fireEvent.click(screen.getByText("fwd A"))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
+    const bcc = screen.getByLabelText<HTMLInputElement>("mail.compose.bcc")
+    fireEvent.change(bcc, { target: { value: "bob@x.fr" } })
+    fireEvent.blur(bcc)
+    expect(
+      screen.getByLabelText<HTMLInputElement>("mail.compose.bcc").value
+    ).toBe("bob@x.fr")
+  })
+
+  it("forward : referme la rangée Cc au blur avec des espaces seuls", () => {
+    render(<ForwardHarness detail={detail} />)
+    fireEvent.click(screen.getByText("fwd A"))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    const cc = screen.getByLabelText<HTMLInputElement>("mail.compose.cc")
+    fireEvent.change(cc, { target: { value: "  " } })
+    fireEvent.blur(cc)
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+  })
 })
