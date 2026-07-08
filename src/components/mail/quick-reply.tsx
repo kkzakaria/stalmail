@@ -6,6 +6,10 @@ import type { ComposerDraft } from "./use-composer"
 
 export interface QuickReplyProps {
   draft: ComposerDraft | null
+  // Incrémenté à chaque OUVERTURE de brouillon (openReply/openForward), pas
+  // sur un patch — sert à réinitialiser les bascules Cc/Cci ci-dessous
+  // quand une nouvelle cible remplace l'ancienne sans fermeture (#142).
+  draftKey: number
   sending: boolean
   onOpenReply: (mode: "reply" | "replyAll") => void
   onPatch: (patch: Partial<ComposerDraft>) => void
@@ -18,6 +22,7 @@ export interface QuickReplyProps {
 // Le transfert n'a plus de bouton ici — il est par-message (MessageItem, #79).
 export function QuickReply({
   draft,
+  draftKey,
   sending,
   onOpenReply,
   onPatch,
@@ -27,15 +32,15 @@ export function QuickReply({
   const { t } = useTranslation()
   const [showFormat, setShowFormat] = useState(false)
   // Bascules INDÉPENDANTES Cc/Cci (pattern du grand Composer), forward uniquement.
-  // Réinitialisées à la fermeture du brouillon (le composant reste monté).
+  // Réinitialisées à chaque OUVERTURE (draftKey), pas à chaque patch : un
+  // changement de cible sans fermeture (transférer A puis B) doit aussi
+  // refermer les rangées (revue PR #142) — un simple `[!draft]` les ratait.
   const [showCc, setShowCc] = useState(false)
   const [showBcc, setShowBcc] = useState(false)
   useEffect(() => {
-    if (!draft) {
-      setShowCc(false)
-      setShowBcc(false)
-    }
-  }, [draft])
+    setShowCc(false)
+    setShowBcc(false)
+  }, [draftKey])
 
   if (!draft) {
     return (

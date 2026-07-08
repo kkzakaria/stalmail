@@ -77,6 +77,7 @@ function Harness({
   return (
     <QuickReply
       draft={qr.draft}
+      draftKey={qr.draftKey}
       sending={sending}
       onOpenReply={qr.openReply}
       onPatch={qr.patch}
@@ -189,13 +190,21 @@ describe("QuickReply", () => {
 })
 
 // Harnais dédié : expose openForward (déclenché par MessageItem en T7, simulé ici).
+// Deux boutons "fwd A"/"fwd B" (messages[0]/messages[1] si présents) pour
+// simuler le changement de cible de transfert sans fermer l'éditeur (#142).
 function ForwardHarness({ detail: thread }: { detail: AppThreadDetail }) {
   const qr = useQuickReplyDraft(thread, "me@x.fr")
   return (
     <>
-      <button onClick={() => qr.openForward(thread.messages[0])}>fwd</button>
+      <button onClick={() => qr.openForward(thread.messages[0])}>fwd A</button>
+      {thread.messages[1] && (
+        <button onClick={() => qr.openForward(thread.messages[1])}>
+          fwd B
+        </button>
+      )}
       <QuickReply
         draft={qr.draft}
+        draftKey={qr.draftKey}
         sending={false}
         onOpenReply={qr.openReply}
         onPatch={qr.patch}
@@ -218,16 +227,31 @@ const detailWithAttachment: AppThreadDetail = {
   ],
 }
 
+// Fil à deux messages : pour simuler le transfert de A puis B sans fermeture
+// intermédiaire de l'éditeur (revue PR #142).
+const detailTwoMessages: AppThreadDetail = {
+  ...detail,
+  messages: [
+    detail.messages[0],
+    {
+      ...detail.messages[0],
+      id: "m2",
+      from: [{ name: "Charlie", email: "charlie@x.fr" }],
+    },
+  ],
+  emailIds: ["m1", "m2"],
+}
+
 describe("QuickReply — pièces jointes du transfert", () => {
   it("forward : affiche les puces de pièces jointes reprises", () => {
     render(<ForwardHarness detail={detailWithAttachment} />)
-    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByText("fwd A"))
     expect(screen.getByText("f.pdf")).toBeInTheDocument()
   })
 
   it("forward : retire une pièce jointe via son bouton ×", () => {
     render(<ForwardHarness detail={detailWithAttachment} />)
-    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByText("fwd A"))
     fireEvent.click(
       screen.getByRole("button", { name: "mail.compose.removeAttachment" })
     )
@@ -238,7 +262,7 @@ describe("QuickReply — pièces jointes du transfert", () => {
 describe("QuickReply — bascules Cc/Cci (transfert uniquement)", () => {
   it("forward : la bascule Cc révèle une rangée reliée et la saisie patch draft.cc", () => {
     render(<ForwardHarness detail={detail} />)
-    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByText("fwd A"))
     // bascules visibles, rangées absentes
     expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
@@ -257,7 +281,7 @@ describe("QuickReply — bascules Cc/Cci (transfert uniquement)", () => {
 
   it("forward : la bascule Cci révèle sa rangée (indépendante de Cc)", () => {
     render(<ForwardHarness detail={detail} />)
-    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByText("fwd A"))
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
     expect(screen.getByLabelText("mail.compose.bcc")).toBeInTheDocument()
     expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
@@ -278,11 +302,26 @@ describe("QuickReply — bascules Cc/Cci (transfert uniquement)", () => {
 
   it("fermer puis rouvrir : les rangées Cc/Cci sont refermées", () => {
     render(<ForwardHarness detail={detail} />)
-    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByText("fwd A"))
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
     expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.close" }))
-    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByText("fwd A"))
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+  })
+
+  it("transférer A, ouvrir Cc, transférer B SANS fermer → la rangée Cc se referme (revue PR #142)", () => {
+    // Fil à deux messages : transférer B remplace le brouillon (non-null →
+    // non-null) sans passer par la fermeture — c'est le cas manqué par
+    // l'ancien useEffect (reset uniquement sur !draft).
+    render(<ForwardHarness detail={detailTwoMessages} />)
+    fireEvent.click(screen.getByText("fwd A"))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
+    fireEvent.click(screen.getByText("fwd B"))
     expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
     expect(
       screen.getByRole("button", { name: "mail.compose.cc" })

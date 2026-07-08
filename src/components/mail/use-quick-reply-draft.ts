@@ -19,6 +19,10 @@ function formatAddrs(addrs: MailAddress[]): string {
 
 export interface UseQuickReplyDraft {
   draft: ComposerDraft | null
+  // Identifie chaque OUVERTURE de brouillon (les patchs ne l'incrémentent
+  // pas) — permet à l'UI de réinitialiser ses états locaux quand une
+  // nouvelle cible remplace l'ancienne sans fermeture (revue PR #142).
+  draftKey: number
   openReply: (mode: "reply" | "replyAll") => void
   openForward: (message: AppMessage) => void
   patch: (p: Partial<ComposerDraft>) => void
@@ -34,6 +38,10 @@ export function useQuickReplyDraft(
 ): UseQuickReplyDraft {
   const { t, i18n } = useTranslation()
   const [draft, setDraft] = useState<ComposerDraft | null>(null)
+  // Compteur d'ouverture (revue PR #142) : distingue « nouveau brouillon
+  // ouvert » de « brouillon patché » pour permettre à QuickReply de
+  // réinitialiser ses bascules Cc/Cci sans se déclencher à chaque frappe.
+  const [draftKey, setDraftKey] = useState(0)
 
   // Identités stables (useCallback) : la liste de messages ne doit pas se
   // re-rendre à chaque frappe dans l'éditeur (CodeRabbit #138).
@@ -58,6 +66,7 @@ export function useQuickReplyDraft(
         references: ctx.references,
         attachments: [],
       })
+      setDraftKey((k) => k + 1)
     },
     [detail, selfEmail]
   )
@@ -88,6 +97,7 @@ export function useQuickReplyDraft(
         references: [],
         attachments: ctx.attachments,
       })
+      setDraftKey((k) => k + 1)
     },
     [detail, t, i18n.language]
   )
@@ -99,5 +109,5 @@ export function useQuickReplyDraft(
 
   const close = useCallback(() => setDraft(null), [])
 
-  return { draft, openReply, openForward, patch, close }
+  return { draft, draftKey, openReply, openForward, patch, close }
 }

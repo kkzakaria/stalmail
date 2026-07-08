@@ -106,4 +106,16 @@ describe("useQuickReplyDraft", () => {
     act(() => empty.result.current.openReply("reply"))
     expect(empty.result.current.draft).toBeNull()
   })
+
+  it("draftKey s'incrémente à chaque openReply/openForward et pas sur patch (revue PR #142)", () => {
+    const { result } = renderHook(() => useQuickReplyDraft(detail, "me@x.fr"))
+    expect(result.current.draftKey).toBe(0)
+    act(() => result.current.openReply("reply"))
+    expect(result.current.draftKey).toBe(1)
+    // Un patch (frappe dans l'éditeur) ne doit pas incrémenter draftKey.
+    act(() => result.current.patch({ subject: "Modifié" }))
+    expect(result.current.draftKey).toBe(1)
+    act(() => result.current.openForward(detail.messages[0]))
+    expect(result.current.draftKey).toBe(2)
+  })
 })
