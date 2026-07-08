@@ -98,6 +98,7 @@ export const MessageItem = memo(function MessageItem({
           type="button"
           className="msg-toggle"
           aria-expanded={open}
+          aria-label={t("mail.reader.toggleMessage", { sender: leadName })}
           onClick={() => setOpen((o) => !o)}
         >
           <Avatar name={leadName} email={senderEmail} />

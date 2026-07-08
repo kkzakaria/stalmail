@@ -38,6 +38,7 @@ l'en-tête : il exige une passe visuelle, pas un changement en aveugle.
     type="button"
     className="msg-toggle"
     aria-expanded={open}
+    aria-label={t("mail.reader.toggleMessage", { sender: leadName })}
     onClick={() => setOpen((o) => !o)}
   >
     <Avatar name={leadName} email={senderEmail} />
@@ -94,8 +95,9 @@ produit (la zone du ↪ ne toggle pas non plus).
 
 ## Tests (`message-item.test.tsx`)
 
-- Les tests de repli/dépli ciblent le bouton toggle par son rôle (nom
-  accessible = contenu, ex. `getByRole("button", { name: /Alice/ })`).
+- Les tests de repli/dépli ciblent le bouton toggle par son rôle (aria-label
+  stable « Message de {{sender}} », l'état étant porté par aria-expanded —
+  retour de revue PR #140).
 - Nouveau test : `aria-expanded` vaut `true` ouvert, `false` replié.
 - Pas de test clavier unitaire (décision d'implémentation) : jsdom
   n'implémente pas l'activation Enter/Espace native d'un `<button>` et
