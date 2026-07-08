@@ -90,41 +90,36 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div className={"msg" + (open ? "" : " collapsed")}>
-      <div
-        className="msg-head"
-        onClick={() => setOpen((o) => !o)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            setOpen((o) => !o)
-          }
-        }}
-      >
-        <Avatar name={leadName} email={senderEmail} />
-        <div className="who">
-          <div className="nm">{leadName}</div>
-          {open && message.to.length > 0 && (
-            <div className="to">
-              {t("mail.reader.to")}{" "}
-              {message.to.map((r) => r.name || r.email).join(", ")}
-            </div>
-          )}
-        </div>
-        <div className="when">{formatThreadDate(message.receivedAt)}</div>
+      <div className="msg-head">
+        {/* Deux vrais boutons frères : le toggle porte la sémantique disclosure
+            (aria-expanded), le ↪ vit hors du toggle (anti-pattern ARIA du
+            contrôle imbriqué levé, suivi #138). */}
+        <button
+          type="button"
+          className="msg-toggle"
+          aria-expanded={open}
+          aria-label={t("mail.reader.toggleMessage", { sender: leadName })}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <Avatar name={leadName} email={senderEmail} />
+          <div className="who">
+            <div className="nm">{leadName}</div>
+            {open && message.to.length > 0 && (
+              <div className="to">
+                {t("mail.reader.to")}{" "}
+                {message.to.map((r) => r.name || r.email).join(", ")}
+              </div>
+            )}
+          </div>
+          <div className="when">{formatThreadDate(message.receivedAt)}</div>
+        </button>
         {open && onForward && (
           <button
             type="button"
             className="icon-btn sm"
             aria-label={t("mail.compose.forwardMessage", { sender: leadName })}
             title={t("mail.compose.forwardMessage", { sender: leadName })}
-            onClick={(e) => {
-              // Le header parent est cliquable (toggle repli) : on isole le bouton.
-              e.stopPropagation()
-              onForward(message)
-            }}
-            onKeyDown={(e) => e.stopPropagation()}
+            onClick={() => onForward(message)}
           >
             <Icon name="forward" size={16} />
           </button>
