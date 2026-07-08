@@ -191,6 +191,7 @@ export function Reader({
               {onSend && (
                 <QuickReply
                   draft={quickReply.draft}
+                  draftKey={quickReply.draftKey}
                   sending={sending ?? false}
                   onOpenReply={quickReply.openReply}
                   onPatch={quickReply.patch}

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { RteEditor } from "./rte-editor"
@@ -6,6 +6,10 @@ import type { ComposerDraft } from "./use-composer"
 
 export interface QuickReplyProps {
   draft: ComposerDraft | null
+  // Incrémenté à chaque OUVERTURE de brouillon (openReply/openForward), pas
+  // sur un patch — sert à réinitialiser les bascules Cc/Cci ci-dessous
+  // quand une nouvelle cible remplace l'ancienne sans fermeture (#142).
+  draftKey: number
   sending: boolean
   onOpenReply: (mode: "reply" | "replyAll") => void
   onPatch: (patch: Partial<ComposerDraft>) => void
@@ -18,6 +22,7 @@ export interface QuickReplyProps {
 // Le transfert n'a plus de bouton ici — il est par-message (MessageItem, #79).
 export function QuickReply({
   draft,
+  draftKey,
   sending,
   onOpenReply,
   onPatch,
@@ -26,6 +31,16 @@ export function QuickReply({
 }: QuickReplyProps) {
   const { t } = useTranslation()
   const [showFormat, setShowFormat] = useState(false)
+  // Bascules INDÉPENDANTES Cc/Cci (pattern du grand Composer), forward uniquement.
+  // Réinitialisées à chaque OUVERTURE (draftKey), pas à chaque patch : un
+  // changement de cible sans fermeture (transférer A puis B) doit aussi
+  // refermer les rangées (revue PR #142) — un simple `[!draft]` les ratait.
+  const [showCc, setShowCc] = useState(false)
+  const [showBcc, setShowBcc] = useState(false)
+  useEffect(() => {
+    setShowCc(false)
+    setShowBcc(false)
+  }, [draftKey])
 
   if (!draft) {
     return (
@@ -67,16 +82,41 @@ export function QuickReply({
 
   return (
     <div className="quick-reply">
-      {/* En-tête unique (maquette) : mode + destinataire éditable + fermer à droite. */}
+      {/* En-tête unique (maquette) : mode + label À + destinataire éditable + fermer à droite. */}
       <div className="qr-head">
         <Icon name={modeIcon} size={15} />
         <span>{modeLabel}</span>
+        <label className="qr-label" htmlFor="qr-to">
+          {t("mail.compose.to")}
+        </label>
         <input
+          id="qr-to"
           className="qr-to"
-          aria-label={t("mail.compose.to")}
           value={draft.to}
           onChange={(e) => onPatch({ to: e.target.value })}
         />
+        {/* Pas d'aria-label ici : le texte visible sert de nom accessible et
+            évite un doublon avec getByLabelText (qui matche aussi aria-label). */}
+        {draft.mode === "forward" && !showCc && (
+          <button
+            type="button"
+            className="icon-btn sm"
+            title={t("mail.compose.cc")}
+            onClick={() => setShowCc(true)}
+          >
+            {t("mail.compose.cc")}
+          </button>
+        )}
+        {draft.mode === "forward" && !showBcc && (
+          <button
+            type="button"
+            className="icon-btn sm"
+            title={t("mail.compose.bcc")}
+            onClick={() => setShowBcc(true)}
+          >
+            {t("mail.compose.bcc")}
+          </button>
+        )}
         <button
           type="button"
           className="icon-btn sm"
@@ -87,6 +127,26 @@ export function QuickReply({
           <Icon name="x" size={16} />
         </button>
       </div>
+      {draft.mode === "forward" && showCc && (
+        <div className="qr-field">
+          <label htmlFor="qr-cc">{t("mail.compose.cc")}</label>
+          <input
+            id="qr-cc"
+            value={draft.cc}
+            onChange={(e) => onPatch({ cc: e.target.value })}
+          />
+        </div>
+      )}
+      {draft.mode === "forward" && showBcc && (
+        <div className="qr-field">
+          <label htmlFor="qr-bcc">{t("mail.compose.bcc")}</label>
+          <input
+            id="qr-bcc"
+            value={draft.bcc}
+            onChange={(e) => onPatch({ bcc: e.target.value })}
+          />
+        </div>
+      )}
       {/* Puces des pièces jointes reprises (transfert) — retirables une à une. */}
       {draft.attachments.length > 0 && (
         <div className="attach-row">
