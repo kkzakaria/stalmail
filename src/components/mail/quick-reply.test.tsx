@@ -175,6 +175,17 @@ describe("QuickReply", () => {
       screen.queryByRole("button", { name: "mail.compose.forward" })
     ).not.toBeInTheDocument()
   })
+
+  it("le champ À porte un label visible relié (trois modes)", () => {
+    render(<Harness detail={detail} onSend={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
+    const input = screen.getByLabelText("mail.compose.to")
+    expect(input).toBeInstanceOf(HTMLInputElement)
+    // le label est un élément <label> rendu (pas un aria-label invisible)
+    expect(document.querySelector('label[for="qr-to"]')?.textContent).toBe(
+      "mail.compose.to"
+    )
+  })
 })
 
 // Harnais dédié : expose openForward (déclenché par MessageItem en T7, simulé ici).

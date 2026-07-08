@@ -67,13 +67,16 @@ export function QuickReply({
 
   return (
     <div className="quick-reply">
-      {/* En-tête unique (maquette) : mode + destinataire éditable + fermer à droite. */}
+      {/* En-tête unique (maquette) : mode + label À + destinataire éditable + fermer à droite. */}
       <div className="qr-head">
         <Icon name={modeIcon} size={15} />
         <span>{modeLabel}</span>
+        <label className="qr-label" htmlFor="qr-to">
+          {t("mail.compose.to")}
+        </label>
         <input
+          id="qr-to"
           className="qr-to"
-          aria-label={t("mail.compose.to")}
           value={draft.to}
           onChange={(e) => onPatch({ to: e.target.value })}
         />

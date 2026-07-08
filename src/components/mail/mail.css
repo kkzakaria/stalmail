@@ -777,10 +777,11 @@
   background: var(--surface); box-shadow: var(--shadow-sm);
 }
 .quick-reply .qr-head { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
-/* destinataire éditable inline dans l'en-tête (fusion mode + À sur une seule ligne) */
-.quick-reply .qr-to { flex: 1; min-width: 0; border: none; background: none; font-family: inherit; font-size: 13.5px; color: var(--ink); }
-/* focus clavier visible (a11y) ; invisible à la souris via :focus-visible */
-.quick-reply .qr-to:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* destinataire éditable inline dans l'en-tête — champ IDENTIFIABLE (retour prod
+   v0.1.46) : label visible + fond/bordure, focus accent (convention .dc-field) */
+.quick-reply .qr-label { flex: none; font-size: 12.5px; color: var(--muted); }
+.quick-reply .qr-to { flex: 1; min-width: 0; font-family: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; outline: none; }
+.quick-reply .qr-to:focus { border-color: var(--accent); }
 /* puces de pièces jointes reprises au transfert (retirables) */
 .quick-reply .attach-row { padding: 10px 14px 0; }
 .attach-x { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; flex: none; display: grid; place-items: center; }
