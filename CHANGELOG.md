@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.47](https://github.com/kkzakaria/stalmail/compare/v0.1.46...v0.1.47) (2026-07-08)
+
+
+### Features
+
+* **reader:** identifiable To field and forward-only Cc/Bcc in quick reply ([#142](https://github.com/kkzakaria/stalmail/issues/142)) ([8ccc70b](https://github.com/kkzakaria/stalmail/commit/8ccc70baef69b32cc052ccb826fa1aaa11c05afa))
+
 ## [0.1.46](https://github.com/kkzakaria/stalmail/compare/v0.1.45...v0.1.46) (2026-07-08)
 
 
