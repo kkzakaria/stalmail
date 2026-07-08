@@ -54,13 +54,19 @@ Reply / Répondre à tous : même en-tête sans les boutons Cc/Cci.
   label (Cc/Cci) + input relié (`htmlFor`/`id`), branchée sur
   `onPatch({ cc })` / `onPatch({ bcc })`.
 - **États** : `showCc`/`showBcc` en état local du composant (comme
-  `showFormat`), réinitialisés quand le brouillon se ferme (`draft` devient
-  `null`). Cci n'est jamais pré-rempli. (En forward, `cc` arrive toujours
-  vide de `buildForwardContext` — pas de règle d'ouverture automatique
-  nécessaire.)
-- **Aucun changement** au hook `useQuickReplyDraft`, à `ComposerDraft`, ni à
-  la chaîne d'envoi : `draft.cc`/`draft.bcc` existent, `useComposer.send` les
-  parse (`parseAddressList`) et `sendMailSchema` les valide déjà.
+  `showFormat`), réinitialisés à **chaque ouverture** de brouillon via le
+  compteur `draftKey` exposé par le hook (incrémenté par `openReply`/
+  `openForward`, jamais par les patchs). Le composant reste monté et une
+  nouvelle cible peut remplacer l'ancienne sans passer par une fermeture —
+  `draftKey` couvre ce cas, contrairement au reset historique sur
+  `draft` devenant `null` (retour de revue PR #142). Cci n'est jamais
+  pré-rempli. (En forward, `cc` arrive toujours vide de
+  `buildForwardContext` — pas de règle d'ouverture automatique nécessaire.)
+- **Seule extension** au hook `useQuickReplyDraft` : l'exposition de
+  `draftKey` (incrémenté par `openReply`/`openForward`). `ComposerDraft` et
+  la chaîne d'envoi restent inchangés : `draft.cc`/`draft.bcc` existent,
+  `useComposer.send` les parse (`parseAddressList`) et `sendMailSchema` les
+  valide déjà.
 
 ## Styles (`mail.css`)
 

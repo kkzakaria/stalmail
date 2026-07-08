@@ -287,11 +287,12 @@ describe("QuickReply — bascules Cc/Cci (transfert uniquement)", () => {
     expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
   })
 
-  it("reply et replyAll : aucune bascule Cc/Cci", () => {
+  it.each([
+    ["reply", "mail.compose.reply"],
+    ["replyAll", "mail.compose.replyAll"],
+  ])("%s : aucune bascule Cc/Cci", (_mode, buttonName) => {
     render(<Harness detail={detailWithCc} onSend={() => {}} />)
-    fireEvent.click(
-      screen.getByRole("button", { name: "mail.compose.replyAll" })
-    )
+    fireEvent.click(screen.getByRole("button", { name: buttonName }))
     expect(
       screen.queryByRole("button", { name: "mail.compose.cc" })
     ).not.toBeInTheDocument()

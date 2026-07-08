@@ -17,6 +17,9 @@
 - Cci jamais pré-rempli ; bascules réinitialisées quand le brouillon se ferme.
 - Aucun changement à `use-quick-reply-draft.ts`, `use-composer.ts`, `composer.tsx`, ni au serveur.
 - Branche : `feat/quick-reply-recipients` (existante, contient la spec).
+- **Amendement post-revue (PR #142)** : le reset est porté par `draftKey`
+  (nouvelle exposition du hook, incrémentée à chaque ouverture) pour couvrir
+  le remplacement de cible sans fermeture.
 
 ---
 
