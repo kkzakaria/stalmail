@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
 import { RteEditor } from "./rte-editor"
@@ -26,6 +26,16 @@ export function QuickReply({
 }: QuickReplyProps) {
   const { t } = useTranslation()
   const [showFormat, setShowFormat] = useState(false)
+  // Bascules INDÉPENDANTES Cc/Cci (pattern du grand Composer), forward uniquement.
+  // Réinitialisées à la fermeture du brouillon (le composant reste monté).
+  const [showCc, setShowCc] = useState(false)
+  const [showBcc, setShowBcc] = useState(false)
+  useEffect(() => {
+    if (!draft) {
+      setShowCc(false)
+      setShowBcc(false)
+    }
+  }, [draft])
 
   if (!draft) {
     return (
@@ -80,6 +90,28 @@ export function QuickReply({
           value={draft.to}
           onChange={(e) => onPatch({ to: e.target.value })}
         />
+        {/* Pas d'aria-label ici : le texte visible sert de nom accessible et
+            évite un doublon avec getByLabelText (qui matche aussi aria-label). */}
+        {draft.mode === "forward" && !showCc && (
+          <button
+            type="button"
+            className="icon-btn sm"
+            title={t("mail.compose.cc")}
+            onClick={() => setShowCc(true)}
+          >
+            {t("mail.compose.cc")}
+          </button>
+        )}
+        {draft.mode === "forward" && !showBcc && (
+          <button
+            type="button"
+            className="icon-btn sm"
+            title={t("mail.compose.bcc")}
+            onClick={() => setShowBcc(true)}
+          >
+            {t("mail.compose.bcc")}
+          </button>
+        )}
         <button
           type="button"
           className="icon-btn sm"
@@ -90,6 +122,26 @@ export function QuickReply({
           <Icon name="x" size={16} />
         </button>
       </div>
+      {draft.mode === "forward" && showCc && (
+        <div className="qr-field">
+          <label htmlFor="qr-cc">{t("mail.compose.cc")}</label>
+          <input
+            id="qr-cc"
+            value={draft.cc}
+            onChange={(e) => onPatch({ cc: e.target.value })}
+          />
+        </div>
+      )}
+      {draft.mode === "forward" && showBcc && (
+        <div className="qr-field">
+          <label htmlFor="qr-bcc">{t("mail.compose.bcc")}</label>
+          <input
+            id="qr-bcc"
+            value={draft.bcc}
+            onChange={(e) => onPatch({ bcc: e.target.value })}
+          />
+        </div>
+      )}
       {/* Puces des pièces jointes reprises (transfert) — retirables une à une. */}
       {draft.attachments.length > 0 && (
         <div className="attach-row">

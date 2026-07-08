@@ -782,6 +782,10 @@
 .quick-reply .qr-label { flex: none; font-size: 12.5px; color: var(--muted); }
 .quick-reply .qr-to { flex: 1; min-width: 0; font-family: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; outline: none; }
 .quick-reply .qr-to:focus { border-color: var(--accent); }
+/* rangées Cc/Cci révélées à la demande (transfert) — pattern .composer-field */
+.quick-reply .qr-field { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.quick-reply .qr-field label { font-size: 12.5px; color: var(--muted); flex: none; }
+.quick-reply .qr-field input { flex: 1; min-width: 0; border: none; background: none; outline: none; font-family: inherit; font-size: 13.5px; color: var(--ink); }
 /* puces de pièces jointes reprises au transfert (retirables) */
 .quick-reply .attach-row { padding: 10px 14px 0; }
 .attach-x { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; flex: none; display: grid; place-items: center; }

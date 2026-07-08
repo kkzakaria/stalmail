@@ -234,3 +234,58 @@ describe("QuickReply — pièces jointes du transfert", () => {
     expect(screen.queryByText("f.pdf")).not.toBeInTheDocument()
   })
 })
+
+describe("QuickReply — bascules Cc/Cci (transfert uniquement)", () => {
+  it("forward : la bascule Cc révèle une rangée reliée et la saisie patch draft.cc", () => {
+    render(<ForwardHarness detail={detail} />)
+    fireEvent.click(screen.getByText("fwd"))
+    // bascules visibles, rangées absentes
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    // la rangée apparaît, le bouton bascule disparaît
+    const cc = screen.getByLabelText("mail.compose.cc")
+    expect(
+      screen.queryByRole("button", { name: "mail.compose.cc" })
+    ).not.toBeInTheDocument()
+    fireEvent.change(cc, { target: { value: "bob@x.fr" } })
+    // Paramètre générique plutôt qu'un "as" : évite le conflit avec
+    // no-unnecessary-type-assertion (eslint --fix retire l'assertion).
+    expect(
+      screen.getByLabelText<HTMLInputElement>("mail.compose.cc").value
+    ).toBe("bob@x.fr")
+  })
+
+  it("forward : la bascule Cci révèle sa rangée (indépendante de Cc)", () => {
+    render(<ForwardHarness detail={detail} />)
+    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
+    expect(screen.getByLabelText("mail.compose.bcc")).toBeInTheDocument()
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+  })
+
+  it("reply et replyAll : aucune bascule Cc/Cci", () => {
+    render(<Harness detail={detailWithCc} onSend={() => {}} />)
+    fireEvent.click(
+      screen.getByRole("button", { name: "mail.compose.replyAll" })
+    )
+    expect(
+      screen.queryByRole("button", { name: "mail.compose.cc" })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "mail.compose.bcc" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("fermer puis rouvrir : les rangées Cc/Cci sont refermées", () => {
+    render(<ForwardHarness detail={detail} />)
+    fireEvent.click(screen.getByText("fwd"))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.close" }))
+    fireEvent.click(screen.getByText("fwd"))
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+  })
+})
