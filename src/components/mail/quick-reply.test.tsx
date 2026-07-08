@@ -177,7 +177,9 @@ describe("QuickReply", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("le champ À porte un label visible relié (trois modes)", () => {
+  // Le bloc label+input est rendu HORS de la garde de mode : la couverture en
+  // reply vaut par construction pour replyAll et forward.
+  it("le champ À porte un label visible relié", () => {
     render(<Harness detail={detail} onSend={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.reply" }))
     const input = screen.getByLabelText("mail.compose.to")

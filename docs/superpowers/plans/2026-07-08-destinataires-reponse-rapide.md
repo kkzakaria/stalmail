@@ -4,7 +4,7 @@
 
 **Goal:** Rendre le champ destinataire de la réponse rapide clairement identifiable (label « À » + champ bordé, trois modes) et ajouter les bascules/rangées Cc et Cci en mode transfert uniquement.
 
-**Architecture:** Spec `docs/superpowers/specs/2026-07-08-destinataires-reponse-rapide-design.md`. Chantier purement UI dans `quick-reply.tsx` (composant présentationnel) + `mail.css` : aucun changement au hook `useQuickReplyDraft`, à `ComposerDraft` ni à la chaîne d'envoi — `draft.cc`/`draft.bcc` existent et sont déjà parsés (`parseAddressList`) et validés (`sendMailSchema`). Les bascules Cc/Cci reprennent le pattern du grand Composer (`composer.tsx:19-125`) ; l'input À stylé reprend les tokens du pattern `.dc-field` (`mail.css:342-348`).
+**Architecture:** Spec `docs/superpowers/specs/2026-07-08-destinataires-reponse-rapide-design.md`. Chantier purement UI dans `quick-reply.tsx` (composant présentationnel) + `mail.css` : aucun changement à `ComposerDraft` ni à la chaîne d'envoi, et une seule extension au hook `useQuickReplyDraft` — l'exposition de `draftKey` (amendement post-revue, cf. Global Constraints) — `draft.cc`/`draft.bcc` existent et sont déjà parsés (`parseAddressList`) et validés (`sendMailSchema`). Les bascules Cc/Cci reprennent le pattern du grand Composer (`composer.tsx:19-125`) ; l'input À stylé reprend les tokens du pattern `.dc-field` (`mail.css:342-348`).
 
 **Tech Stack:** React 19, vitest + @testing-library/react (harnais hook+composant existant), CSS vanilla, Bun.
 
