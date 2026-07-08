@@ -61,11 +61,26 @@ describe("MessageItem", () => {
     expect(screen.getByRole("button", { name: /cv\.pdf/i })).toBeDisabled()
   })
 
-  it("replie le corps au clic sur l'en-tête", () => {
-    const { container } = wrap(<MessageItem message={msg()} defaultOpen />)
+  it("replie le corps au clic sur le bouton d'en-tête", () => {
+    wrap(<MessageItem message={msg()} defaultOpen />)
     expect(screen.getByText("corps en clair")).toBeInTheDocument()
-    fireEvent.click(container.querySelector(".msg-head")!)
+    fireEvent.click(screen.getByRole("button", { name: /^Bob/ }))
     expect(screen.queryByText("corps en clair")).not.toBeInTheDocument()
+  })
+
+  it("le toggle expose aria-expanded selon l'état ouvert/replié", () => {
+    wrap(<MessageItem message={msg()} defaultOpen />)
+    const toggle = screen.getByRole("button", { name: /^Bob/ })
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+  })
+
+  it("le bouton Transférer n'est pas imbriqué dans le toggle (a11y)", () => {
+    wrap(<MessageItem message={msg()} defaultOpen onForward={() => {}} />)
+    const fwd = screen.getByRole("button", { name: /Transférer le message/ })
+    const toggle = screen.getByRole("button", { name: /^Bob/ })
+    expect(toggle.contains(fwd)).toBe(false)
   })
 
   it("corps absent quand defaultOpen=false", () => {
