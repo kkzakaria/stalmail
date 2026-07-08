@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.46](https://github.com/kkzakaria/stalmail/compare/v0.1.45...v0.1.46) (2026-07-08)
+
+
+### Features
+
+* **reader:** real per-message forward with header block and attachments ([#79](https://github.com/kkzakaria/stalmail/issues/79)) ([#138](https://github.com/kkzakaria/stalmail/issues/138)) ([84e9fee](https://github.com/kkzakaria/stalmail/commit/84e9feefb4c23416fde587545d88dc2d82df3cbe))
+
 ## [0.1.45](https://github.com/kkzakaria/stalmail/compare/v0.1.44...v0.1.45) (2026-07-06)
 
 
