@@ -109,6 +109,79 @@ describe("Composer", () => {
     ).toBeNull()
   })
 
+  it("referme la rangée Cc vide au blur (bouton bascule de retour)", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
+    fireEvent.blur(cc)
+    expect(
+      screen.queryByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeNull()
+    expect(
+      screen.getByRole("button", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+  })
+
+  it("garde la rangée Cc ouverte au blur quand elle a une valeur", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
+    fireEvent.change(cc, { target: { value: "bob@x.fr" } })
+    fireEvent.blur(cc)
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    ).toHaveValue("bob@x.fr")
+  })
+
+  it("referme la rangée Cci au blur avec des espaces seuls", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
+    const bcc = screen.getByRole("textbox", { name: "mail.compose.bcc" })
+    fireEvent.change(bcc, { target: { value: "   " } })
+    fireEvent.blur(bcc)
+    expect(
+      screen.queryByRole("textbox", { name: "mail.compose.bcc" })
+    ).toBeNull()
+  })
+
+  it("referme la rangée Cc pré-remplie (replyAll) une fois vidée puis quittée", () => {
+    render(
+      <Composer
+        initial={{ ...initial, mode: "replyAll", cc: "bob@x.fr" }}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" }) // ouverte d'emblée
+    fireEvent.change(cc, { target: { value: "" } })
+    fireEvent.blur(cc)
+    expect(
+      screen.queryByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeNull()
+  })
+
   it("envoie le brouillon saisi", () => {
     const onSend = vi.fn()
     render(

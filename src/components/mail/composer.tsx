@@ -107,6 +107,10 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
                 aria-label={t("mail.compose.cc")}
                 value={draft.cc}
                 onChange={(e) => set({ cc: e.target.value })}
+                // Rangée vide quittée → retour à la bascule (retour prod v0.1.47).
+                onBlur={() => {
+                  if (draft.cc.trim() === "") setShowCc(false)
+                }}
               />
             </div>
           )}
@@ -118,6 +122,9 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
                 aria-label={t("mail.compose.bcc")}
                 value={draft.bcc}
                 onChange={(e) => set({ bcc: e.target.value })}
+                onBlur={() => {
+                  if (draft.bcc.trim() === "") setShowBcc(false)
+                }}
               />
             </div>
           )}
