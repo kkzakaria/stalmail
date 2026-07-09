@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.48](https://github.com/kkzakaria/stalmail/compare/v0.1.47...v0.1.48) (2026-07-09)
+
+
+### Bug Fixes
+
+* **composer:** collapse empty Cc/Bcc rows on blur in both composers ([#144](https://github.com/kkzakaria/stalmail/issues/144)) ([08dda5a](https://github.com/kkzakaria/stalmail/commit/08dda5a46e58784f0e8ff9dff5d1240cc7e1058f))
+
 ## [0.1.47](https://github.com/kkzakaria/stalmail/compare/v0.1.46...v0.1.47) (2026-07-08)
 
 
