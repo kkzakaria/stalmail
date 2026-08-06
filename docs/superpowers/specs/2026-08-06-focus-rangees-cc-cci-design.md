@@ -120,3 +120,30 @@ remplacés par des tests de parcours, par composeur :
   dans quel mode) — inchangé.
 - L'indicateur de focus visuel des inputs du grand Composer (pattern à
   harmoniser avec `.qr-field`, noté au backlog).
+
+## Amendement du 2026-08-06 — décision 6
+
+La vérification navigateur (Task 3) a confirmé le danger anticipé par le plan :
+dans la réponse rapide, cliquer « Envoyer » avec une rangée vide ouverte voit son
+clic **avalé**. Le focus part au mousedown, la rangée se referme, le pied du
+panneau remonte de ~38 px, et le navigateur n'émet un `click` que si mousedown et
+mouseup partagent une cible — l'événement atterrit sur un `DIV`. Mesuré à
+l'identique sur la production v0.1.48 (−37 px) : le défaut est **antérieur**
+(issue #147), mais cette branche en élargit l'exposition, le repli atteignant
+désormais le parcours courant.
+
+**Décision 6 : le repli est différé jusqu'à la fin du geste pointeur.** Si un
+pointeur est enfoncé au moment où le focus quitte la zone, le repli n'est pas
+exécuté : il est reporté au `pointerup`/`pointercancel`, puis programmé en
+macrotâche — `pointerup`, `mouseup` et `click` appartenant à la même tâche, une
+macrotâche s'exécute nécessairement **après** la délivrance du clic. Rien ne
+bouge sous le curseur pendant le geste ; la rangée se referme juste après.
+
+Alternative écartée : réserver la hauteur de la rangée jusqu'au relâchement.
+Elle évite le décalage mais introduit un état intermédiaire visible (un trou dans
+la mise en page) qu'il faudrait ensuite résorber.
+
+Le grand composeur n'est pas affecté (son pied est fixe, l'éditeur en `flex: 1`
+absorbe la hauteur libérée), mais la règle y est appliquée aussi : un
+comportement unique vaut mieux que deux, et rien ne garantit que la mise en page
+du composeur restera fixe.

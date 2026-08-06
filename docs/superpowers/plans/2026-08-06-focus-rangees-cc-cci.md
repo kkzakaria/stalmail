@@ -740,3 +740,245 @@ c'est le test qui ment : reproduire l'écart dans un test avant de corriger.
   input` n'a pas l'équivalent du `outline` de `.qr-field input:focus`).
 - Le CSS mort `.to-toggle` / `.recip-detail`.
 - Issue #141 (mode lecture mobile non câblé).
+
+---
+
+### Task 4 : Différer le repli jusqu'à la fin du geste pointeur (issue #147)
+
+Corrige le clic avalé mesuré en Task 3. Applique la **décision 6** de la spec.
+
+**Files:**
+- Create: `src/components/mail/use-gesture-safe-collapse.ts`
+- Create: `src/components/mail/use-gesture-safe-collapse.test.tsx`
+- Modify: `src/components/mail/quick-reply.tsx` (hook + handler)
+- Modify: `src/components/mail/composer.tsx` (hook + handler)
+- Test: `src/components/mail/quick-reply.test.tsx`, `src/components/mail/composer.test.tsx` (un test de parcours chacun)
+
+**Interfaces:**
+- Consumes : `leavesZone` (Task 1) et les handlers `collapseEmptyRows` des Tasks 1 et 2.
+- Produces : `useGestureSafeCollapse(): (collapse: () => void) => void`.
+
+**Faits établis par sonde jsdom (mesurés avant rédaction, ne pas re-découvrir) :**
+1. `fireEvent.pointerDown` / `fireEvent.pointerUp` sont bien dispatchés en jsdom et atteignent un écouteur `document` en capture.
+2. Le report du repli au `pointerup` puis en `setTimeout(…, 0)` fonctionne tel quel.
+3. **`vi.runAllTimers()` doit être enveloppé dans `act(...)`** (importé de `@testing-library/react`), sinon la mise à jour d'état déclenchée par le timer n'est pas répercutée dans le DOM et l'assertion échoue à tort.
+
+- [ ] **Step 1 : Écrire le test du hook**
+
+Créer `src/components/mail/use-gesture-safe-collapse.test.tsx` :
+
+```tsx
+import { describe, expect, it, vi } from "vitest"
+import { render, screen, fireEvent, act } from "@testing-library/react"
+import { useState } from "react"
+import { useGestureSafeCollapse } from "./use-gesture-safe-collapse"
+
+function Harness() {
+  const [ouverte, setOuverte] = useState(true)
+  const collapseAfterGesture = useGestureSafeCollapse()
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => collapseAfterGesture(() => setOuverte(false))}
+      >
+        replier
+      </button>
+      <button type="button">cible</button>
+      <span data-testid="etat">{ouverte ? "ouverte" : "fermée"}</span>
+    </div>
+  )
+}
+
+describe("useGestureSafeCollapse", () => {
+  it("hors geste : replie immédiatement", () => {
+    render(<Harness />)
+    fireEvent.click(screen.getByRole("button", { name: "replier" }))
+    expect(screen.getByTestId("etat")).toHaveTextContent("fermée")
+  })
+
+  it("geste en cours : ne replie pas avant le relâchement", () => {
+    vi.useFakeTimers()
+    try {
+      render(<Harness />)
+      const cible = screen.getByRole("button", { name: "cible" })
+      fireEvent.pointerDown(cible)
+      fireEvent.click(screen.getByRole("button", { name: "replier" }))
+      expect(screen.getByTestId("etat")).toHaveTextContent("ouverte")
+      fireEvent.pointerUp(cible)
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(screen.getByTestId("etat")).toHaveTextContent("fermée")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("geste annulé (pointercancel) : replie quand même", () => {
+    vi.useFakeTimers()
+    try {
+      render(<Harness />)
+      const cible = screen.getByRole("button", { name: "cible" })
+      fireEvent.pointerDown(cible)
+      fireEvent.click(screen.getByRole("button", { name: "replier" }))
+      fireEvent.pointerCancel(cible)
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(screen.getByTestId("etat")).toHaveTextContent("fermée")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+```
+
+- [ ] **Step 2 : Lancer le test pour le voir échouer**
+
+```bash
+bun run vitest run src/components/mail/use-gesture-safe-collapse.test.tsx
+```
+
+Attendu : FAIL — le module `./use-gesture-safe-collapse` n'existe pas.
+
+- [ ] **Step 3 : Écrire le hook**
+
+Créer `src/components/mail/use-gesture-safe-collapse.ts` :
+
+```ts
+import { useCallback, useEffect, useRef } from "react"
+
+/**
+ * Renvoie une fonction qui exécute `collapse` tout de suite, ou — si un geste
+ * pointeur est en cours — juste APRÈS la délivrance du clic.
+ *
+ * Pourquoi : le focus part au mousedown. Replier une rangée à cet instant fait
+ * remonter tout ce qui est en dessous avant le mouseup, et le navigateur n'émet
+ * un `click` que si mousedown et mouseup partagent une cible — le clic sur
+ * « Envoyer » était avalé (issue #147, design 2026-08-06 décision 6).
+ */
+export function useGestureSafeCollapse(): (collapse: () => void) => void {
+  const pointerDown = useRef(false)
+
+  useEffect(() => {
+    const down = () => {
+      pointerDown.current = true
+    }
+    const up = () => {
+      pointerDown.current = false
+    }
+    document.addEventListener("pointerdown", down, true)
+    document.addEventListener("pointerup", up, true)
+    document.addEventListener("pointercancel", up, true)
+    return () => {
+      document.removeEventListener("pointerdown", down, true)
+      document.removeEventListener("pointerup", up, true)
+      document.removeEventListener("pointercancel", up, true)
+    }
+  }, [])
+
+  return useCallback((collapse: () => void) => {
+    if (!pointerDown.current) {
+      collapse()
+      return
+    }
+    const finish = () => {
+      document.removeEventListener("pointerup", finish, true)
+      document.removeEventListener("pointercancel", finish, true)
+      // pointerup, mouseup et click appartiennent à la même tâche : une
+      // macrotâche s'exécute donc après la délivrance du clic.
+      setTimeout(collapse, 0)
+    }
+    document.addEventListener("pointerup", finish, true)
+    document.addEventListener("pointercancel", finish, true)
+  }, [])
+}
+```
+
+- [ ] **Step 4 : Lancer le test pour le voir passer**
+
+```bash
+bun run vitest run src/components/mail/use-gesture-safe-collapse.test.tsx
+```
+
+Attendu : 3/3 PASS.
+
+- [ ] **Step 5 : Brancher le hook dans les deux composeurs**
+
+Dans `quick-reply.tsx`, avec les autres hooks (donc **avant** le `if (!draft)`) :
+
+```tsx
+  const collapseAfterGesture = useGestureSafeCollapse()
+```
+
+et l'import correspondant avec les autres imports locaux :
+
+```tsx
+import { useGestureSafeCollapse } from "./use-gesture-safe-collapse"
+```
+
+Puis envelopper le corps du handler existant :
+
+```tsx
+  const collapseEmptyRows = (e: FocusEvent<HTMLDivElement>) => {
+    if (!leavesZone(e.currentTarget, e.relatedTarget)) return
+    collapseAfterGesture(() => {
+      if (draft.cc.trim() === "") setShowCc(false)
+      if (draft.bcc.trim() === "") setShowBcc(false)
+    })
+  }
+```
+
+Appliquer exactement la même transformation dans `composer.tsx` (mêmes noms
+d'état, `set` inchangé).
+
+- [ ] **Step 6 : Ajouter un test de parcours par composeur**
+
+Dans `quick-reply.test.tsx`, à la fin du `describe` « zone destinataires » :
+
+```tsx
+  it("clic en cours : le repli attend la fin du geste (issue #147)", () => {
+    vi.useFakeTimers()
+    try {
+      ouvrirCc()
+      const cible = horsZone()
+      fireEvent.pointerDown(cible)
+      fireEvent.focusOut(screen.getByLabelText("mail.compose.cc"), {
+        relatedTarget: cible,
+      })
+      // Rien ne bouge tant que le pointeur est enfoncé : sinon le clic serait
+      // avalé par le décalage de la mise en page.
+      expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
+      fireEvent.pointerUp(cible)
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+```
+
+Ajouter `act` à l'import `@testing-library/react` du fichier, et `vi` à
+l'import `vitest` s'il n'y est pas déjà.
+
+Dans `composer.test.tsx`, le même test, adapté aux sélecteurs du composeur
+(`screen.getByRole("textbox", { name: "mail.compose.cc" })`, cible hors zone
+`horsZone()` = le champ Sujet), avec le même titre.
+
+- [ ] **Step 7 : Vérifier la suite complète et les contrôles**
+
+```bash
+bun run test && bun run lint && bun run typecheck
+```
+
+- [ ] **Step 8 : Commit**
+
+```bash
+git add src/components/mail/use-gesture-safe-collapse.ts src/components/mail/use-gesture-safe-collapse.test.tsx src/components/mail/quick-reply.tsx src/components/mail/composer.tsx src/components/mail/quick-reply.test.tsx src/components/mail/composer.test.tsx
+git commit -m "fix(composer): defer empty-row collapse until the pointer gesture ends
+
+Closes #147"
+```
