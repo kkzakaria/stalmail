@@ -127,6 +127,9 @@ describe("Composer", () => {
     )
   })
 
+  // Garde-fou : prouve seulement l'absence de retour à un autoFocus
+  // inconditionnel. Ne prouve pas à lui seul que le focus fonctionne quand
+  // il le doit — c'est le test voisin qui le prouve.
   it("une rangée Cc pré-remplie (replyAll) ne prend PAS le focus au montage", () => {
     render(
       <Composer
