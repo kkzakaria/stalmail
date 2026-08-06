@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { QuickReply } from "./quick-reply"
 import { useQuickReplyDraft } from "./use-quick-reply-draft"
 import type { AppThreadDetail } from "../../server/mail-types"
@@ -407,5 +407,27 @@ describe("QuickReply — zone destinataires : focus et repli", () => {
     ouvrirCc()
     fireEvent.blur(screen.getByLabelText("mail.compose.cc"))
     expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
+  })
+
+  it("clic en cours : le repli attend la fin du geste (issue #147)", () => {
+    vi.useFakeTimers()
+    try {
+      ouvrirCc()
+      const cible = horsZone()
+      fireEvent.pointerDown(cible)
+      fireEvent.focusOut(screen.getByLabelText("mail.compose.cc"), {
+        relatedTarget: cible,
+      })
+      // Rien ne bouge tant que le pointeur est enfoncé : sinon le clic serait
+      // avalé par le décalage de la mise en page.
+      expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
+      fireEvent.pointerUp(cible)
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

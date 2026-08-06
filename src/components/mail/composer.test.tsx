@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 import { Composer } from "./composer"
 import type { ComposerDraft } from "./use-composer"
 
@@ -282,6 +282,41 @@ describe("Composer", () => {
     expect(
       screen.getByRole("textbox", { name: "mail.compose.cc" })
     ).toBeInTheDocument()
+  })
+
+  it("clic en cours : le repli attend la fin du geste (issue #147)", () => {
+    vi.useFakeTimers()
+    try {
+      render(
+        <Composer
+          initial={initial}
+          sending={false}
+          onSend={() => {}}
+          onClose={() => {}}
+        />
+      )
+      fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+      const cible = horsZone()
+      fireEvent.pointerDown(cible)
+      fireEvent.focusOut(
+        screen.getByRole("textbox", { name: "mail.compose.cc" }),
+        { relatedTarget: cible }
+      )
+      // Rien ne bouge tant que le pointeur est enfoncé : sinon le clic serait
+      // avalé par le décalage de la mise en page.
+      expect(
+        screen.getByRole("textbox", { name: "mail.compose.cc" })
+      ).toBeInTheDocument()
+      fireEvent.pointerUp(cible)
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(
+        screen.queryByRole("textbox", { name: "mail.compose.cc" })
+      ).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("envoie le brouillon saisi", () => {

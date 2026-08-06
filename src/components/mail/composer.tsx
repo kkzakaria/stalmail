@@ -5,6 +5,7 @@ import { Icon } from "./mail-icons"
 import { leavesZone } from "./recipients-zone"
 import { RteEditor } from "./rte-editor"
 import type { ComposerDraft } from "./use-composer"
+import { useGestureSafeCollapse } from "./use-gesture-safe-collapse"
 
 type Mode = "min" | "normal" | "max"
 
@@ -31,6 +32,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
   const [showFormat, setShowFormat] = useState(false)
   const set = (patch: Partial<ComposerDraft>) =>
     setDraft((d) => ({ ...d, ...patch }))
+  const collapseAfterGesture = useGestureSafeCollapse()
 
   // Repli au niveau de la ZONE : une rangée vide ne se referme qu'en SORTANT
   // de la zone destinataires (design 2026-08-06, décisions 2 à 4).
@@ -38,8 +40,10 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
     // currentTarget est lu ICI, pas dans un callback différé : React le remet
     // à null dès que le handler a rendu la main.
     if (!leavesZone(e.currentTarget, e.relatedTarget)) return
-    if (draft.cc.trim() === "") setShowCc(false)
-    if (draft.bcc.trim() === "") setShowBcc(false)
+    collapseAfterGesture(() => {
+      if (draft.cc.trim() === "") setShowCc(false)
+      if (draft.bcc.trim() === "") setShowBcc(false)
+    })
   }
 
   // Libellés des bascules de fenêtre (aria-label + title/tooltip, comme la maquette).

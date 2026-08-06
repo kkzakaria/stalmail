@@ -5,6 +5,7 @@ import { Icon } from "./mail-icons"
 import { leavesZone } from "./recipients-zone"
 import { RteEditor } from "./rte-editor"
 import type { ComposerDraft } from "./use-composer"
+import { useGestureSafeCollapse } from "./use-gesture-safe-collapse"
 
 export interface QuickReplyProps {
   draft: ComposerDraft | null
@@ -43,6 +44,7 @@ export function QuickReply({
     setShowCc(false)
     setShowBcc(false)
   }, [draftKey])
+  const collapseAfterGesture = useGestureSafeCollapse()
 
   if (!draft) {
     return (
@@ -90,8 +92,10 @@ export function QuickReply({
     // currentTarget est lu ICI, pas dans un callback différé : React le remet
     // à null dès que le handler a rendu la main (fait établi n°4).
     if (!leavesZone(e.currentTarget, e.relatedTarget)) return
-    if (draft.cc.trim() === "") setShowCc(false)
-    if (draft.bcc.trim() === "") setShowBcc(false)
+    collapseAfterGesture(() => {
+      if (draft.cc.trim() === "") setShowCc(false)
+      if (draft.bcc.trim() === "") setShowBcc(false)
+    })
   }
 
   return (
