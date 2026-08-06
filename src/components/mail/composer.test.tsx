@@ -109,7 +109,10 @@ describe("Composer", () => {
     ).toBeNull()
   })
 
-  it("referme la rangée Cc vide au blur (bouton bascule de retour)", () => {
+  // Cible hors zone : le champ Sujet, juste sous les rangées destinataires.
+  const horsZone = () => screen.getByLabelText("mail.compose.subject")
+
+  it("la bascule Cc donne le focus au champ révélé", () => {
     render(
       <Composer
         initial={initial}
@@ -119,8 +122,39 @@ describe("Composer", () => {
       />
     )
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
-    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
-    fireEvent.blur(cc)
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    )
+  })
+
+  it("une rangée Cc pré-remplie (replyAll) ne prend PAS le focus au montage", () => {
+    render(
+      <Composer
+        initial={{ ...initial, mode: "replyAll", cc: "bob@x.fr" }}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    expect(document.activeElement).not.toBe(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    )
+  })
+
+  it("sortir de la zone referme la rangée Cc vide", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      { relatedTarget: horsZone() }
+    )
     expect(
       screen.queryByRole("textbox", { name: "mail.compose.cc" })
     ).toBeNull()
@@ -129,7 +163,7 @@ describe("Composer", () => {
     ).toBeInTheDocument()
   })
 
-  it("garde la rangée Cc ouverte au blur quand elle a une valeur", () => {
+  it("sortir de la zone garde la rangée Cc remplie", () => {
     render(
       <Composer
         initial={initial}
@@ -141,13 +175,13 @@ describe("Composer", () => {
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
     const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
     fireEvent.change(cc, { target: { value: "bob@x.fr" } })
-    fireEvent.blur(cc)
+    fireEvent.focusOut(cc, { relatedTarget: horsZone() })
     expect(
       screen.getByRole("textbox", { name: "mail.compose.cc" })
     ).toHaveValue("bob@x.fr")
   })
 
-  it("referme la rangée Cci au blur avec des espaces seuls", () => {
+  it("des espaces seuls comptent comme vide", () => {
     render(
       <Composer
         initial={initial}
@@ -159,13 +193,62 @@ describe("Composer", () => {
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
     const bcc = screen.getByRole("textbox", { name: "mail.compose.bcc" })
     fireEvent.change(bcc, { target: { value: "   " } })
-    fireEvent.blur(bcc)
+    fireEvent.focusOut(bcc, { relatedTarget: horsZone() })
     expect(
       screen.queryByRole("textbox", { name: "mail.compose.bcc" })
     ).toBeNull()
   })
 
-  it("referme la rangée Cc pré-remplie (replyAll) une fois vidée puis quittée", () => {
+  it("circuler dans la zone ne referme rien (Cc vide → bascule Cci)", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      {
+        relatedTarget: screen.getByRole("button", { name: "mail.compose.bcc" }),
+      }
+    )
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+  })
+
+  it("détour par Cci puis sortie : la Cc vide oubliée se referme aussi", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      {
+        relatedTarget: screen.getByRole("button", { name: "mail.compose.bcc" }),
+      }
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
+    const bcc = screen.getByRole("textbox", { name: "mail.compose.bcc" })
+    fireEvent.change(bcc, { target: { value: "bob@x.fr" } })
+    fireEvent.focusOut(bcc, { relatedTarget: horsZone() })
+    expect(
+      screen.queryByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeNull()
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.bcc" })
+    ).toHaveValue("bob@x.fr")
+  })
+
+  it("la rangée Cc pré-remplie vidée se referme en sortant de la zone", () => {
     render(
       <Composer
         initial={{ ...initial, mode: "replyAll", cc: "bob@x.fr" }}
@@ -174,12 +257,28 @@ describe("Composer", () => {
         onClose={() => {}}
       />
     )
-    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" }) // ouverte d'emblée
+    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
     fireEvent.change(cc, { target: { value: "" } })
-    fireEvent.blur(cc)
+    fireEvent.focusOut(cc, { relatedTarget: horsZone() })
     expect(
       screen.queryByRole("textbox", { name: "mail.compose.cc" })
     ).toBeNull()
+  })
+
+  it("relatedTarget nul (fenêtre qui perd le focus) ne referme rien", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.blur(screen.getByRole("textbox", { name: "mail.compose.cc" }))
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
   })
 
   it("envoie le brouillon saisi", () => {

@@ -1,6 +1,8 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
+import type { FocusEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
+import { leavesZone } from "./recipients-zone"
 import { RteEditor } from "./rte-editor"
 import type { ComposerDraft } from "./use-composer"
 
@@ -20,10 +22,25 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
   // à la fois alors qu'on peut ne vouloir que l'un.
   const [showCc, setShowCc] = useState(initial.cc !== "")
   const [showBcc, setShowBcc] = useState(initial.bcc !== "")
+  // Le focus n'est donné qu'aux rangées ouvertes PAR LA BASCULE : showCc/showBcc
+  // peuvent être vrais dès le montage (replyAll avec Cc pré-rempli), et voler le
+  // curseur à l'ouverture du composeur serait une régression.
+  const ccOpenedByUser = useRef(false)
+  const bccOpenedByUser = useRef(false)
   const [mode, setMode] = useState<Mode>("normal")
   const [showFormat, setShowFormat] = useState(false)
   const set = (patch: Partial<ComposerDraft>) =>
     setDraft((d) => ({ ...d, ...patch }))
+
+  // Repli au niveau de la ZONE : une rangée vide ne se referme qu'en SORTANT
+  // de la zone destinataires (design 2026-08-06, décisions 2 à 4).
+  const collapseEmptyRows = (e: FocusEvent<HTMLDivElement>) => {
+    // currentTarget est lu ICI, pas dans un callback différé : React le remet
+    // à null dès que le handler a rendu la main.
+    if (!leavesZone(e.currentTarget, e.relatedTarget)) return
+    if (draft.cc.trim() === "") setShowCc(false)
+    if (draft.bcc.trim() === "") setShowBcc(false)
+  }
 
   // Libellés des bascules de fenêtre (aria-label + title/tooltip, comme la maquette).
   const minimizeLabel =
@@ -67,67 +84,70 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
 
       {mode !== "min" && (
         <div className="composer-body-wrap">
-          <div className="composer-field">
-            <label htmlFor="cmp-to">{t("mail.compose.to")}</label>
-            <input
-              id="cmp-to"
-              aria-label={t("mail.compose.to")}
-              value={draft.to}
-              onChange={(e) => set({ to: e.target.value })}
-            />
-            {!showCc && (
-              <button
-                type="button"
-                className="icon-btn sm"
-                aria-label={t("mail.compose.cc")}
-                title={t("mail.compose.cc")}
-                onClick={() => setShowCc(true)}
-              >
-                {t("mail.compose.cc")}
-              </button>
+          <div className="recip-zone" onBlur={collapseEmptyRows}>
+            <div className="composer-field">
+              <label htmlFor="cmp-to">{t("mail.compose.to")}</label>
+              <input
+                id="cmp-to"
+                aria-label={t("mail.compose.to")}
+                value={draft.to}
+                onChange={(e) => set({ to: e.target.value })}
+              />
+              {!showCc && (
+                <button
+                  type="button"
+                  className="icon-btn sm"
+                  aria-label={t("mail.compose.cc")}
+                  title={t("mail.compose.cc")}
+                  onClick={() => {
+                    ccOpenedByUser.current = true
+                    setShowCc(true)
+                  }}
+                >
+                  {t("mail.compose.cc")}
+                </button>
+              )}
+              {!showBcc && (
+                <button
+                  type="button"
+                  className="icon-btn sm"
+                  aria-label={t("mail.compose.bcc")}
+                  title={t("mail.compose.bcc")}
+                  onClick={() => {
+                    bccOpenedByUser.current = true
+                    setShowBcc(true)
+                  }}
+                >
+                  {t("mail.compose.bcc")}
+                </button>
+              )}
+            </div>
+
+            {showCc && (
+              <div className="composer-field">
+                <label htmlFor="cmp-cc">{t("mail.compose.cc")}</label>
+                <input
+                  id="cmp-cc"
+                  aria-label={t("mail.compose.cc")}
+                  autoFocus={ccOpenedByUser.current}
+                  value={draft.cc}
+                  onChange={(e) => set({ cc: e.target.value })}
+                />
+              </div>
             )}
-            {!showBcc && (
-              <button
-                type="button"
-                className="icon-btn sm"
-                aria-label={t("mail.compose.bcc")}
-                title={t("mail.compose.bcc")}
-                onClick={() => setShowBcc(true)}
-              >
-                {t("mail.compose.bcc")}
-              </button>
+            {showBcc && (
+              <div className="composer-field">
+                <label htmlFor="cmp-bcc">{t("mail.compose.bcc")}</label>
+                <input
+                  id="cmp-bcc"
+                  aria-label={t("mail.compose.bcc")}
+                  autoFocus={bccOpenedByUser.current}
+                  value={draft.bcc}
+                  onChange={(e) => set({ bcc: e.target.value })}
+                />
+              </div>
             )}
           </div>
-
-          {showCc && (
-            <div className="composer-field">
-              <label htmlFor="cmp-cc">{t("mail.compose.cc")}</label>
-              <input
-                id="cmp-cc"
-                aria-label={t("mail.compose.cc")}
-                value={draft.cc}
-                onChange={(e) => set({ cc: e.target.value })}
-                // Rangée vide quittée → retour à la bascule (retour prod v0.1.47).
-                onBlur={() => {
-                  if (draft.cc.trim() === "") setShowCc(false)
-                }}
-              />
-            </div>
-          )}
-          {showBcc && (
-            <div className="composer-field">
-              <label htmlFor="cmp-bcc">{t("mail.compose.bcc")}</label>
-              <input
-                id="cmp-bcc"
-                aria-label={t("mail.compose.bcc")}
-                value={draft.bcc}
-                onChange={(e) => set({ bcc: e.target.value })}
-                onBlur={() => {
-                  if (draft.bcc.trim() === "") setShowBcc(false)
-                }}
-              />
-            </div>
-          )}
 
           <div className="composer-field">
             <label htmlFor="cmp-subject">{t("mail.compose.subject")}</label>
