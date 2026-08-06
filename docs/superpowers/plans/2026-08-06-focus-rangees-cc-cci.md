@@ -45,6 +45,8 @@ déterminent l'écriture des tests :
 
 | Fichier | Rôle dans ce plan |
 | --- | --- |
+| `src/components/mail/recipients-zone.ts` | **Créé.** Prédicat pur `leavesZone(zone, related)` — la règle « le focus sort-il de la zone ? », testée isolément (convention du projet), partagée par les deux composeurs. |
+| `src/components/mail/recipients-zone.test.ts` | **Créé.** Tests unitaires du prédicat. |
 | `src/components/mail/mail.css` | Ajout de `.recip-zone { display: contents }` — frontière d'événements sans effet de mise en page. Une seule règle, partagée par les deux composeurs. |
 | `src/components/mail/quick-reply.tsx` | Zone destinataires + focus auto inconditionnel (les rangées y démarrent toujours fermées). Retrait des deux `onBlur` d'input. |
 | `src/components/mail/composer.tsx` | Même zone, focus auto **restreint aux ouvertures par bascule** (`showCc` peut être vrai dès le montage). Retrait des deux `onBlur` d'input. |
@@ -58,15 +60,91 @@ Aucun changement serveur, aucun changement de type, aucune clé i18n.
 ### Task 1 : Réponse rapide — zone destinataires et focus auto
 
 **Files:**
+- Create: `src/components/mail/recipients-zone.ts`
+- Create: `src/components/mail/recipients-zone.test.ts`
 - Modify: `src/components/mail/mail.css` (ajouter une règle près de la section `.quick-reply`, vers l. 786)
 - Modify: `src/components/mail/quick-reply.tsx:1` (import), `:83-157` (structure JSX + handler)
 - Test: `src/components/mail/quick-reply.test.tsx:334-365` (bloc remplacé)
 
 **Interfaces:**
 - Consumes : rien (première tâche).
-- Produces : la classe CSS `.recip-zone` (réutilisée telle quelle par la Task 2) et la forme du handler `collapseEmptyRows(e: FocusEvent<HTMLDivElement>)` que la Task 2 reproduit sur le Composer.
+- Produces : la classe CSS `.recip-zone` et la fonction pure
+  `leavesZone(zone: HTMLElement, related: Element | null): boolean`, toutes deux
+  réutilisées telles quelles par la Task 2 — qui ne doit ni les redéfinir ni les
+  dupliquer.
 
-- [ ] **Step 1 : Écrire les tests de parcours**
+- [ ] **Step 1 : Écrire le test du prédicat pur**
+
+Créer `src/components/mail/recipients-zone.test.ts` :
+
+```ts
+import { describe, expect, it } from "vitest"
+import { leavesZone } from "./recipients-zone"
+
+describe("leavesZone", () => {
+  const zone = document.createElement("div")
+  const interne = document.createElement("input")
+  zone.appendChild(interne)
+  const externe = document.createElement("input")
+
+  it("relatedTarget nul (fenêtre qui perd le focus) : on ne sort pas", () => {
+    expect(leavesZone(zone, null)).toBe(false)
+  })
+
+  it("cible interne à la zone : on ne sort pas", () => {
+    expect(leavesZone(zone, interne)).toBe(false)
+  })
+
+  it("la zone elle-même compte comme interne", () => {
+    expect(leavesZone(zone, zone)).toBe(false)
+  })
+
+  it("cible hors zone : on sort", () => {
+    expect(leavesZone(zone, externe)).toBe(true)
+  })
+})
+```
+
+- [ ] **Step 2 : Lancer le test pour le voir échouer**
+
+```bash
+bun run vitest run src/components/mail/recipients-zone.test.ts
+```
+
+Attendu : FAIL — le module `./recipients-zone` n'existe pas.
+
+- [ ] **Step 3 : Écrire le prédicat pur**
+
+Créer `src/components/mail/recipients-zone.ts` :
+
+```ts
+/**
+ * Le focus quitte-t-il la zone destinataires ?
+ *
+ * Règle partagée par les deux composeurs (design 2026-08-06) : une rangée
+ * Cc/Cci vide ne se referme qu'en SORTANT de la zone — circuler entre ses
+ * champs et ses bascules ne referme rien.
+ */
+export function leavesZone(
+  zone: HTMLElement,
+  related: Element | null
+): boolean {
+  // relatedTarget nul = la fenêtre a perdu le focus (alt-tab) : ne rien
+  // refermer, l'utilisateur va probablement chercher une adresse ailleurs.
+  if (related === null) return false
+  return !zone.contains(related)
+}
+```
+
+- [ ] **Step 4 : Lancer le test pour le voir passer**
+
+```bash
+bun run vitest run src/components/mail/recipients-zone.test.ts
+```
+
+Attendu : 4/4 PASS.
+
+- [ ] **Step 5 : Écrire les tests de parcours**
 
 Dans `src/components/mail/quick-reply.test.tsx`, **supprimer** les trois `it(...)` des lignes 334 à 365 (`forward : referme la rangée Cc vide au blur`, `forward : garde la rangée Cci ouverte au blur quand elle a une valeur`, `forward : referme la rangée Cc au blur avec des espaces seuls`) — ils s'appuient sur `fireEvent.blur`, qui ne referme plus rien (fait établi n°3).
 
@@ -152,7 +230,7 @@ describe("QuickReply — zone destinataires : focus et repli", () => {
 })
 ```
 
-- [ ] **Step 2 : Lancer les tests pour les voir échouer**
+- [ ] **Step 6 : Lancer les tests pour les voir échouer**
 
 ```bash
 bun run vitest run src/components/mail/quick-reply.test.tsx
@@ -160,7 +238,7 @@ bun run vitest run src/components/mail/quick-reply.test.tsx
 
 Attendu : `la bascule Cc donne le focus au champ révélé` échoue (`document.activeElement` est `<body>`), `circuler dans la zone ne referme rien` échoue (l'`onBlur` d'input actuel referme la rangée), `détour par Cci puis sortie` échoue (la Cc reste ouverte), `relatedTarget nul` échoue (l'`onBlur` actuel referme sans regarder `relatedTarget`). Les autres peuvent passer par accident — c'est normal.
 
-- [ ] **Step 3 : Ajouter la règle CSS**
+- [ ] **Step 7 : Ajouter la règle CSS**
 
 Dans `src/components/mail/mail.css`, juste après la ligne `.quick-reply .qr-field input:focus { ... }` (l. 789) :
 
@@ -171,12 +249,18 @@ Dans `src/components/mail/mail.css`, juste après la ligne `.quick-reply .qr-fie
 .recip-zone { display: contents; }
 ```
 
-- [ ] **Step 4 : Implémenter dans `quick-reply.tsx`**
+- [ ] **Step 8 : Implémenter dans `quick-reply.tsx`**
 
-Ligne 1, élargir l'import React :
+Ligne 1, élargir l'import React, et importer le prédicat créé au Step 3 :
 
 ```tsx
 import { useEffect, useState, type FocusEvent } from "react"
+```
+
+puis, avec les autres imports locaux (après `import { Icon } from "./mail-icons"`) :
+
+```tsx
+import { leavesZone } from "./recipients-zone"
 ```
 
 Juste avant le `return (` de la l. 83 (donc après le calcul de `modeLabel`), ajouter le handler :
@@ -185,14 +269,11 @@ Juste avant le `return (` de la l. 83 (donc après le calcul de `modeLabel`), aj
   // Repli au niveau de la ZONE : une rangée vide ne se referme qu'en SORTANT
   // de la zone destinataires. Circuler entre champs et bascules ne referme
   // rien, et toute rangée vide oubliée en chemin est rattrapée à la sortie
-  // (design 2026-08-06, décisions 2 et 3).
+  // (design 2026-08-06, décisions 2 à 4).
   const collapseEmptyRows = (e: FocusEvent<HTMLDivElement>) => {
-    // relatedTarget nul = la fenêtre a perdu le focus (alt-tab) : ne rien
-    // refermer, l'utilisateur va probablement chercher une adresse ailleurs
-    // (décision 4). currentTarget est lu ICI : React le remet à null dès que
-    // le handler a rendu la main.
-    if (e.relatedTarget === null) return
-    if (e.currentTarget.contains(e.relatedTarget)) return
+    // currentTarget est lu ICI, pas dans un callback différé : React le remet
+    // à null dès que le handler a rendu la main (fait établi n°4).
+    if (!leavesZone(e.currentTarget, e.relatedTarget)) return
     if (draft.cc.trim() === "") setShowCc(false)
     if (draft.bcc.trim() === "") setShowBcc(false)
   }
@@ -235,7 +316,7 @@ Sur l'input `#qr-cc` (l. 133-141) : **supprimer** le `onBlur` et son commentaire
 Même traitement pour `#qr-bcc` (l. 147-155) : `onBlur` supprimé, `autoFocus`
 ajouté, `value={draft.bcc}` et `onChange` inchangés.
 
-- [ ] **Step 5 : Lancer les tests pour les voir passer**
+- [ ] **Step 9 : Lancer les tests pour les voir passer**
 
 ```bash
 bun run vitest run src/components/mail/quick-reply.test.tsx
@@ -244,7 +325,7 @@ bun run vitest run src/components/mail/quick-reply.test.tsx
 Attendu : PASS, y compris les tests de non-régression déjà présents
 (`fermer puis rouvrir`, `transférer A … transférer B`, bascules indépendantes).
 
-- [ ] **Step 6 : Vérifier la suite complète et les contrôles**
+- [ ] **Step 10 : Vérifier la suite complète et les contrôles**
 
 ```bash
 bun run test && bun run lint && bun run typecheck
@@ -254,7 +335,7 @@ Attendu : tout vert. Si `reader.test.tsx` ou d'autres tests montant la réponse
 rapide échouent sur un focus inattendu, c'est un vrai signal : le focus auto
 change `document.activeElement`. Corriger le test concerné, pas le composant.
 
-- [ ] **Step 7 : Commit**
+- [ ] **Step 11 : Commit**
 
 ```bash
 git add src/components/mail/quick-reply.tsx src/components/mail/quick-reply.test.tsx src/components/mail/mail.css
@@ -270,7 +351,10 @@ git commit -m "fix(reader): focus revealed Cc/Bcc row and collapse empty rows on
 - Test: `src/components/mail/composer.test.tsx:112-183` (bloc remplacé)
 
 **Interfaces:**
-- Consumes : `.recip-zone` (créée en Task 1) — ne pas la redéfinir.
+- Consumes : la classe CSS `.recip-zone` et
+  `leavesZone(zone: HTMLElement, related: Element | null): boolean`, exportée
+  par `src/components/mail/recipients-zone.ts` (Task 1) — les importer, ne
+  jamais les redéfinir ni les recopier.
 - Produces : rien pour les tâches suivantes.
 
 **Différence unique avec la Task 1 :** `showCc` est initialisé à
@@ -472,10 +556,14 @@ suite, pas une régression.
 
 - [ ] **Step 3 : Implémenter dans `composer.tsx`**
 
-Ligne 1 :
+Ligne 1, et l'import du prédicat partagé avec les autres imports locaux :
 
 ```tsx
 import { useRef, useState, type FocusEvent } from "react"
+```
+
+```tsx
+import { leavesZone } from "./recipients-zone"
 ```
 
 Après la déclaration de `showBcc` (l. 21), ajouter les drapeaux :
@@ -488,18 +576,16 @@ Après la déclaration de `showBcc` (l. 21), ajouter les drapeaux :
   const bccOpenedByUser = useRef(false)
 ```
 
-Après la déclaration de `set` (l. 25-26), ajouter le handler — identique à celui
-de la réponse rapide, aux noms d'état près :
+Après la déclaration de `set` (l. 25-26), ajouter le handler. Il **réutilise**
+le prédicat `leavesZone` créé en Task 1 — ne pas le réécrire ni le recopier :
 
 ```tsx
   // Repli au niveau de la ZONE : une rangée vide ne se referme qu'en SORTANT
-  // de la zone destinataires (design 2026-08-06, décisions 2 et 3).
+  // de la zone destinataires (design 2026-08-06, décisions 2 à 4).
   const collapseEmptyRows = (e: FocusEvent<HTMLDivElement>) => {
-    // relatedTarget nul = la fenêtre a perdu le focus (alt-tab) : ne rien
-    // refermer (décision 4). currentTarget est lu ICI : React le remet à null
-    // dès que le handler a rendu la main.
-    if (e.relatedTarget === null) return
-    if (e.currentTarget.contains(e.relatedTarget)) return
+    // currentTarget est lu ICI, pas dans un callback différé : React le remet
+    // à null dès que le handler a rendu la main.
+    if (!leavesZone(e.currentTarget, e.relatedTarget)) return
     if (draft.cc.trim() === "") setShowCc(false)
     if (draft.bcc.trim() === "") setShowBcc(false)
   }
