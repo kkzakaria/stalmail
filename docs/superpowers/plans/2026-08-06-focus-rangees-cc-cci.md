@@ -338,7 +338,7 @@ change `document.activeElement`. Corriger le test concerné, pas le composant.
 - [ ] **Step 11 : Commit**
 
 ```bash
-git add src/components/mail/quick-reply.tsx src/components/mail/quick-reply.test.tsx src/components/mail/mail.css
+git add src/components/mail/recipients-zone.ts src/components/mail/recipients-zone.test.ts src/components/mail/quick-reply.tsx src/components/mail/quick-reply.test.tsx src/components/mail/mail.css
 git commit -m "fix(reader): focus revealed Cc/Bcc row and collapse empty rows on zone exit"
 ```
 
@@ -717,6 +717,11 @@ sur « Envoyer » :
   sur la prod v0.1.48 (le défaut serait alors antérieur, hérité du `onBlur`
   d'input), puis ouvrir une issue dédiée avec les deux mesures.
 
+> **Arbitrage ultérieur** : consigne d'origine ci-dessus non suivie — le
+> partenaire humain a arbitré l'inverse. La Task 4 ci-dessous corrige
+> effectivement le clic avalé dans cette même PR (décision 6 de la spec),
+> plutôt que d'ouvrir une issue dédiée.
+
 - [ ] **Step 5 : Consigner le résultat**
 
 Reporter les deux parcours dans la description de la PR (ce sont eux qui
@@ -790,6 +795,20 @@ function Harness() {
   )
 }
 
+// Harnais démontable : expose le `collapse` différé pour vérifier qu'il n'est
+// pas appelé si le composant démonte avant la fin du geste.
+function HarnaisAvecEspion({ collapse }: { collapse: () => void }) {
+  const collapseAfterGesture = useGestureSafeCollapse()
+  return (
+    <div>
+      <button type="button" onClick={() => collapseAfterGesture(collapse)}>
+        replier
+      </button>
+      <button type="button">cible</button>
+    </div>
+  )
+}
+
 describe("useGestureSafeCollapse", () => {
   it("hors geste : replie immédiatement", () => {
     render(<Harness />)
@@ -831,6 +850,30 @@ describe("useGestureSafeCollapse", () => {
       vi.useRealTimers()
     }
   })
+
+  it("composant démonté pendant le geste : le repli différé ne s'exécute pas (fuite d'écouteur)", () => {
+    vi.useFakeTimers()
+    try {
+      const collapse = vi.fn()
+      const { unmount } = render(<HarnaisAvecEspion collapse={collapse} />)
+      const cible = screen.getByRole("button", { name: "cible" })
+      fireEvent.pointerDown(cible)
+      fireEvent.click(screen.getByRole("button", { name: "replier" }))
+      // Démonté AVANT le pointerup attendu : le report doit être annulé, pas
+      // laissé en attente sur `document`.
+      unmount()
+      // Dispatché sur `document`, pas sur `cible` : `cible` est détachée du
+      // document après unmount() et ne remonte plus jusqu'à l'écouteur
+      // global — seul un dispatch sur `document` lui-même est discriminant.
+      fireEvent.pointerUp(document)
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(collapse).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 ```
 
@@ -860,6 +903,11 @@ import { useCallback, useEffect, useRef } from "react"
  */
 export function useGestureSafeCollapse(): (collapse: () => void) => void {
   const pointerDown = useRef(false)
+  // Reports en attente (geste en cours, `collapse` pas encore exécuté) : un
+  // retrait par report, pour tout annuler si le composant démonte avant le
+  // pointerup/pointercancel attendu (sinon l'écouteur reste posé sur
+  // `document` et déclenche un `collapse` périmé plus tard, ailleurs).
+  const pending = useRef<Set<() => void>>(new Set())
 
   useEffect(() => {
     const down = () => {
@@ -871,10 +919,19 @@ export function useGestureSafeCollapse(): (collapse: () => void) => void {
     document.addEventListener("pointerdown", down, true)
     document.addEventListener("pointerup", up, true)
     document.addEventListener("pointercancel", up, true)
+    // Capturé ICI (pas relu via pending.current dans le cleanup) : la ref
+    // n'est jamais réassignée, donc la même instance de Set reste valable
+    // jusqu'au démontage — et exhaustive-deps ne réclame pas `pending` en
+    // dépendance de cet effet.
+    const pendingReports = pending.current
     return () => {
       document.removeEventListener("pointerdown", down, true)
       document.removeEventListener("pointerup", up, true)
       document.removeEventListener("pointercancel", up, true)
+      // Annule les gestes en cours : retire leurs écouteurs globaux et
+      // empêche tout `collapse` différé de s'exécuter après démontage.
+      for (const cancel of pendingReports) cancel()
+      pendingReports.clear()
     }
   }, [])
 
@@ -883,18 +940,34 @@ export function useGestureSafeCollapse(): (collapse: () => void) => void {
       collapse()
       return
     }
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const cancel = () => {
+      document.removeEventListener("pointerup", finish, true)
+      document.removeEventListener("pointercancel", finish, true)
+      if (timeoutId !== undefined) clearTimeout(timeoutId)
+      pending.current.delete(cancel)
+    }
     const finish = () => {
       document.removeEventListener("pointerup", finish, true)
       document.removeEventListener("pointercancel", finish, true)
       // pointerup, mouseup et click appartiennent à la même tâche : une
       // macrotâche s'exécute donc après la délivrance du clic.
-      setTimeout(collapse, 0)
+      timeoutId = setTimeout(() => {
+        pending.current.delete(cancel)
+        collapse()
+      }, 0)
     }
+    pending.current.add(cancel)
     document.addEventListener("pointerup", finish, true)
     document.addEventListener("pointercancel", finish, true)
   }, [])
 }
 ```
+
+> **Note** : version en vigueur depuis la correction post-revue (commit
+> `593d4a9`) — le registre `pending` annule les reports encore actifs au
+> démontage. La version initialement rédigée ici ne suivait pas ce chemin ;
+> voir le test de démontage ajouté au Step 1.
 
 - [ ] **Step 4 : Lancer le test pour le voir passer**
 
@@ -902,7 +975,7 @@ export function useGestureSafeCollapse(): (collapse: () => void) => void {
 bun run vitest run src/components/mail/use-gesture-safe-collapse.test.tsx
 ```
 
-Attendu : 3/3 PASS.
+Attendu : 4/4 PASS.
 
 - [ ] **Step 5 : Brancher le hook dans les deux composeurs**
 
