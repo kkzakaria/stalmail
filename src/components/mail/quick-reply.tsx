@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
+import type { FocusEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { Icon } from "./mail-icons"
+import { leavesZone } from "./recipients-zone"
 import { RteEditor } from "./rte-editor"
 import type { ComposerDraft } from "./use-composer"
 
@@ -80,81 +82,93 @@ export function QuickReply({
         ? t("mail.compose.replyAll")
         : t("mail.compose.reply")
 
+  // Repli au niveau de la ZONE : une rangée vide ne se referme qu'en SORTANT
+  // de la zone destinataires. Circuler entre champs et bascules ne referme
+  // rien, et toute rangée vide oubliée en chemin est rattrapée à la sortie
+  // (design 2026-08-06, décisions 2 à 4).
+  const collapseEmptyRows = (e: FocusEvent<HTMLDivElement>) => {
+    // currentTarget est lu ICI, pas dans un callback différé : React le remet
+    // à null dès que le handler a rendu la main (fait établi n°4).
+    if (!leavesZone(e.currentTarget, e.relatedTarget)) return
+    if (draft.cc.trim() === "") setShowCc(false)
+    if (draft.bcc.trim() === "") setShowBcc(false)
+  }
+
   return (
     <div className="quick-reply">
-      {/* En-tête unique (maquette) : mode + label À + destinataire éditable + fermer à droite. */}
-      <div className="qr-head">
-        <Icon name={modeIcon} size={15} />
-        <span>{modeLabel}</span>
-        <label className="qr-label" htmlFor="qr-to">
-          {t("mail.compose.to")}
-        </label>
-        <input
-          id="qr-to"
-          className="qr-to"
-          value={draft.to}
-          onChange={(e) => onPatch({ to: e.target.value })}
-        />
-        {/* Pas d'aria-label ici : le texte visible sert de nom accessible et
-            évite un doublon avec getByLabelText (qui matche aussi aria-label). */}
-        {draft.mode === "forward" && !showCc && (
+      <div className="recip-zone" onBlur={collapseEmptyRows}>
+        {/* En-tête unique (maquette) : mode + label À + destinataire éditable + fermer à droite. */}
+        <div className="qr-head">
+          <Icon name={modeIcon} size={15} />
+          <span>{modeLabel}</span>
+          <label className="qr-label" htmlFor="qr-to">
+            {t("mail.compose.to")}
+          </label>
+          <input
+            id="qr-to"
+            className="qr-to"
+            value={draft.to}
+            onChange={(e) => onPatch({ to: e.target.value })}
+          />
+          {/* Pas d'aria-label ici : le texte visible sert de nom accessible et
+              évite un doublon avec getByLabelText (qui matche aussi aria-label). */}
+          {draft.mode === "forward" && !showCc && (
+            <button
+              type="button"
+              className="icon-btn sm"
+              title={t("mail.compose.cc")}
+              onClick={() => setShowCc(true)}
+            >
+              {t("mail.compose.cc")}
+            </button>
+          )}
+          {draft.mode === "forward" && !showBcc && (
+            <button
+              type="button"
+              className="icon-btn sm"
+              title={t("mail.compose.bcc")}
+              onClick={() => setShowBcc(true)}
+            >
+              {t("mail.compose.bcc")}
+            </button>
+          )}
           <button
             type="button"
             className="icon-btn sm"
-            title={t("mail.compose.cc")}
-            onClick={() => setShowCc(true)}
+            aria-label={t("mail.compose.close")}
+            title={t("mail.compose.close")}
+            onClick={onClose}
           >
-            {t("mail.compose.cc")}
+            <Icon name="x" size={16} />
           </button>
+        </div>
+        {draft.mode === "forward" && showCc && (
+          <div className="qr-field">
+            <label htmlFor="qr-cc">{t("mail.compose.cc")}</label>
+            <input
+              id="qr-cc"
+              // Focus à l'ouverture : la rangée est utilisable sans second clic,
+              // et le focus clavier ne retombe plus sur <body>. Inconditionnel
+              // ici — dans la réponse rapide les rangées démarrent fermées, donc
+              // tout montage est une ouverture par bascule.
+              autoFocus
+              value={draft.cc}
+              onChange={(e) => onPatch({ cc: e.target.value })}
+            />
+          </div>
         )}
-        {draft.mode === "forward" && !showBcc && (
-          <button
-            type="button"
-            className="icon-btn sm"
-            title={t("mail.compose.bcc")}
-            onClick={() => setShowBcc(true)}
-          >
-            {t("mail.compose.bcc")}
-          </button>
+        {draft.mode === "forward" && showBcc && (
+          <div className="qr-field">
+            <label htmlFor="qr-bcc">{t("mail.compose.bcc")}</label>
+            <input
+              id="qr-bcc"
+              autoFocus
+              value={draft.bcc}
+              onChange={(e) => onPatch({ bcc: e.target.value })}
+            />
+          </div>
         )}
-        <button
-          type="button"
-          className="icon-btn sm"
-          aria-label={t("mail.compose.close")}
-          title={t("mail.compose.close")}
-          onClick={onClose}
-        >
-          <Icon name="x" size={16} />
-        </button>
       </div>
-      {draft.mode === "forward" && showCc && (
-        <div className="qr-field">
-          <label htmlFor="qr-cc">{t("mail.compose.cc")}</label>
-          <input
-            id="qr-cc"
-            value={draft.cc}
-            onChange={(e) => onPatch({ cc: e.target.value })}
-            // Rangée vide quittée → retour à la bascule (retour prod v0.1.47).
-            onBlur={() => {
-              if (draft.cc.trim() === "") setShowCc(false)
-            }}
-          />
-        </div>
-      )}
-      {draft.mode === "forward" && showBcc && (
-        <div className="qr-field">
-          <label htmlFor="qr-bcc">{t("mail.compose.bcc")}</label>
-          <input
-            id="qr-bcc"
-            value={draft.bcc}
-            onChange={(e) => onPatch({ bcc: e.target.value })}
-            // Rangée vide quittée → retour à la bascule (retour prod v0.1.47).
-            onBlur={() => {
-              if (draft.bcc.trim() === "") setShowBcc(false)
-            }}
-          />
-        </div>
-      )}
       {/* Puces des pièces jointes reprises (transfert) — retirables une à une. */}
       {draft.attachments.length > 0 && (
         <div className="attach-row">

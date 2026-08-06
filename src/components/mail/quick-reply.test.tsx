@@ -330,37 +330,82 @@ describe("QuickReply — bascules Cc/Cci (transfert uniquement)", () => {
       screen.getByRole("button", { name: "mail.compose.cc" })
     ).toBeInTheDocument()
   })
+})
 
-  it("forward : referme la rangée Cc vide au blur (bascule de retour)", () => {
+describe("QuickReply — zone destinataires : focus et repli", () => {
+  // Ouvre un transfert puis révèle la rangée Cc par sa bascule.
+  const ouvrirCc = () => {
     render(<ForwardHarness detail={detail} />)
     fireEvent.click(screen.getByText("fwd A"))
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
-    fireEvent.blur(screen.getByLabelText("mail.compose.cc"))
+  }
+  // Cible hors zone : l'éditeur de message (le parcours rapporté en prod).
+  const horsZone = () => screen.getByLabelText("mail.compose.body")
+
+  it("la bascule Cc donne le focus au champ révélé", () => {
+    ouvrirCc()
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("mail.compose.cc")
+    )
+  })
+
+  it("sortir de la zone referme la rangée Cc vide", () => {
+    ouvrirCc()
+    fireEvent.focusOut(screen.getByLabelText("mail.compose.cc"), {
+      relatedTarget: horsZone(),
+    })
     expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
     expect(
       screen.getByRole("button", { name: "mail.compose.cc" })
     ).toBeInTheDocument()
   })
 
-  it("forward : garde la rangée Cci ouverte au blur quand elle a une valeur", () => {
-    render(<ForwardHarness detail={detail} />)
-    fireEvent.click(screen.getByText("fwd A"))
+  it("sortir de la zone garde la rangée Cc remplie", () => {
+    ouvrirCc()
+    const cc = screen.getByLabelText<HTMLInputElement>("mail.compose.cc")
+    fireEvent.change(cc, { target: { value: "bob@x.fr" } })
+    fireEvent.focusOut(cc, { relatedTarget: horsZone() })
+    expect(
+      screen.getByLabelText<HTMLInputElement>("mail.compose.cc").value
+    ).toBe("bob@x.fr")
+  })
+
+  it("des espaces seuls comptent comme vide", () => {
+    ouvrirCc()
+    const cc = screen.getByLabelText<HTMLInputElement>("mail.compose.cc")
+    fireEvent.change(cc, { target: { value: "   " } })
+    fireEvent.focusOut(cc, { relatedTarget: horsZone() })
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+  })
+
+  it("circuler dans la zone ne referme rien (Cc vide → bascule Cci)", () => {
+    ouvrirCc()
+    fireEvent.focusOut(screen.getByLabelText("mail.compose.cc"), {
+      relatedTarget: screen.getByRole("button", { name: "mail.compose.bcc" }),
+    })
+    expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
+  })
+
+  it("détour par Cci puis sortie : la Cc vide oubliée se referme aussi", () => {
+    // Le parcours qui échouait : sans la règle de zone, Cc exemptée au passage
+    // vers Cci n'était plus jamais réévaluée.
+    ouvrirCc()
+    fireEvent.focusOut(screen.getByLabelText("mail.compose.cc"), {
+      relatedTarget: screen.getByRole("button", { name: "mail.compose.bcc" }),
+    })
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
     const bcc = screen.getByLabelText<HTMLInputElement>("mail.compose.bcc")
     fireEvent.change(bcc, { target: { value: "bob@x.fr" } })
-    fireEvent.blur(bcc)
+    fireEvent.focusOut(bcc, { relatedTarget: horsZone() })
+    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
     expect(
       screen.getByLabelText<HTMLInputElement>("mail.compose.bcc").value
     ).toBe("bob@x.fr")
   })
 
-  it("forward : referme la rangée Cc au blur avec des espaces seuls", () => {
-    render(<ForwardHarness detail={detail} />)
-    fireEvent.click(screen.getByText("fwd A"))
-    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
-    const cc = screen.getByLabelText<HTMLInputElement>("mail.compose.cc")
-    fireEvent.change(cc, { target: { value: "  " } })
-    fireEvent.blur(cc)
-    expect(screen.queryByLabelText("mail.compose.cc")).not.toBeInTheDocument()
+  it("relatedTarget nul (fenêtre qui perd le focus) ne referme rien", () => {
+    ouvrirCc()
+    fireEvent.blur(screen.getByLabelText("mail.compose.cc"))
+    expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
   })
 })
