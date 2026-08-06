@@ -278,7 +278,14 @@ describe("Composer", () => {
       />
     )
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
-    fireEvent.blur(screen.getByRole("textbox", { name: "mail.compose.cc" }))
+    // focusOut explicite avec relatedTarget: null — exerce le contrat de
+    // leavesZone sans dépendre de la façon dont jsdom traduit fireEvent.blur.
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      {
+        relatedTarget: null,
+      }
+    )
     expect(
       screen.getByRole("textbox", { name: "mail.compose.cc" })
     ).toBeInTheDocument()
@@ -308,6 +315,11 @@ describe("Composer", () => {
         screen.getByRole("textbox", { name: "mail.compose.cc" })
       ).toBeInTheDocument()
       fireEvent.pointerUp(cible)
+      // Le repli doit rester en attente jusqu'après la délivrance du clic :
+      // un repli synchrone ici serait le défaut que le report doit empêcher.
+      expect(
+        screen.getByRole("textbox", { name: "mail.compose.cc" })
+      ).toBeInTheDocument()
       act(() => {
         vi.runAllTimers()
       })

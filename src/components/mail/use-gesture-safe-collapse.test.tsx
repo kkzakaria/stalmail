@@ -50,6 +50,9 @@ describe("useGestureSafeCollapse", () => {
       fireEvent.click(screen.getByRole("button", { name: "replier" }))
       expect(screen.getByTestId("etat")).toHaveTextContent("ouverte")
       fireEvent.pointerUp(cible)
+      // Le repli doit rester en attente jusqu'après la délivrance du clic :
+      // un repli synchrone ici serait le défaut que le report doit empêcher.
+      expect(screen.getByTestId("etat")).toHaveTextContent("ouverte")
       act(() => {
         vi.runAllTimers()
       })
@@ -87,7 +90,10 @@ describe("useGestureSafeCollapse", () => {
       // Démonté AVANT le pointerup attendu : le report doit être annulé, pas
       // laissé en attente sur `document`.
       unmount()
-      fireEvent.pointerUp(cible)
+      // Dispatché sur `document`, pas sur `cible` : `cible` est détachée du
+      // document après unmount() et ne remonte plus jusqu'à l'écouteur
+      // global — seul un dispatch sur `document` lui-même est discriminant.
+      fireEvent.pointerUp(document)
       act(() => {
         vi.runAllTimers()
       })

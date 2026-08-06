@@ -405,7 +405,11 @@ describe("QuickReply — zone destinataires : focus et repli", () => {
 
   it("relatedTarget nul (fenêtre qui perd le focus) ne referme rien", () => {
     ouvrirCc()
-    fireEvent.blur(screen.getByLabelText("mail.compose.cc"))
+    // focusOut explicite avec relatedTarget: null — exerce le contrat de
+    // leavesZone sans dépendre de la façon dont jsdom traduit fireEvent.blur.
+    fireEvent.focusOut(screen.getByLabelText("mail.compose.cc"), {
+      relatedTarget: null,
+    })
     expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
   })
 
@@ -422,6 +426,9 @@ describe("QuickReply — zone destinataires : focus et repli", () => {
       // avalé par le décalage de la mise en page.
       expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
       fireEvent.pointerUp(cible)
+      // Le repli doit rester en attente jusqu'après la délivrance du clic :
+      // un repli synchrone ici serait le défaut que le report doit empêcher.
+      expect(screen.getByLabelText("mail.compose.cc")).toBeInTheDocument()
       act(() => {
         vi.runAllTimers()
       })
@@ -429,5 +436,30 @@ describe("QuickReply — zone destinataires : focus et repli", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // Symétrie Cci, calquée sur les cas Cc ci-dessus.
+  const ouvrirBcc = () => {
+    render(<ForwardHarness detail={detail} />)
+    fireEvent.click(screen.getByText("fwd A"))
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
+  }
+
+  it("la bascule Cci donne le focus au champ révélé", () => {
+    ouvrirBcc()
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("mail.compose.bcc")
+    )
+  })
+
+  it("sortir de la zone referme la rangée Cci vide (espaces compris)", () => {
+    ouvrirBcc()
+    const bcc = screen.getByLabelText<HTMLInputElement>("mail.compose.bcc")
+    fireEvent.change(bcc, { target: { value: "   " } })
+    fireEvent.focusOut(bcc, { relatedTarget: horsZone() })
+    expect(screen.queryByLabelText("mail.compose.bcc")).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "mail.compose.bcc" })
+    ).toBeInTheDocument()
   })
 })
