@@ -51,7 +51,7 @@
 
 **Files:**
 - Modify: `src/server/stalwart-bootstrap.ts` (ajout de `getServerHostname`)
-- Modify: `src/server/setup-actions.ts:422-447` (fonctions de résolution), `:453-472` (`setupContextHandler`), `:473-505` (`configureAcmeHandler`)
+- Modify: `src/server/setup-actions.ts:339-342` (renommage de l'appelant webmail), `:422-447` (fonctions de résolution), `:453-472` (`setupContextHandler`), `:473-505` (`configureAcmeHandler`)
 - Test: `src/server/stalwart-bootstrap.test.ts`, `src/server/setup-actions.test.ts`
 
 **Interfaces:**
@@ -125,7 +125,10 @@ Attendu : 3/3 PASS sur le nouveau bloc.
 
 - [ ] **Step 5 : Écrire les tests de la résolution pure et des handlers**
 
-Dans `src/server/setup-actions.test.ts`, **remplacer** le bloc `describe("resolveServerHostname (pur)")` (l. 187-205) par :
+Dans `src/server/setup-actions.test.ts`, **conserver** le bloc
+`describe("resolveServerHostname (pur)")` (l. 187-205) en renommant la fonction
+testée et le titre du bloc en `resolveWebmailHostname` — il couvre un
+comportement qui existe toujours (voir Step 7). Ajouter **à côté** :
 
 ```ts
 describe("resolveMailHostname (pur)", () => {
@@ -155,7 +158,22 @@ describe("resolveMailHostname (pur)", () => {
 })
 ```
 
-Remplacer l'import de `resolveServerHostname` (l. 21) par `resolveMailHostname`.
+Adapter l'import (l. 21) : `resolveServerHostname` devient `resolveWebmailHostname`, et `resolveMailHostname` s'y ajoute.
+
+Ajouter enfin le cas qui épingle la distinction — c'est elle le cœur du correctif :
+
+```ts
+it("les deux résolveurs répondent différemment quand les rôles divergent", () => {
+  // L'hôte du webmail et l'identité mail n'ont aucune raison de coïncider :
+  // les confondre faisait demander le certificat pour le mauvais nom.
+  expect(resolveWebmailHostname("https://webmail.exemple.fr", "exemple.fr")).toBe(
+    "webmail.exemple.fr"
+  )
+  expect(resolveMailHostname("mail.exemple.fr", "exemple.fr")).toBe(
+    "mail.exemple.fr"
+  )
+})
+```
 
 Le fichier moque déjà `./stalwart-bootstrap` (l. 44-50) : **y ajouter `getServerHostname`**, sans quoi les nouveaux tests ne pourront pas en contrôler la valeur.
 
@@ -215,7 +233,29 @@ Attendu : FAIL — `resolveMailHostname` n'existe pas, et les handlers utilisent
 
 - [ ] **Step 7 : Remplacer la résolution**
 
-Dans `src/server/setup-actions.ts`, **supprimer** `resolveServerHostname` (l. 422-434) et `resolveAcmeHostname` (l. 439-447), et écrire à leur place :
+Dans `src/server/setup-actions.ts`, **supprimer** `resolveAcmeHostname`
+(l. 439-447), qui n'a plus d'usage.
+
+`resolveServerHostname` (l. 422-434), en revanche, **reste** : elle a un second
+appelant, `hostAddressStatusHandler` (l. 339-342), qui s'en sert pour le CNAME
+webmail des enregistrements DNS (rôle `"webmail"` dans `dns-host-records.ts`).
+C'est un usage légitime et distinct, qui doit continuer de lire
+`STALMAIL_PUBLIC_URL`. La **renommer** `resolveWebmailHostname` — corps inchangé,
+appelant mis à jour — et lui donner un commentaire qui nomme son rôle, puisque
+c'est justement l'ambiguïté de l'ancien nom qui a produit le défaut :
+
+```ts
+// Pur : hôte du WEBMAIL, dérivé de STALMAIL_PUBLIC_URL, à défaut le nom du domaine.
+// Sert au CNAME webmail des enregistrements DNS (rôle "webmail"). À ne pas confondre
+// avec l'identité du serveur mail (bannière EHLO, cible MX, SAN du certificat) :
+// celle-là se lit chez Stalwart via resolveMailHostname (design 2026-08-07).
+export function resolveWebmailHostname(
+  publicUrl: string | undefined,
+  domainName: string
+): string {
+```
+
+Puis écrire à côté :
 
 ```ts
 // Pur : le nom que le serveur mail annonce. Le `serverHostname` vient de Stalwart
