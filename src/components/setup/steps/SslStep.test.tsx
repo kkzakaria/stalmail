@@ -30,6 +30,8 @@ describe("SslStep", () => {
           Promise.resolve({ ok: true as const })
         )}
         onNext={onNext}
+        mailDomainEnv=""
+        defaultDomain="exemple.fr"
       />
     )
 
@@ -67,6 +69,8 @@ describe("SslStep", () => {
         onStatusChange={vi.fn()}
         acknowledgeManualSsl={acknowledgeManualSsl}
         onNext={onNext}
+        mailDomainEnv=""
+        defaultDomain="exemple.fr"
       />
     )
 
@@ -99,6 +103,8 @@ describe("SslStep", () => {
         onStatusChange={vi.fn()}
         acknowledgeManualSsl={acknowledgeManualSsl}
         onNext={onNext}
+        mailDomainEnv=""
+        defaultDomain="exemple.fr"
       />
     )
 
@@ -128,6 +134,8 @@ describe("SslStep", () => {
         onStatusChange={vi.fn()}
         acknowledgeManualSsl={acknowledgeManualSsl}
         onNext={onNext}
+        mailDomainEnv=""
+        defaultDomain="exemple.fr"
       />
     )
 
@@ -166,6 +174,8 @@ describe("SslStep", () => {
         onStatusChange={vi.fn()}
         acknowledgeManualSsl={acknowledgeManualSsl}
         onNext={onNext}
+        mailDomainEnv=""
+        defaultDomain="exemple.fr"
       />
     )
 
@@ -204,6 +214,8 @@ describe("SslStep", () => {
           Promise.resolve({ ok: true as const })
         )}
         onNext={vi.fn()}
+        mailDomainEnv=""
+        defaultDomain="exemple.fr"
       />
     )
 
@@ -212,5 +224,58 @@ describe("SslStep", () => {
       screen.getByText("L'obtention du certificat SSL a échoué.")
     ).toBeInTheDocument()
     expect(screen.getByText("Réessayer")).toBeInTheDocument()
+  })
+
+  describe("avertissement de divergence de domaine", () => {
+    // Props minimales communes aux trois cas : DNS manuel pour rendre le composant
+    // synchrone (pas de configureAcme async à attendre), l'avertissement étant rendu
+    // au-dessus du contenu propre à chaque phase.
+    const baseProps = {
+      hostname: "mail.exemple.fr",
+      contactEmail: "admin@exemple.fr",
+      dnsManual: true,
+      configureAcme: vi.fn(() => Promise.resolve({ ok: true as const })),
+      acmeStatus: vi.fn(
+        (): Promise<{ status: AcmeStatus }> =>
+          Promise.resolve({ status: "pending" })
+      ),
+      onStatusChange: vi.fn(),
+      acknowledgeManualSsl: vi.fn(() => Promise.resolve({ ok: true as const })),
+      onNext: vi.fn(),
+    }
+
+    it("avertit quand le domaine déclaré diverge du domaine créé", async () => {
+      wrap(
+        <SslStep
+          {...baseProps}
+          mailDomainEnv="autre.fr"
+          defaultDomain="exemple.fr"
+        />
+      )
+      // Le texte réellement rendu porte l'interpolation ({{env}}/{{created}}) — on
+      // vérifie le fragment mta-sts.<env> qui prouve à la fois la présence de
+      // l'avertissement et la bonne interpolation.
+      expect(await screen.findByText(/mta-sts\.autre\.fr/)).toBeInTheDocument()
+    })
+
+    it("n'avertit pas quand les deux domaines coïncident", async () => {
+      wrap(
+        <SslStep
+          {...baseProps}
+          mailDomainEnv="exemple.fr"
+          defaultDomain="exemple.fr"
+        />
+      )
+      await screen.findByText("Certificat à gérer manuellement")
+      expect(screen.queryByText(/mta-sts\./)).not.toBeInTheDocument()
+    })
+
+    it("n'avertit pas quand la variable est absente", async () => {
+      wrap(
+        <SslStep {...baseProps} mailDomainEnv="" defaultDomain="exemple.fr" />
+      )
+      await screen.findByText("Certificat à gérer manuellement")
+      expect(screen.queryByText(/mta-sts\./)).not.toBeInTheDocument()
+    })
   })
 })

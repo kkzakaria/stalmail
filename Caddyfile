@@ -22,6 +22,21 @@
 {
 	# SNI par défaut pour les connexions sans SNI (accès par IP, pré-DNS).
 	default_sni bootstrap.stalmail.local
+
+	# Annuaire ACME. Le défaut (production Let's Encrypt) est posé ICI ET dans les
+	# fichiers compose — les deux ne se recouvrent pas complètement :
+	#   - celui-ci (`{$VAR:defaut}`) ne s'applique que si la variable est ABSENTE de
+	#     l'environnement. C'est le filet pour tout montage de ce Caddyfile hors
+	#     compose (`docker run --rm ... caddy validate`, `compose.yml`, qui ne pose
+	#     aucun `environment` sur son service caddy) : sans lui, `acme_ca` sans
+	#     argument fait échouer l'analyse du Caddyfile au démarrage.
+	#   - ceux des fichiers compose (`${VAR:-defaut}`) couvrent EN PLUS le cas où la
+	#     variable est présente mais vide (`.env` avec la clé posée à vide) — un cas
+	#     que la substitution Caddyfile ne sait pas gérer, puisqu'elle ne regarde que
+	#     l'absence.
+	# Bascule en staging par le .env pour les validations qui détruisent et refont
+	# le déploiement.
+	acme_ca {$STALMAIL_ACME_DIRECTORY:https://acme-v02.api.letsencrypt.org/directory}
 }
 
 # Routes communes aux deux sites (DRY).
@@ -54,4 +69,22 @@
 # Site nommé : domaine réel en prod (ACME), `localhost` en dev (cert local auto).
 {$STALMAIL_HOSTNAME:localhost} {
 	import stalmail_routes
+}
+
+# Hôte de politique MTA-STS. La zone Stalwart publie déjà le TXT `_mta-sts` et le
+# CNAME `mta-sts` ; sans ce bloc, le nom résout mais aucun site ne répond et le
+# handshake TLS échoue — on publiait un enregistrement dont on ne desservait pas la
+# politique. Stalwart génère et sert la politique lui-même sur ce chemin.
+#
+# Rien d'autre n'est exposé sous ce nom : ni webmail, ni wizard, ni surface JMAP.
+# Aucune directive `tls` : Caddy émet un certificat interne pour le défaut en
+# `.localhost` (stack de dev, pas de domaine mail) et passe à ACME dès que la
+# variable porte un vrai domaine.
+mta-sts.{$STALMAIL_MAIL_DOMAIN:invalid.localhost} {
+	handle /.well-known/mta-sts.txt {
+		reverse_proxy stalwart:8080
+	}
+	handle {
+		respond 404
+	}
 }

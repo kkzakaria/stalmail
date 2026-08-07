@@ -4,16 +4,20 @@ set -euo pipefail
 # Stalmail — installeur serveur en UNE commande (images GHCR, sans build, sans copie).
 #
 #   curl -fsSL https://raw.githubusercontent.com/kkzakaria/stalmail/main/install.sh \
-#     | bash -s -- mail.getstalmail.com
+#     | bash -s -- mail.getstalmail.com getstalmail.com
 #
-# Ou en local :  ./install.sh mail.getstalmail.com
+# Ou en local :  ./install.sh mail.getstalmail.com getstalmail.com
 #
-# Le SEUL paramètre requis est le hostname public. Le script :
+# Deux paramètres, dans cet ordre : le hostname public du webmail, puis le domaine des
+# adresses e-mail (partie après le @ — distinct du hostname, ex. ci-dessus). Omis →
+# prompt sur le terminal (/dev/tty, jamais sur l'entrée standard : compatible avec
+# l'usage en pipe ci-dessus). Le script :
 #   - vérifie Docker + Compose v2,
 #   - récupère compose.prod.yml + Caddyfile depuis le repo (images publiques GHCR),
-#   - génère .env (STALMAIL_SECRET aléatoire + STALMAIL_HOSTNAME + STALMAIL_PUBLIC_URL),
+#   - génère .env (STALMAIL_SECRET aléatoire + STALMAIL_HOSTNAME + STALMAIL_PUBLIC_URL
+#     + STALMAIL_MAIL_DOMAIN + hash du jeton de setup),
 #   - tire les images et démarre la stack.
-# Le reste (domaine, DNS, SSL, DKIM) se configure dans le wizard in-app.
+# Le reste (DNS, SSL, DKIM) se configure dans le wizard in-app.
 
 # Réf des fichiers récupérés (compose.prod.yml + Caddyfile). Défaut `main` : ce script
 # sert d'abord à valider le socle courant. Pour une install reproductible, épingler un
@@ -27,10 +31,31 @@ echo "║        Stalmail Installer        ║"
 echo "╚══════════════════════════════════╝"
 echo ""
 
-# 1. Hostname (argument ou prompt).
+# Lit une saisie interactive depuis le terminal (/dev/tty), jamais depuis l'entrée
+# standard : en usage pipé (curl ... | bash -s -- ...), stdin porte le SCRIPT lui-même,
+# et un `read` non redirigé y avalerait la ligne de code suivante comme saisie
+# utilisateur — corruption silencieuse de l'exécution. `[ -r /dev/tty ]` ne suffit PAS
+# ici : le nœud existe et est lisible même sans terminal contrôlant (échec seulement à
+# l'OUVERTURE, avec ENXIO, pas au niveau des permissions du fichier) ; on sonde donc la
+# vraie ouverture dans un SOUS-SHELL jetable (aucun effet de bord sur les fds du script
+# principal, message d'erreur bash absorbé par le `2>/dev/null` du sous-shell tout
+# entier) pour détecter le cas CI/non interactif et échouer proprement plutôt que de
+# laisser échapper l'erreur brute ou de bloquer.
+# Usage : prompt_tty "texte du prompt" NOM_VARIABLE "message d'erreur si pas de terminal"
+prompt_tty() {
+  if ( exec 3< /dev/tty ) 2>/dev/null; then
+    read -rp "$1" "$2" < /dev/tty
+  else
+    echo "$3"
+    exit 1
+  fi
+}
+
+# 1. Hostname (argument ou prompt terminal).
 HOSTNAME_ARG="${1:-}"
 if [ -z "${HOSTNAME_ARG}" ]; then
-  read -rp "Hostname public du webmail (ex. mail.getstalmail.com) : " HOSTNAME_ARG
+  prompt_tty "Hostname public du webmail (ex. mail.getstalmail.com) : " HOSTNAME_ARG \
+    "❌ Hostname requis. Aucun terminal disponible pour le demander : passez-le en argument, ex. : ./install.sh mail.getstalmail.com getstalmail.com"
 fi
 if [ -z "${HOSTNAME_ARG}" ]; then
   echo "❌ Hostname requis."
@@ -41,6 +66,35 @@ fi
 if ! printf '%s' "${HOSTNAME_ARG}" | grep -qE '^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'; then
   echo "❌ Hostname invalide : « ${HOSTNAME_ARG} ». Attendu un FQDN, ex. mail.getstalmail.com"
   exit 1
+fi
+
+# Domaine des adresses e-mail (partie après le @). Distinct du hostname du webmail :
+# avec STALMAIL_HOSTNAME=mail.exemple.fr, on attend ici exemple.fr. Requis par
+# compose.prod.yml (hôte de politique MTA-STS).
+MAIL_DOMAIN_ARG="${2:-}"
+if [ -z "${MAIL_DOMAIN_ARG}" ]; then
+  # Même précaution que pour HOSTNAME_ARG ci-dessus (voir prompt_tty). C'est ici que le
+  # défaut historique se manifestait le plus souvent, puisque l'usage documenté en tête
+  # de fichier ne fournit qu'un seul argument (le hostname) → ce prompt était
+  # systématiquement atteint en pipe.
+  prompt_tty "Domaine des adresses e-mail (ex. getstalmail.com) : " MAIL_DOMAIN_ARG \
+    "❌ Domaine des adresses requis. Aucun terminal disponible pour le demander : passez-le en second argument, ex. : ./install.sh mail.getstalmail.com getstalmail.com"
+fi
+if [ -z "${MAIL_DOMAIN_ARG}" ]; then
+  echo "❌ Domaine des adresses requis."
+  exit 1
+fi
+if ! printf '%s' "${MAIL_DOMAIN_ARG}" | grep -qE '^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'; then
+  echo "❌ Domaine invalide : « ${MAIL_DOMAIN_ARG} ». Attendu un domaine, ex. getstalmail.com"
+  exit 1
+fi
+# Garde-fou (non bloquant) contre la confusion la plus probable : le domaine des
+# adresses n'est PAS le hostname du webmail. C'est parfois voulu (webmail sur l'apex),
+# mais bien plus souvent une saisie erronée (valeurs identiques ou arguments inversés).
+if [ "${MAIL_DOMAIN_ARG}" = "${HOSTNAME_ARG}" ]; then
+  echo "⚠ Domaine des adresses (${MAIL_DOMAIN_ARG}) identique au hostname du webmail."
+  echo "   Attendu normalement deux valeurs distinctes, ex. hostname=mail.exemple.fr"
+  echo "   et domaine=exemple.fr. Si c'est volontaire (webmail sur l'apex), ignorez ce message."
 fi
 
 # 2. Docker + Compose.
@@ -118,9 +172,10 @@ if [ ! -f .env ]; then
     printf 'STALMAIL_HOSTNAME=%s\n' "${HOSTNAME_ARG}"
     printf 'STALMAIL_PUBLIC_URL=https://%s\n' "${HOSTNAME_ARG}"
     printf 'STALMAIL_SETUP_TOKEN_HASH=%s\n' "${SETUP_TOKEN_HASH}"
+    printf 'STALMAIL_MAIL_DOMAIN=%s\n' "${MAIL_DOMAIN_ARG}"
   } > .env
   chmod 600 .env
-  echo "✓ .env créé (secret généré, hostname=${HOSTNAME_ARG})"
+  echo "✓ .env créé (secret généré, hostname=${HOSTNAME_ARG}, domaine=${MAIL_DOMAIN_ARG})"
 else
   # .env existant : ne pas mentir sur le hostname affiché. Si l'argument diffère du
   # STALMAIL_HOSTNAME déjà enregistré, on s'arrête (l'opérateur tranche) ; sinon on réutilise.
@@ -146,6 +201,15 @@ else
   fi
   # Si le hash existait déjà, le jeton en clair n'est pas récupérable (seul le hash est
   # persisté) → SETUP_TOKEN reste vide, géré dans l'encadré final ci-dessous.
+  # Migration douce : un .env antérieur à la topologie mail n'a pas
+  # STALMAIL_MAIL_DOMAIN, désormais REQUISE par compose.prod.yml → sans elle,
+  # `docker compose up` échoue avant tout affichage.
+  EXISTING_MAIL_DOMAIN=$(awk -F= '$1=="STALMAIL_MAIL_DOMAIN"{print $2}' .env | tail -n1)
+  if [ -z "${EXISTING_MAIL_DOMAIN}" ]; then
+    printf 'STALMAIL_MAIL_DOMAIN=%s\n' "${MAIL_DOMAIN_ARG}" >> .env
+    chmod 600 .env
+    echo "✓ .env migré (STALMAIL_MAIL_DOMAIN=${MAIL_DOMAIN_ARG} ajouté)"
+  fi
 fi
 
 # 5. Démarrage.

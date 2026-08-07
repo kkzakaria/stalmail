@@ -242,6 +242,7 @@ describe("SetupWizard", () => {
         initialContext={{
           serverHostname: "mail.exemple.fr",
           defaultDomain: "exemple.fr",
+          mailDomainEnv: "",
         }}
         submitBootstrap={vi.fn()}
         pollStep={poll}

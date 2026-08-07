@@ -10,6 +10,7 @@ import { Alert, Badge, Spinner, StepHeader, StepNav } from "../ui/primitives"
 import { IconInfo } from "../ui/icons"
 import { SetupErrorBox } from "../ui/SetupErrorBox"
 import { codeFromError, messageKeyForCode } from "../error-code"
+import { hasMailDomainMismatch } from "../host-utils"
 
 type Phase = "configuring" | "monitor" | "manual" | "error"
 
@@ -26,6 +27,10 @@ interface Props {
   /** Called before onNext in manual DNS mode to write the SSL acknowledgment marker. */
   acknowledgeManualSsl: () => Promise<{ ok: true }>
   onNext: () => void
+  /** Valeur de STALMAIL_MAIL_DOMAIN, vide si non déclarée. */
+  mailDomainEnv: string
+  /** Domaine réellement créé dans le wizard. */
+  defaultDomain: string
 }
 
 export function SslStep({
@@ -37,6 +42,8 @@ export function SslStep({
   onStatusChange,
   acknowledgeManualSsl,
   onNext,
+  mailDomainEnv,
+  defaultDomain,
 }: Props) {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>(
@@ -150,6 +157,15 @@ export function SslStep({
         title={t("wizard.ssl.title")}
         sub={t("wizard.ssl.subtitle")}
       />
+
+      {hasMailDomainMismatch(mailDomainEnv, defaultDomain) && (
+        <Alert variant="warning">
+          {t("wizard.ssl.domainMismatch", {
+            env: mailDomainEnv,
+            created: defaultDomain,
+          })}
+        </Alert>
+      )}
 
       {phase === "configuring" ? (
         <p className="inline-status">
