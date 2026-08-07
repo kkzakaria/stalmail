@@ -553,6 +553,11 @@ export async function finishSetupHandler(): Promise<{ ok: true }> {
 // Inputs may be empty on a pure resume (client state not yet collected); the
 // handler resolves hostname/contactEmail server-side. Bound the lengths only.
 export const configureAcmeSchema = z.object({
+  // `hostname` reste accepté et borné pour ne pas changer le contrat client dans
+  // cette PR, mais n'alimente plus le SAN : configureAcmeHandler lit l'identité mail
+  // chez Stalwart (getServerHostname → resolveMailHostname), pas dans cette entrée
+  // (design 2026-08-07 — confondre l'hôte du webmail et l'identité mail faisait
+  // demander le certificat pour le mauvais nom).
   hostname: z.string().max(253),
   contactEmail: z.union([z.literal(""), z.string().email().max(254)]),
 })
