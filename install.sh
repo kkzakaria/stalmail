@@ -43,6 +43,22 @@ if ! printf '%s' "${HOSTNAME_ARG}" | grep -qE '^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[
   exit 1
 fi
 
+# Domaine des adresses e-mail (partie après le @). Distinct du hostname du webmail :
+# avec STALMAIL_HOSTNAME=mail.exemple.fr, on attend ici exemple.fr. Requis par
+# compose.prod.yml (hôte de politique MTA-STS).
+MAIL_DOMAIN_ARG="${2:-}"
+if [ -z "${MAIL_DOMAIN_ARG}" ]; then
+  read -rp "Domaine des adresses e-mail (ex. getstalmail.com) : " MAIL_DOMAIN_ARG
+fi
+if [ -z "${MAIL_DOMAIN_ARG}" ]; then
+  echo "❌ Domaine des adresses requis."
+  exit 1
+fi
+if ! printf '%s' "${MAIL_DOMAIN_ARG}" | grep -qE '^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'; then
+  echo "❌ Domaine invalide : « ${MAIL_DOMAIN_ARG} ». Attendu un domaine, ex. getstalmail.com"
+  exit 1
+fi
+
 # 2. Docker + Compose.
 if ! command -v docker &> /dev/null; then
   echo "❌ Docker n'est pas installé. → https://docs.docker.com/get-docker/"
@@ -118,9 +134,10 @@ if [ ! -f .env ]; then
     printf 'STALMAIL_HOSTNAME=%s\n' "${HOSTNAME_ARG}"
     printf 'STALMAIL_PUBLIC_URL=https://%s\n' "${HOSTNAME_ARG}"
     printf 'STALMAIL_SETUP_TOKEN_HASH=%s\n' "${SETUP_TOKEN_HASH}"
+    printf 'STALMAIL_MAIL_DOMAIN=%s\n' "${MAIL_DOMAIN_ARG}"
   } > .env
   chmod 600 .env
-  echo "✓ .env créé (secret généré, hostname=${HOSTNAME_ARG})"
+  echo "✓ .env créé (secret généré, hostname=${HOSTNAME_ARG}, domaine=${MAIL_DOMAIN_ARG})"
 else
   # .env existant : ne pas mentir sur le hostname affiché. Si l'argument diffère du
   # STALMAIL_HOSTNAME déjà enregistré, on s'arrête (l'opérateur tranche) ; sinon on réutilise.
@@ -146,6 +163,15 @@ else
   fi
   # Si le hash existait déjà, le jeton en clair n'est pas récupérable (seul le hash est
   # persisté) → SETUP_TOKEN reste vide, géré dans l'encadré final ci-dessous.
+  # Migration douce : un .env antérieur à la topologie mail n'a pas
+  # STALMAIL_MAIL_DOMAIN, désormais REQUISE par compose.prod.yml → sans elle,
+  # `docker compose up` échoue avant tout affichage.
+  EXISTING_MAIL_DOMAIN=$(awk -F= '$1=="STALMAIL_MAIL_DOMAIN"{print $2}' .env | tail -n1)
+  if [ -z "${EXISTING_MAIL_DOMAIN}" ]; then
+    printf 'STALMAIL_MAIL_DOMAIN=%s\n' "${MAIL_DOMAIN_ARG}" >> .env
+    chmod 600 .env
+    echo "✓ .env migré (STALMAIL_MAIL_DOMAIN=${MAIL_DOMAIN_ARG} ajouté)"
+  fi
 fi
 
 # 5. Démarrage.
