@@ -486,9 +486,18 @@ export async function configureAcmeHandler({
   const { configureAcme } = await import("./stalwart-acme")
   const domain = await resolveDomainOrThrow()
   // Le SAN suit l'identité mail, lue chez Stalwart : une reprise d'étape (entrées
-  // client vides) donne donc le même nom qu'au premier passage.
+  // client vides) donne donc le même nom qu'au premier passage. getServerHostname
+  // interroge Stalwart (JMAP) et peut donc échouer : un throw brut fuirait à la
+  // frontière createServerFn (même raison que resolveDomainOrThrow ci-dessus).
   const { getServerHostname } = await import("./stalwart-bootstrap")
-  const hostname = resolveMailHostname(await getServerHostname(), domain.name)
+  let serverHostname: string
+  try {
+    serverHostname = await getServerHostname()
+  } catch (e) {
+    const { SetupError, toSetupErrorCode } = await import("./setup-errors")
+    throw new SetupError(toSetupErrorCode(e, "SETUP-BACKEND-UNAVAILABLE"))
+  }
+  const hostname = resolveMailHostname(serverHostname, domain.name)
   const contactEmail = data.contactEmail || `admin@${domain.name}`
   try {
     await configureAcme({

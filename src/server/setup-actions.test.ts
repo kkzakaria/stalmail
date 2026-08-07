@@ -868,8 +868,8 @@ describe("configureAcmeHandler", () => {
     })
     vi.mocked(getServerHostname).mockResolvedValueOnce("mail.example.com")
     vi.mocked(configureAcme).mockResolvedValueOnce("prov-1")
-    // data.hostname is accepted by the schema but no longer drives the SAN — it is
-    // deliberately different here to make that explicit.
+    // data.hostname reste accepté par le schéma mais ne pilote plus le SAN — il est
+    // délibérément différent ici pour le rendre explicite.
     const result = await configureAcmeHandler({
       data: {
         hostname: "client-supplied-and-ignored.example",
@@ -1004,6 +1004,18 @@ describe("configureAcmeHandler — SAN", () => {
     await configureAcmeHandler({ data: { hostname: "", contactEmail: "" } })
     const [first, second] = vi.mocked(configureAcme).mock.calls
     expect(second[0].hostname).toBe(first[0].hostname)
+  })
+
+  it("throws SETUP-BACKEND-UNAVAILABLE quand getServerHostname lève une JmapError", async () => {
+    vi.mocked(getServerHostname).mockRejectedValueOnce(
+      new JmapError("session request failed: HTTP 503")
+    )
+    const err = await configureAcmeHandler({
+      data: { hostname: "", contactEmail: "" },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SetupError)
+    expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
+    expect(configureAcme).not.toHaveBeenCalled()
   })
 })
 
