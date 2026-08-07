@@ -160,12 +160,12 @@ export function SslStep({
       {mailDomainEnv !== "" &&
         defaultDomain !== "" &&
         mailDomainEnv !== defaultDomain && (
-          <p className="warn" role="status">
+          <Alert variant="warning">
             {t("wizard.ssl.domainMismatch", {
               env: mailDomainEnv,
               created: defaultDomain,
             })}
-          </p>
+          </Alert>
         )}
 
       {phase === "configuring" ? (
