@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.49](https://github.com/kkzakaria/stalmail/compare/v0.1.48...v0.1.49) (2026-08-07)
+
+
+### Bug Fixes
+
+* **composer:** focus revealed Cc/Bcc rows and collapse empty ones on zone exit ([#146](https://github.com/kkzakaria/stalmail/issues/146)) ([2be36d1](https://github.com/kkzakaria/stalmail/commit/2be36d184c9d2889bab4f4a5621d0773a1aca5dd))
+
 ## [0.1.48](https://github.com/kkzakaria/stalmail/compare/v0.1.47...v0.1.48) (2026-07-09)
 
 
