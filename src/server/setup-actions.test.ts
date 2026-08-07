@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { submitBootstrap, isBootstrapMode } from "./stalwart-bootstrap"
+import {
+  submitBootstrap,
+  isBootstrapMode,
+  getServerHostname,
+} from "./stalwart-bootstrap"
 import { requestStalwartRestart } from "./stalwart-restart"
 import {
   getStepHandler,
@@ -18,7 +22,8 @@ import {
   unlockSetupHandler,
   setupAuthStatusHandler,
   setupContextHandler,
-  resolveServerHostname,
+  resolveWebmailHostname,
+  resolveMailHostname,
   resolveDomainWithRetry,
 } from "./setup-actions"
 import type * as StalwartAccountModule from "./stalwart-account"
@@ -47,6 +52,7 @@ vi.mock("./stalwart-bootstrap", () => ({
     username: "admin@exemple.fr",
     secret: "g",
   })),
+  getServerHostname: vi.fn(async () => ""),
 }))
 vi.mock("./stalwart-restart", () => ({ requestStalwartRestart: vi.fn() }))
 vi.mock("./stalwart-domain", async (importActual) => ({
@@ -184,22 +190,59 @@ describe("getStepHandler", () => {
   })
 })
 
-describe("resolveServerHostname (pur)", () => {
+describe("resolveWebmailHostname (pur)", () => {
   it("STALMAIL_PUBLIC_URL valide → son hostname (source autoritaire)", () => {
-    expect(resolveServerHostname("https://mail.exemple.fr", "exemple.fr")).toBe(
-      "mail.exemple.fr"
-    )
+    expect(
+      resolveWebmailHostname("https://mail.exemple.fr", "exemple.fr")
+    ).toBe("mail.exemple.fr")
   })
   it("env absente → repli sur le nom de domaine", () => {
-    expect(resolveServerHostname(undefined, "exemple.fr")).toBe("exemple.fr")
+    expect(resolveWebmailHostname(undefined, "exemple.fr")).toBe("exemple.fr")
   })
   it("env malformée → repli sur le nom de domaine", () => {
-    expect(resolveServerHostname("pas une url", "exemple.fr")).toBe(
+    expect(resolveWebmailHostname("pas une url", "exemple.fr")).toBe(
       "exemple.fr"
     )
   })
   it("env vide → repli sur le nom de domaine", () => {
-    expect(resolveServerHostname("", "exemple.fr")).toBe("exemple.fr")
+    expect(resolveWebmailHostname("", "exemple.fr")).toBe("exemple.fr")
+  })
+})
+
+describe("resolveMailHostname (pur)", () => {
+  it("prend le serverHostname quand il est renseigné", () => {
+    expect(resolveMailHostname("mail.exemple.fr", "exemple.fr")).toBe(
+      "mail.exemple.fr"
+    )
+  })
+
+  it("retombe sur le nom du domaine quand le serverHostname est vide", () => {
+    expect(resolveMailHostname("", "exemple.fr")).toBe("exemple.fr")
+  })
+
+  it("ignore STALMAIL_PUBLIC_URL, quelle que soit sa valeur", () => {
+    const previous = process.env.STALMAIL_PUBLIC_URL
+    process.env.STALMAIL_PUBLIC_URL = "https://webmail.autre.fr"
+    try {
+      // Le cas qui échoue aujourd'hui : l'hôte du webmail diverge de l'hôte mail.
+      expect(resolveMailHostname("mail.exemple.fr", "exemple.fr")).toBe(
+        "mail.exemple.fr"
+      )
+    } finally {
+      if (previous === undefined) delete process.env.STALMAIL_PUBLIC_URL
+      else process.env.STALMAIL_PUBLIC_URL = previous
+    }
+  })
+
+  it("les deux résolveurs répondent différemment quand les rôles divergent", () => {
+    // L'hôte du webmail et l'identité mail n'ont aucune raison de coïncider :
+    // les confondre faisait demander le certificat pour le mauvais nom.
+    expect(
+      resolveWebmailHostname("https://webmail.exemple.fr", "exemple.fr")
+    ).toBe("webmail.exemple.fr")
+    expect(resolveMailHostname("mail.exemple.fr", "exemple.fr")).toBe(
+      "mail.exemple.fr"
+    )
   })
 })
 
@@ -311,51 +354,63 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     else process.env[ENV_KEY] = prevEnv
   })
 
-  it("mode bootstrap (pré-collect) → valeurs vides, sans requêter le domaine", async () => {
+  it("mode bootstrap (pré-collect) → valeurs vides, sans requêter le domaine ni Stalwart", async () => {
     vi.mocked(isBootstrapMode).mockResolvedValueOnce(true)
     expect(await setupContextHandler()).toEqual({
       serverHostname: "",
       defaultDomain: "",
     })
     expect(getPrimaryDomain).not.toHaveBeenCalled()
+    expect(getServerHostname).not.toHaveBeenCalled()
   })
 
-  it("hors bootstrap, sans env → hostname = nom de domaine (Stalwart autoritatif)", async () => {
+  it("hors bootstrap, serverHostname vide chez Stalwart → hostname = nom de domaine", async () => {
     delete process.env[ENV_KEY]
     vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
+    vi.mocked(getServerHostname).mockResolvedValueOnce("")
     expect(await setupContextHandler()).toEqual({
       serverHostname: "exemple.fr",
       defaultDomain: "exemple.fr",
     })
   })
 
-  it("hors bootstrap, avec env → hostname = hostname de STALMAIL_PUBLIC_URL", async () => {
-    process.env[ENV_KEY] = "https://mail.exemple.fr"
+  it("hors bootstrap, serverHostname renseigné chez Stalwart → hostname lu à la source, STALMAIL_PUBLIC_URL ignorée", async () => {
+    process.env[ENV_KEY] = "https://webmail.autre.fr"
     vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
+    vi.mocked(getServerHostname).mockResolvedValueOnce("mail.exemple.fr")
     expect(await setupContextHandler()).toEqual({
       serverHostname: "mail.exemple.fr",
       defaultDomain: "exemple.fr",
     })
   })
 
-  it("hors bootstrap, domaine introuvable, sans env → valeurs vides", async () => {
+  it("hors bootstrap, domaine introuvable, serverHostname vide → valeurs vides", async () => {
     delete process.env[ENV_KEY]
     vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+    vi.mocked(getServerHostname).mockResolvedValueOnce("")
     expect(await setupContextHandler()).toEqual({
       serverHostname: "",
       defaultDomain: "",
     })
   })
 
-  it("hors bootstrap, domaine introuvable MAIS env présente → hostname URL, domaine vide (asymétrie voulue)", async () => {
-    process.env[ENV_KEY] = "https://mail.exemple.fr"
+  it("hors bootstrap, domaine introuvable MAIS serverHostname renseigné → hostname Stalwart, domaine vide (asymétrie voulue)", async () => {
     vi.mocked(isBootstrapMode).mockResolvedValueOnce(false)
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce(null)
+    vi.mocked(getServerHostname).mockResolvedValueOnce("mail.exemple.fr")
     expect(await setupContextHandler()).toEqual({
       serverHostname: "mail.exemple.fr",
       defaultDomain: "",
     })
+  })
+
+  it("setupContextHandler renvoie le serverHostname lu chez Stalwart", async () => {
+    process.env.STALMAIL_PUBLIC_URL = "https://webmail.autre.fr"
+    vi.mocked(getServerHostname).mockResolvedValue("mail.exemple.fr")
+    await expect(setupContextHandler()).resolves.toEqual(
+      expect.objectContaining({ serverHostname: "mail.exemple.fr" })
+    )
   })
 })
 
@@ -806,14 +861,20 @@ describe("configureAcmeHandler", () => {
     vi.mocked(deriveSetupStep).mockResolvedValue("ssl")
   })
 
-  it("resolves the domain and calls configureAcme with correct args, returns {ok:true}", async () => {
+  it("resolves the domain and calls configureAcme with the hostname sourced from Stalwart (data.hostname is not the SAN source), returns {ok:true}", async () => {
     vi.mocked(getPrimaryDomain).mockResolvedValueOnce({
       id: "dom-1",
       name: "example.com",
     })
+    vi.mocked(getServerHostname).mockResolvedValueOnce("mail.example.com")
     vi.mocked(configureAcme).mockResolvedValueOnce("prov-1")
+    // data.hostname is accepted by the schema but no longer drives the SAN — it is
+    // deliberately different here to make that explicit.
     const result = await configureAcmeHandler({
-      data: { hostname: "mail.example.com", contactEmail: "admin@example.com" },
+      data: {
+        hostname: "client-supplied-and-ignored.example",
+        contactEmail: "admin@example.com",
+      },
     })
     expect(configureAcme).toHaveBeenCalledWith({
       domainId: "dom-1",
@@ -857,14 +918,17 @@ describe("configureAcmeHandler", () => {
     expect((err as SetupError).code).toBe("SETUP-BACKEND-UNAVAILABLE")
   })
 
-  it("resume (empty client input): sources hostname from STALMAIL_PUBLIC_URL and contactEmail from the domain", async () => {
+  it("resume (empty client input): sources hostname from getServerHostname (Stalwart) and contactEmail from the domain", async () => {
+    // STALMAIL_PUBLIC_URL est délibérément posée à une valeur différente : elle ne
+    // doit plus influencer le SAN, seul getServerHostname (Stalwart) le fait.
     const prev = process.env.STALMAIL_PUBLIC_URL
-    process.env.STALMAIL_PUBLIC_URL = "https://mail.example.com/"
+    process.env.STALMAIL_PUBLIC_URL = "https://webmail.autre.fr"
     try {
       vi.mocked(getPrimaryDomain).mockResolvedValueOnce({
         id: "dom-1",
         name: "example.com",
       })
+      vi.mocked(getServerHostname).mockResolvedValueOnce("mail.example.com")
       vi.mocked(configureAcme).mockResolvedValueOnce("prov-1")
       // Empty client values, as on a pure resume into the SSL step.
       const result = await configureAcmeHandler({
@@ -907,6 +971,39 @@ describe("configureAcmeHandler", () => {
     }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SetupError)
     expect((err as SetupError).code).toBe("SETUP-FORBIDDEN")
+  })
+})
+
+describe("configureAcmeHandler — SAN", () => {
+  const prevEnv = process.env.STALMAIL_PUBLIC_URL
+  afterEach(() => {
+    if (prevEnv === undefined) delete process.env.STALMAIL_PUBLIC_URL
+    else process.env.STALMAIL_PUBLIC_URL = prevEnv
+  })
+
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("ssl")
+    vi.mocked(getPrimaryDomain).mockResolvedValue({
+      id: "dom-1",
+      name: "exemple.fr",
+    })
+  })
+
+  it("demande le certificat pour le serverHostname, pas pour l'hôte du webmail", async () => {
+    process.env.STALMAIL_PUBLIC_URL = "https://webmail.autre.fr"
+    vi.mocked(getServerHostname).mockResolvedValue("mail.exemple.fr")
+    await configureAcmeHandler({ data: { hostname: "", contactEmail: "" } })
+    expect(configureAcme).toHaveBeenCalledWith(
+      expect.objectContaining({ hostname: "mail.exemple.fr" })
+    )
+  })
+
+  it("reprise à entrées vides : même SAN qu'au premier passage", async () => {
+    vi.mocked(getServerHostname).mockResolvedValue("mail.exemple.fr")
+    await configureAcmeHandler({ data: { hostname: "", contactEmail: "" } })
+    await configureAcmeHandler({ data: { hostname: "", contactEmail: "" } })
+    const [first, second] = vi.mocked(configureAcme).mock.calls
+    expect(second[0].hostname).toBe(first[0].hostname)
   })
 })
 

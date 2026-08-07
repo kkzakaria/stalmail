@@ -336,7 +336,7 @@ export async function hostAddressStatusHandler({
   if (!domain) return { records: [] }
   const ipv4 = data.ipv4 && isIpv4(data.ipv4) ? data.ipv4 : null
   const ipv6 = data.ipv6 && isIpv6(data.ipv6) ? data.ipv6 : null
-  const hostname = resolveServerHostname(
+  const hostname = resolveWebmailHostname(
     process.env.STALMAIL_PUBLIC_URL,
     domain.name
   )
@@ -416,10 +416,11 @@ export const submitBootstrapFn = createServerFn({ method: "POST" })
   .validator((d: BootstrapInput) => domainSchema.parse(d))
   .handler(submitBootstrapHandler)
 
-// Pur : hostname public du serveur. Source autoritaire = STALMAIL_PUBLIC_URL (comme
-// auth-actions) ; à défaut, le nom de domaine. Sert à ré-hydrater l'affichage du wizard
-// sur reload (#19) et à résoudre le SAN ACME. Aucun secret (hostname/domaine publics).
-export function resolveServerHostname(
+// Pur : hôte du WEBMAIL, dérivé de STALMAIL_PUBLIC_URL, à défaut le nom du domaine.
+// Sert au CNAME webmail des enregistrements DNS (rôle "webmail"). À ne pas confondre
+// avec l'identité du serveur mail (bannière EHLO, cible MX, SAN du certificat) :
+// celle-là se lit chez Stalwart via resolveMailHostname (design 2026-08-07).
+export function resolveWebmailHostname(
   publicUrl: string | undefined,
   domainName: string
 ): string {
@@ -433,17 +434,16 @@ export function resolveServerHostname(
   return domainName
 }
 
-// Derive the SSL SAN hostname from the fixed public base URL (server-authoritative,
-// like auth-actions), falling back to a client-collected value then the domain name.
-// On a pure resume the client state is empty, so the server value is the source of truth.
-function resolveAcmeHostname(
-  clientHostname: string,
+// Pur : le nom que le serveur mail annonce. Le `serverHostname` vient de Stalwart
+// (singleton Bootstrap), le nom du domaine ne sert que de repli. STALMAIL_PUBLIC_URL
+// ne participe PAS : il porte l'hôte du webmail, servi par Caddy, et le confondre
+// avec l'identité mail faisait demander le certificat pour le mauvais nom
+// (design 2026-08-07).
+export function resolveMailHostname(
+  serverHostname: string,
   domainName: string
 ): string {
-  return resolveServerHostname(
-    process.env.STALMAIL_PUBLIC_URL,
-    clientHostname || domainName
-  )
+  return serverHostname || domainName
 }
 
 // Ré-dérive les valeurs d'affichage du wizard (hostname serveur + domaine) côté serveur,
@@ -461,9 +461,10 @@ export async function setupContextHandler(): Promise<{
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const domain = await getPrimaryDomain()
   const defaultDomain = domain?.name ?? ""
+  const { getServerHostname } = await import("./stalwart-bootstrap")
   return {
-    serverHostname: resolveServerHostname(
-      process.env.STALMAIL_PUBLIC_URL,
+    serverHostname: resolveMailHostname(
+      await getServerHostname(),
       defaultDomain
     ),
     defaultDomain,
@@ -484,10 +485,10 @@ export async function configureAcmeHandler({
   }
   const { configureAcme } = await import("./stalwart-acme")
   const domain = await resolveDomainOrThrow()
-  // hostname + contactEmail are resolved server-side (not authoritative from the
-  // client) so an automatic-SSL resume — where the client carries empty inputs —
-  // still produces a valid ACME payload instead of failing validation immediately.
-  const hostname = resolveAcmeHostname(data.hostname, domain.name)
+  // Le SAN suit l'identité mail, lue chez Stalwart : une reprise d'étape (entrées
+  // client vides) donne donc le même nom qu'au premier passage.
+  const { getServerHostname } = await import("./stalwart-bootstrap")
+  const hostname = resolveMailHostname(await getServerHostname(), domain.name)
   const contactEmail = data.contactEmail || `admin@${domain.name}`
   try {
     await configureAcme({
