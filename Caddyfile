@@ -23,13 +23,20 @@
 	# SNI par défaut pour les connexions sans SNI (accès par IP, pré-DNS).
 	default_sni bootstrap.stalmail.local
 
-	# Annuaire ACME. Le défaut (production Let's Encrypt) est fourni par les fichiers
-	# compose, pas par ce Caddyfile : `{$VAR:defaut}` n'applique son défaut que si la
-	# variable est ABSENTE de l'environnement, pas si elle y est présente mais vide —
-	# or compose définit toujours la clé (à vide si le .env ne dit rien), donc un
-	# défaut posé ici serait silencieusement ignoré. Bascule en staging par le .env
-	# pour les validations qui détruisent et refont le déploiement.
-	acme_ca {$STALMAIL_ACME_DIRECTORY}
+	# Annuaire ACME. Le défaut (production Let's Encrypt) est posé ICI ET dans les
+	# fichiers compose — les deux ne se recouvrent pas complètement :
+	#   - celui-ci (`{$VAR:defaut}`) ne s'applique que si la variable est ABSENTE de
+	#     l'environnement. C'est le filet pour tout montage de ce Caddyfile hors
+	#     compose (`docker run --rm ... caddy validate`, `compose.yml`, qui ne pose
+	#     aucun `environment` sur son service caddy) : sans lui, `acme_ca` sans
+	#     argument fait échouer l'analyse du Caddyfile au démarrage.
+	#   - ceux des fichiers compose (`${VAR:-defaut}`) couvrent EN PLUS le cas où la
+	#     variable est présente mais vide (`.env` avec la clé posée à vide) — un cas
+	#     que la substitution Caddyfile ne sait pas gérer, puisqu'elle ne regarde que
+	#     l'absence.
+	# Bascule en staging par le .env pour les validations qui détruisent et refont
+	# le déploiement.
+	acme_ca {$STALMAIL_ACME_DIRECTORY:https://acme-v02.api.letsencrypt.org/directory}
 }
 
 # Routes communes aux deux sites (DRY).
