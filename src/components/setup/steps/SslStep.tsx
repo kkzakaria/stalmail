@@ -26,6 +26,10 @@ interface Props {
   /** Called before onNext in manual DNS mode to write the SSL acknowledgment marker. */
   acknowledgeManualSsl: () => Promise<{ ok: true }>
   onNext: () => void
+  /** Valeur de STALMAIL_MAIL_DOMAIN, vide si non déclarée. */
+  mailDomainEnv: string
+  /** Domaine réellement créé dans le wizard. */
+  defaultDomain: string
 }
 
 export function SslStep({
@@ -37,6 +41,8 @@ export function SslStep({
   onStatusChange,
   acknowledgeManualSsl,
   onNext,
+  mailDomainEnv,
+  defaultDomain,
 }: Props) {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>(
@@ -150,6 +156,17 @@ export function SslStep({
         title={t("wizard.ssl.title")}
         sub={t("wizard.ssl.subtitle")}
       />
+
+      {mailDomainEnv !== "" &&
+        defaultDomain !== "" &&
+        mailDomainEnv !== defaultDomain && (
+          <p className="warn" role="status">
+            {t("wizard.ssl.domainMismatch", {
+              env: mailDomainEnv,
+              created: defaultDomain,
+            })}
+          </p>
+        )}
 
       {phase === "configuring" ? (
         <p className="inline-status">

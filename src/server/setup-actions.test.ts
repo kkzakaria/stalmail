@@ -359,6 +359,7 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     expect(await setupContextHandler()).toEqual({
       serverHostname: "",
       defaultDomain: "",
+      mailDomainEnv: "",
     })
     expect(getPrimaryDomain).not.toHaveBeenCalled()
     expect(getServerHostname).not.toHaveBeenCalled()
@@ -371,6 +372,7 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     expect(await setupContextHandler()).toEqual({
       serverHostname: "exemple.fr",
       defaultDomain: "exemple.fr",
+      mailDomainEnv: "",
     })
   })
 
@@ -381,6 +383,7 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     expect(await setupContextHandler()).toEqual({
       serverHostname: "mail.exemple.fr",
       defaultDomain: "exemple.fr",
+      mailDomainEnv: "",
     })
   })
 
@@ -392,6 +395,7 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     expect(await setupContextHandler()).toEqual({
       serverHostname: "",
       defaultDomain: "",
+      mailDomainEnv: "",
     })
   })
 
@@ -402,6 +406,7 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     expect(await setupContextHandler()).toEqual({
       serverHostname: "mail.exemple.fr",
       defaultDomain: "",
+      mailDomainEnv: "",
     })
   })
 
@@ -410,6 +415,26 @@ describe("setupContextHandler (#19 — ré-hydratation)", () => {
     vi.mocked(getServerHostname).mockResolvedValue("mail.exemple.fr")
     await expect(setupContextHandler()).resolves.toEqual(
       expect.objectContaining({ serverHostname: "mail.exemple.fr" })
+    )
+  })
+})
+
+describe("setupContextHandler — domaine de politique", () => {
+  it("renvoie la valeur de STALMAIL_MAIL_DOMAIN", async () => {
+    process.env.STALMAIL_MAIL_DOMAIN = "exemple.fr"
+    try {
+      await expect(setupContextHandler()).resolves.toEqual(
+        expect.objectContaining({ mailDomainEnv: "exemple.fr" })
+      )
+    } finally {
+      delete process.env.STALMAIL_MAIL_DOMAIN
+    }
+  })
+
+  it("renvoie une chaîne vide quand la variable est absente", async () => {
+    delete process.env.STALMAIL_MAIL_DOMAIN
+    await expect(setupContextHandler()).resolves.toEqual(
+      expect.objectContaining({ mailDomainEnv: "" })
     )
   })
 })

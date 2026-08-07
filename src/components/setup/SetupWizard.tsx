@@ -44,7 +44,14 @@ interface Props {
   initialTheme: Theme
   // Contexte ré-dérivé côté serveur (hostname + domaine) pour ré-hydrater l'affichage
   // sur reload / entrée directe en phase monitoring (#19). Vide en phase 'collect'.
-  initialContext?: { serverHostname: string; defaultDomain: string }
+  initialContext?: {
+    serverHostname: string
+    defaultDomain: string
+    // Domaine déclaré dans STALMAIL_MAIL_DOMAIN (vide si non déclarée) — sert
+    // uniquement à l'avertissement de divergence sur SslStep, jamais modifié
+    // en session (cf. setupContextHandler).
+    mailDomainEnv: string
+  }
   unlock: (token: string) => Promise<{ ok: true }>
   authStatus: () => Promise<{ authed: boolean }>
   submitBootstrap: (input: DomainValues) => Promise<void>
@@ -520,6 +527,8 @@ export function SetupWizard({
         onStatusChange={setSslStatus}
         acknowledgeManualSsl={stableAcknowledgeManualSsl}
         onNext={stableRefetchStep}
+        mailDomainEnv={initialContext?.mailDomainEnv ?? ""}
+        defaultDomain={collected.defaultDomain}
       />
     )
   } else if (serverStep === "account") {

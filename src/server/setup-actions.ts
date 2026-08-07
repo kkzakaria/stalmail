@@ -453,11 +453,16 @@ export function resolveMailHostname(
 export async function setupContextHandler(): Promise<{
   serverHostname: string
   defaultDomain: string
+  // Domaine de politique MTA-STS déclaré dans l'environnement. Exposé au wizard
+  // pour signaler une divergence avec le domaine réellement créé : la variable est
+  // saisie AVANT que le domaine n'existe, une faute de frappe resterait invisible.
+  mailDomainEnv: string
 }> {
   // On ne teste que le mode bootstrap (où x:Domain/query est interdit) : isBootstrapMode()
   // suffit. deriveSetupStep() ferait en plus un getPrimaryDomain() redondant ici.
   const { isBootstrapMode } = await import("./stalwart-bootstrap")
-  if (await isBootstrapMode()) return { serverHostname: "", defaultDomain: "" }
+  if (await isBootstrapMode())
+    return { serverHostname: "", defaultDomain: "", mailDomainEnv: "" }
   const { getPrimaryDomain } = await import("./stalwart-domain")
   const domain = await getPrimaryDomain()
   const defaultDomain = domain?.name ?? ""
@@ -468,6 +473,7 @@ export async function setupContextHandler(): Promise<{
       defaultDomain
     ),
     defaultDomain,
+    mailDomainEnv: process.env.STALMAIL_MAIL_DOMAIN ?? "",
   }
 }
 

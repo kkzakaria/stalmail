@@ -224,6 +224,8 @@ export const fr = {
       manualTitle: "Certificat à gérer manuellement",
       manualNote:
         "En DNS manuel, le défi ACME DNS-01 ne peut pas être automatisé ici. Obtenez et installez le certificat du serveur mail vous-même (hors de ce wizard), puis continuez.",
+      domainMismatch:
+        "Le domaine déclaré dans STALMAIL_MAIL_DOMAIN ({{env}}) diffère du domaine créé ici ({{created}}). La politique MTA-STS sera servie sur mta-sts.{{env}}, qui n'est pas votre domaine de messagerie.",
       status: {
         pending: "En attente",
         failed: "Échec — nouvel essai planifié",
@@ -592,6 +594,8 @@ export const en: DeepRecord<typeof fr> = {
       manualTitle: "Certificate to manage manually",
       manualNote:
         "With manual DNS, the ACME DNS-01 challenge can't be automated here. Obtain and install the mail server certificate yourself (outside this wizard), then continue.",
+      domainMismatch:
+        "The domain declared in STALMAIL_MAIL_DOMAIN ({{env}}) differs from the domain created here ({{created}}). The MTA-STS policy will be served from mta-sts.{{env}}, which is not your mail domain.",
       status: {
         pending: "Pending",
         failed: "Failed — retry scheduled",
