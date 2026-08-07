@@ -1079,11 +1079,12 @@ ce bouton est hors zone, la règle de repli s'applique.)
 - Consumes : rien de nouveau.
 - Produces : rien — changement interne au composeur.
 
-**Périmètre :** `quick-reply.tsx` **n'est pas touché**. Ses rangées démarrent
-toujours fermées et le panneau entier est démonté à la fermeture, donc tout
-montage y résulte d'un clic sur la bascule : l'`autoFocus` inconditionnel y est
-correct. Un commentaire d'une ligne le dira sur place, pour qu'on ne prenne pas
-la divergence entre les deux fichiers pour un oubli.
+**Périmètre :** `quick-reply.tsx` reçoit **un commentaire seulement, aucun
+changement de comportement**. Ses rangées démarrent toujours fermées et le
+panneau entier est démonté à la fermeture, donc tout montage y résulte d'un
+clic sur la bascule : l'`autoFocus` inconditionnel y est correct. Un
+commentaire d'une ligne le dira sur place, pour qu'on ne prenne pas la
+divergence entre les deux fichiers pour un oubli (Step 4).
 
 - [ ] **Step 1 : Écrire le test qui échoue**
 
@@ -1105,13 +1106,28 @@ Dans `src/components/mail/composer.test.tsx`, ajouter au `describe("Composer")` 
     })
     // Le corps du composeur est démonté en mode réduit puis remonté : ce
     // remontage n'est PAS une ouverture par bascule.
-    fireEvent.click(
-      screen.getByRole("button", { name: "mail.compose.minimize" })
-    )
-    fireEvent.click(screen.getByRole("button", { name: "mail.compose.expand" }))
+    // Même nœud DOM tout du long : seul son libellé bascule entre
+    // "minimize" et "expand" selon le mode ; ce n'est PAS un remontage.
+    const toggleBtn = () =>
+      screen.getByRole("button", {
+        name: /mail\.compose\.(minimize|expand)/,
+      })
+    // fireEvent.click ne donne PAS le focus en jsdom (contrairement à un vrai
+    // navigateur, où le mousedown le fait) : on l'appelle explicitement pour
+    // reproduire fidèlement le parcours souris réel.
+    toggleBtn().focus()
+    fireEvent.click(toggleBtn()) // réduit
+    toggleBtn().focus()
+    fireEvent.click(toggleBtn()) // restaure
     const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
     expect(cc).toHaveValue("bob@x.fr")
-    expect(document.activeElement).not.toBe(cc)
+    // Assertion POSITIVE : le focus reste sur le bouton qu'on vient de
+    // cliquer (libellé "minimize" une fois restauré). Une assertion négative
+    // (`not.toBe(cc)`) passerait aussi si le focus était perdu au profit de
+    // <body> — une régression d'accessibilité que ce test doit détecter.
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "mail.compose.minimize" })
+    )
   })
 ```
 
@@ -1121,9 +1137,10 @@ Dans `src/components/mail/composer.test.tsx`, ajouter au `describe("Composer")` 
 bun run vitest run src/components/mail/composer.test.tsx
 ```
 
-Attendu : ÉCHEC sur `expect(document.activeElement).not.toBe(cc)` — le drapeau
-permanent redonne `autoFocus={true}` au remontage. Si le test passe déjà,
-**arrête-toi et signale-le** : le défaut ne serait pas celui décrit.
+Attendu : ÉCHEC sur l'assertion finale (`document.activeElement` doit être le
+bouton bascule, pas la rangée Cc) — le drapeau permanent redonne
+`autoFocus={true}` au remontage, ce qui vole le focus au champ Cc. Si le test
+passe déjà, **arrête-toi et signale-le** : le défaut ne serait pas celui décrit.
 
 - [ ] **Step 3 : Remplacer les drapeaux par une intention consommée**
 

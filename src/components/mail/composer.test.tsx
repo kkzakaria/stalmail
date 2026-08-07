@@ -159,13 +159,28 @@ describe("Composer", () => {
     })
     // Le corps du composeur est démonté en mode réduit puis remonté : ce
     // remontage n'est PAS une ouverture par bascule.
-    fireEvent.click(
-      screen.getByRole("button", { name: "mail.compose.minimize" })
-    )
-    fireEvent.click(screen.getByRole("button", { name: "mail.compose.expand" }))
+    // Même nœud DOM tout du long : seul son libellé bascule entre
+    // "minimize" et "expand" selon le mode ; ce n'est PAS un remontage.
+    const toggleBtn = () =>
+      screen.getByRole("button", {
+        name: /mail\.compose\.(minimize|expand)/,
+      })
+    // fireEvent.click ne donne PAS le focus en jsdom (contrairement à un vrai
+    // navigateur, où le mousedown le fait) : on l'appelle explicitement pour
+    // reproduire fidèlement le parcours souris réel.
+    toggleBtn().focus()
+    fireEvent.click(toggleBtn()) // réduit
+    toggleBtn().focus()
+    fireEvent.click(toggleBtn()) // restaure
     const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
     expect(cc).toHaveValue("bob@x.fr")
-    expect(document.activeElement).not.toBe(cc)
+    // Assertion POSITIVE : le focus reste sur le bouton qu'on vient de
+    // cliquer (libellé "minimize" une fois restauré). Une assertion négative
+    // (`not.toBe(cc)`) passerait aussi si le focus était perdu au profit de
+    // <body> — une régression d'accessibilité que ce test doit détecter.
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "mail.compose.minimize" })
+    )
   })
 
   it("sortir de la zone referme la rangée Cc vide", () => {
