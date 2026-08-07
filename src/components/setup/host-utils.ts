@@ -21,3 +21,21 @@ export function hostZone(hostname: string): string {
   const parts = normalized.split(".")
   return parts.length > 2 ? parts.slice(1).join(".") : normalized
 }
+
+/**
+ * Le domaine de politique MTA-STS déclaré (STALMAIL_MAIL_DOMAIN) diverge-t-il du
+ * domaine réellement créé dans le wizard ? La variable est saisie AVANT que le
+ * domaine n'existe : une faute de frappe y resterait invisible sans cet avertissement
+ * (SslStep). Ne signale rien tant que l'une des deux valeurs est encore vide (bootstrap
+ * pas terminé / variable non déclarée) — seule une vraie divergence compte.
+ */
+export function hasMailDomainMismatch(
+  mailDomainEnv: string,
+  defaultDomain: string
+): boolean {
+  return (
+    mailDomainEnv !== "" &&
+    defaultDomain !== "" &&
+    mailDomainEnv !== defaultDomain
+  )
+}

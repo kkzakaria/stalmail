@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isExternalHost, hostZone } from "./host-utils"
+import { isExternalHost, hostZone, hasMailDomainMismatch } from "./host-utils"
 
 describe("isExternalHost", () => {
   it("returns false when hostname or domain is empty", () => {
@@ -60,5 +60,19 @@ describe("hostZone", () => {
 
   it("handles mixed case and spaces", () => {
     expect(hostZone(" SUB.exemple.fr ")).toBe("exemple.fr")
+  })
+})
+
+describe("hasMailDomainMismatch", () => {
+  it("détecte une divergence entre le domaine déclaré et le domaine créé", () => {
+    expect(hasMailDomainMismatch("autre.fr", "exemple.fr")).toBe(true)
+  })
+
+  it("ne signale rien quand les deux domaines coïncident", () => {
+    expect(hasMailDomainMismatch("exemple.fr", "exemple.fr")).toBe(false)
+  })
+
+  it("ne signale rien quand la variable déclarée est absente (vide)", () => {
+    expect(hasMailDomainMismatch("", "exemple.fr")).toBe(false)
   })
 })

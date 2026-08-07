@@ -10,6 +10,7 @@ import { Alert, Badge, Spinner, StepHeader, StepNav } from "../ui/primitives"
 import { IconInfo } from "../ui/icons"
 import { SetupErrorBox } from "../ui/SetupErrorBox"
 import { codeFromError, messageKeyForCode } from "../error-code"
+import { hasMailDomainMismatch } from "../host-utils"
 
 type Phase = "configuring" | "monitor" | "manual" | "error"
 
@@ -157,16 +158,14 @@ export function SslStep({
         sub={t("wizard.ssl.subtitle")}
       />
 
-      {mailDomainEnv !== "" &&
-        defaultDomain !== "" &&
-        mailDomainEnv !== defaultDomain && (
-          <Alert variant="warning">
-            {t("wizard.ssl.domainMismatch", {
-              env: mailDomainEnv,
-              created: defaultDomain,
-            })}
-          </Alert>
-        )}
+      {hasMailDomainMismatch(mailDomainEnv, defaultDomain) && (
+        <Alert variant="warning">
+          {t("wizard.ssl.domainMismatch", {
+            env: mailDomainEnv,
+            created: defaultDomain,
+          })}
+        </Alert>
+      )}
 
       {phase === "configuring" ? (
         <p className="inline-status">
