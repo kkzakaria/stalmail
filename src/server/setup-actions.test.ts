@@ -1045,6 +1045,14 @@ describe("configureAcmeHandler — SAN", () => {
 })
 
 describe("configureAcmeHandler — annuaire ACME", () => {
+  beforeEach(() => {
+    vi.mocked(deriveSetupStep).mockResolvedValue("ssl")
+    vi.mocked(getPrimaryDomain).mockResolvedValue({
+      id: "dom-1",
+      name: "exemple.fr",
+    })
+  })
+
   it("transmet STALMAIL_ACME_DIRECTORY quand il est défini", async () => {
     process.env.STALMAIL_ACME_DIRECTORY =
       "https://acme-staging-v02.api.letsencrypt.org/directory"
