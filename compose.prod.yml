@@ -53,6 +53,9 @@ services:
       STALMAIL_PUBLIC_URL: "${STALMAIL_PUBLIC_URL:?set STALMAIL_PUBLIC_URL in .env (e.g. https://mail.getstalmail.com)}"
       STALMAIL_SETUP_TOKEN_HASH: "${STALMAIL_SETUP_TOKEN_HASH:?set STALMAIL_SETUP_TOKEN_HASH in .env}"
       STALMAIL_RUN_DIR: /shared
+      # Domaine des adresses e-mail (la partie après le @), PAS l'hôte du webmail :
+      # c'est lui qui donne l'hôte de politique MTA-STS `mta-sts.<domaine>`.
+      STALMAIL_MAIL_DOMAIN: "${STALMAIL_MAIL_DOMAIN:-}"
       # Annuaire ACME (facultatif). Le défaut (production) vit ici : la forme `:-`
       # de compose couvre à la fois l'absence ET la chaîne vide, contrairement à la
       # substitution Caddyfile — laisser vide dans le .env pour Let's Encrypt production.
@@ -75,6 +78,9 @@ services:
       # de compose couvre à la fois l'absence ET la chaîne vide, contrairement à la
       # substitution Caddyfile — laisser vide dans le .env pour Let's Encrypt production.
       STALMAIL_ACME_DIRECTORY: "${STALMAIL_ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}"
+      # Domaine des adresses e-mail (la partie après le @), PAS l'hôte du webmail :
+      # c'est lui qui donne l'hôte de politique MTA-STS `mta-sts.<domaine>`.
+      STALMAIL_MAIL_DOMAIN: "${STALMAIL_MAIL_DOMAIN:?set STALMAIL_MAIL_DOMAIN in .env (le domaine des adresses, ex. exemple.fr — pas l'hôte du webmail)}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - stalmail-caddy-data:/data
