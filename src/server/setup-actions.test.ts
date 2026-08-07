@@ -1019,6 +1019,30 @@ describe("configureAcmeHandler — SAN", () => {
   })
 })
 
+describe("configureAcmeHandler — annuaire ACME", () => {
+  it("transmet STALMAIL_ACME_DIRECTORY quand il est défini", async () => {
+    process.env.STALMAIL_ACME_DIRECTORY =
+      "https://acme-staging-v02.api.letsencrypt.org/directory"
+    try {
+      await configureAcmeHandler({ data: { hostname: "", contactEmail: "" } })
+      expect(configureAcme).toHaveBeenCalledWith(
+        expect.objectContaining({
+          directory: "https://acme-staging-v02.api.letsencrypt.org/directory",
+        })
+      )
+    } finally {
+      delete process.env.STALMAIL_ACME_DIRECTORY
+    }
+  })
+
+  it("ne transmet aucun annuaire quand la variable est absente", async () => {
+    delete process.env.STALMAIL_ACME_DIRECTORY
+    await configureAcmeHandler({ data: { hostname: "", contactEmail: "" } })
+    const call = vi.mocked(configureAcme).mock.calls.at(-1)?.[0]
+    expect(call).not.toHaveProperty("directory")
+  })
+})
+
 // ---------------------------------------------------------------------------
 // acmeStatusHandler — read-only, no auth guard
 // ---------------------------------------------------------------------------

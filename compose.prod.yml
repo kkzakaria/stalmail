@@ -53,6 +53,8 @@ services:
       STALMAIL_PUBLIC_URL: "${STALMAIL_PUBLIC_URL:?set STALMAIL_PUBLIC_URL in .env (e.g. https://mail.getstalmail.com)}"
       STALMAIL_SETUP_TOKEN_HASH: "${STALMAIL_SETUP_TOKEN_HASH:?set STALMAIL_SETUP_TOKEN_HASH in .env}"
       STALMAIL_RUN_DIR: /shared
+      # Annuaire ACME (facultatif) : laisser vide pour Let's Encrypt production.
+      STALMAIL_ACME_DIRECTORY: "${STALMAIL_ACME_DIRECTORY:-}"
     volumes:
       - stalmail-shared:/shared
       - stalmail-app-data:/var/lib/stalmail
@@ -67,6 +69,8 @@ services:
     environment:
       # Hostname public : site nommé ACME (le fallback :443 auto-signé sert l'accès par IP).
       STALMAIL_HOSTNAME: "${STALMAIL_HOSTNAME:?set STALMAIL_HOSTNAME in .env (e.g. mail.getstalmail.com)}"
+      # Annuaire ACME (facultatif) : laisser vide pour Let's Encrypt production.
+      STALMAIL_ACME_DIRECTORY: "${STALMAIL_ACME_DIRECTORY:-}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - stalmail-caddy-data:/data

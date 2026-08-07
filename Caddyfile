@@ -22,6 +22,10 @@
 {
 	# SNI par défaut pour les connexions sans SNI (accès par IP, pré-DNS).
 	default_sni bootstrap.stalmail.local
+
+	# Annuaire ACME. Par défaut la production Let's Encrypt ; bascule en staging par
+	# le .env pour les validations qui détruisent et refont le déploiement.
+	acme_ca {$STALMAIL_ACME_DIRECTORY:https://acme-v02.api.letsencrypt.org/directory}
 }
 
 # Routes communes aux deux sites (DRY).

@@ -500,10 +500,16 @@ export async function configureAcmeHandler({
   const hostname = resolveMailHostname(serverHostname, domain.name)
   const contactEmail = data.contactEmail || `admin@${domain.name}`
   try {
+    // Annuaire de substitution (Let's Encrypt staging) pour les validations qui
+    // détruisent et refont le déploiement : le quota d'émission de l'annuaire de
+    // production est limité, et l'épuiser rend le serveur injoignable en HTTPS
+    // pendant une semaine.
+    const directory = process.env.STALMAIL_ACME_DIRECTORY
     await configureAcme({
       domainId: domain.id,
       hostname,
       contactEmail,
+      ...(directory ? { directory } : {}),
     })
   } catch (e) {
     const { SetupError, toSetupErrorCode } = await import("./setup-errors")
