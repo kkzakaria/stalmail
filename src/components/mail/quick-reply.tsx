@@ -155,6 +155,9 @@ export function QuickReply({
               // et le focus clavier ne retombe plus sur <body>. Inconditionnel
               // ici — dans la réponse rapide les rangées démarrent fermées, donc
               // tout montage est une ouverture par bascule.
+              // Inconditionnel ici, contrairement au grand Composer : le panneau
+              // entier est démonté à la fermeture et les rangées démarrent
+              // fermées, donc tout montage résulte d'un clic sur la bascule.
               autoFocus
               value={draft.cc}
               onChange={(e) => onPatch({ cc: e.target.value })}

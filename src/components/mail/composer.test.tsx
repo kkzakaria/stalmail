@@ -144,6 +144,30 @@ describe("Composer", () => {
     )
   })
 
+  it("réduire puis restaurer ne vole pas le curseur à une rangée remplie", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.change(screen.getByRole("textbox", { name: "mail.compose.cc" }), {
+      target: { value: "bob@x.fr" },
+    })
+    // Le corps du composeur est démonté en mode réduit puis remonté : ce
+    // remontage n'est PAS une ouverture par bascule.
+    fireEvent.click(
+      screen.getByRole("button", { name: "mail.compose.minimize" })
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.expand" }))
+    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
+    expect(cc).toHaveValue("bob@x.fr")
+    expect(document.activeElement).not.toBe(cc)
+  })
+
   it("sortir de la zone referme la rangée Cc vide", () => {
     render(
       <Composer

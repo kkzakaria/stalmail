@@ -23,11 +23,11 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
   // à la fois alors qu'on peut ne vouloir que l'un.
   const [showCc, setShowCc] = useState(initial.cc !== "")
   const [showBcc, setShowBcc] = useState(initial.bcc !== "")
-  // Le focus n'est donné qu'aux rangées ouvertes PAR LA BASCULE : showCc/showBcc
-  // peuvent être vrais dès le montage (replyAll avec Cc pré-rempli), et voler le
-  // curseur à l'ouverture du composeur serait une régression.
-  const ccOpenedByUser = useRef(false)
-  const bccOpenedByUser = useRef(false)
+  // Quelle rangée doit recevoir le focus à son PROCHAIN montage. L'intention est
+  // consommée au montage : `autoFocus` ne sait pas distinguer une ouverture par
+  // bascule d'un simple remontage (retour du mode réduit), et un drapeau
+  // permanent y volerait le curseur.
+  const pendingFocus = useRef<"cc" | "bcc" | null>(null)
   const [mode, setMode] = useState<Mode>("normal")
   const [showFormat, setShowFormat] = useState(false)
   const set = (patch: Partial<ComposerDraft>) =>
@@ -104,7 +104,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
                   aria-label={t("mail.compose.cc")}
                   title={t("mail.compose.cc")}
                   onClick={() => {
-                    ccOpenedByUser.current = true
+                    pendingFocus.current = "cc"
                     setShowCc(true)
                   }}
                 >
@@ -118,7 +118,7 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
                   aria-label={t("mail.compose.bcc")}
                   title={t("mail.compose.bcc")}
                   onClick={() => {
-                    bccOpenedByUser.current = true
+                    pendingFocus.current = "bcc"
                     setShowBcc(true)
                   }}
                 >
@@ -133,7 +133,12 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
                 <input
                   id="cmp-cc"
                   aria-label={t("mail.compose.cc")}
-                  autoFocus={ccOpenedByUser.current}
+                  ref={(el) => {
+                    if (el && pendingFocus.current === "cc") {
+                      pendingFocus.current = null
+                      el.focus()
+                    }
+                  }}
                   value={draft.cc}
                   onChange={(e) => set({ cc: e.target.value })}
                 />
@@ -145,7 +150,12 @@ export function Composer({ initial, sending, onSend, onClose }: ComposerProps) {
                 <input
                   id="cmp-bcc"
                   aria-label={t("mail.compose.bcc")}
-                  autoFocus={bccOpenedByUser.current}
+                  ref={(el) => {
+                    if (el && pendingFocus.current === "bcc") {
+                      pendingFocus.current = null
+                      el.focus()
+                    }
+                  }}
                   value={draft.bcc}
                   onChange={(e) => set({ bcc: e.target.value })}
                 />
