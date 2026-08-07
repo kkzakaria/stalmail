@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 import { Composer } from "./composer"
 import type { ComposerDraft } from "./use-composer"
 
@@ -109,7 +109,10 @@ describe("Composer", () => {
     ).toBeNull()
   })
 
-  it("referme la rangée Cc vide au blur (bouton bascule de retour)", () => {
+  // Cible hors zone : le champ Sujet, juste sous les rangées destinataires.
+  const horsZone = () => screen.getByLabelText("mail.compose.subject")
+
+  it("la bascule Cc donne le focus au champ révélé", () => {
     render(
       <Composer
         initial={initial}
@@ -119,8 +122,81 @@ describe("Composer", () => {
       />
     )
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    )
+  })
+
+  // Garde-fou : prouve seulement l'absence de retour à un autoFocus
+  // inconditionnel. Ne prouve pas à lui seul que le focus fonctionne quand
+  // il le doit — c'est le test voisin qui le prouve.
+  it("une rangée Cc pré-remplie (replyAll) ne prend PAS le focus au montage", () => {
+    render(
+      <Composer
+        initial={{ ...initial, mode: "replyAll", cc: "bob@x.fr" }}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    expect(document.activeElement).not.toBe(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    )
+  })
+
+  it("réduire puis restaurer ne vole pas le curseur à une rangée remplie", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.change(screen.getByRole("textbox", { name: "mail.compose.cc" }), {
+      target: { value: "bob@x.fr" },
+    })
+    // Le corps du composeur est démonté en mode réduit puis remonté : ce
+    // remontage n'est PAS une ouverture par bascule.
+    // Même nœud DOM tout du long : seul son libellé bascule entre
+    // "minimize" et "expand" selon le mode ; ce n'est PAS un remontage.
+    const toggleBtn = () =>
+      screen.getByRole("button", {
+        name: /mail\.compose\.(minimize|expand)/,
+      })
+    // fireEvent.click ne donne PAS le focus en jsdom (contrairement à un vrai
+    // navigateur, où le mousedown le fait) : on l'appelle explicitement pour
+    // reproduire fidèlement le parcours souris réel.
+    toggleBtn().focus()
+    fireEvent.click(toggleBtn()) // réduit
+    toggleBtn().focus()
+    fireEvent.click(toggleBtn()) // restaure
     const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
-    fireEvent.blur(cc)
+    expect(cc).toHaveValue("bob@x.fr")
+    // Assertion POSITIVE : le focus reste sur le bouton qu'on vient de
+    // cliquer (libellé "minimize" une fois restauré). Une assertion négative
+    // (`not.toBe(cc)`) passerait aussi si le focus était perdu au profit de
+    // <body> — une régression d'accessibilité que ce test doit détecter.
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "mail.compose.minimize" })
+    )
+  })
+
+  it("sortir de la zone referme la rangée Cc vide", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      { relatedTarget: horsZone() }
+    )
     expect(
       screen.queryByRole("textbox", { name: "mail.compose.cc" })
     ).toBeNull()
@@ -129,7 +205,7 @@ describe("Composer", () => {
     ).toBeInTheDocument()
   })
 
-  it("garde la rangée Cc ouverte au blur quand elle a une valeur", () => {
+  it("sortir de la zone garde la rangée Cc remplie", () => {
     render(
       <Composer
         initial={initial}
@@ -141,13 +217,13 @@ describe("Composer", () => {
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
     const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
     fireEvent.change(cc, { target: { value: "bob@x.fr" } })
-    fireEvent.blur(cc)
+    fireEvent.focusOut(cc, { relatedTarget: horsZone() })
     expect(
       screen.getByRole("textbox", { name: "mail.compose.cc" })
     ).toHaveValue("bob@x.fr")
   })
 
-  it("referme la rangée Cci au blur avec des espaces seuls", () => {
+  it("des espaces seuls comptent comme vide", () => {
     render(
       <Composer
         initial={initial}
@@ -159,13 +235,62 @@ describe("Composer", () => {
     fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
     const bcc = screen.getByRole("textbox", { name: "mail.compose.bcc" })
     fireEvent.change(bcc, { target: { value: "   " } })
-    fireEvent.blur(bcc)
+    fireEvent.focusOut(bcc, { relatedTarget: horsZone() })
     expect(
       screen.queryByRole("textbox", { name: "mail.compose.bcc" })
     ).toBeNull()
   })
 
-  it("referme la rangée Cc pré-remplie (replyAll) une fois vidée puis quittée", () => {
+  it("circuler dans la zone ne referme rien (Cc vide → bascule Cci)", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      {
+        relatedTarget: screen.getByRole("button", { name: "mail.compose.bcc" }),
+      }
+    )
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+  })
+
+  it("détour par Cci puis sortie : la Cc vide oubliée se referme aussi", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      {
+        relatedTarget: screen.getByRole("button", { name: "mail.compose.bcc" }),
+      }
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.bcc" }))
+    const bcc = screen.getByRole("textbox", { name: "mail.compose.bcc" })
+    fireEvent.change(bcc, { target: { value: "bob@x.fr" } })
+    fireEvent.focusOut(bcc, { relatedTarget: horsZone() })
+    expect(
+      screen.queryByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeNull()
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.bcc" })
+    ).toHaveValue("bob@x.fr")
+  })
+
+  it("la rangée Cc pré-remplie vidée se referme en sortant de la zone", () => {
     render(
       <Composer
         initial={{ ...initial, mode: "replyAll", cc: "bob@x.fr" }}
@@ -174,12 +299,75 @@ describe("Composer", () => {
         onClose={() => {}}
       />
     )
-    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" }) // ouverte d'emblée
+    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
     fireEvent.change(cc, { target: { value: "" } })
-    fireEvent.blur(cc)
+    fireEvent.focusOut(cc, { relatedTarget: horsZone() })
     expect(
       screen.queryByRole("textbox", { name: "mail.compose.cc" })
     ).toBeNull()
+  })
+
+  it("relatedTarget nul (fenêtre qui perd le focus) ne referme rien", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    // focusOut explicite avec relatedTarget: null — exerce le contrat de
+    // leavesZone sans dépendre de la façon dont jsdom traduit fireEvent.blur.
+    fireEvent.focusOut(
+      screen.getByRole("textbox", { name: "mail.compose.cc" }),
+      {
+        relatedTarget: null,
+      }
+    )
+    expect(
+      screen.getByRole("textbox", { name: "mail.compose.cc" })
+    ).toBeInTheDocument()
+  })
+
+  it("clic en cours : le repli attend la fin du geste (issue #147)", () => {
+    vi.useFakeTimers()
+    try {
+      render(
+        <Composer
+          initial={initial}
+          sending={false}
+          onSend={() => {}}
+          onClose={() => {}}
+        />
+      )
+      fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+      const cible = horsZone()
+      fireEvent.pointerDown(cible)
+      fireEvent.focusOut(
+        screen.getByRole("textbox", { name: "mail.compose.cc" }),
+        { relatedTarget: cible }
+      )
+      // Rien ne bouge tant que le pointeur est enfoncé : sinon le clic serait
+      // avalé par le décalage de la mise en page.
+      expect(
+        screen.getByRole("textbox", { name: "mail.compose.cc" })
+      ).toBeInTheDocument()
+      fireEvent.pointerUp(cible)
+      // Le repli doit rester en attente jusqu'après la délivrance du clic :
+      // un repli synchrone ici serait le défaut que le report doit empêcher.
+      expect(
+        screen.getByRole("textbox", { name: "mail.compose.cc" })
+      ).toBeInTheDocument()
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(
+        screen.queryByRole("textbox", { name: "mail.compose.cc" })
+      ).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("envoie le brouillon saisi", () => {
