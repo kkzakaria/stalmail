@@ -1055,3 +1055,158 @@ git commit -m "fix(composer): defer empty-row collapse until the pointer gesture
 
 Closes #147"
 ```
+
+---
+
+### Task 5 : Supprimer les drapeaux permanents au profit d'un focus impératif consommé
+
+Corrige le défaut relevé par la revue finale (M1) : `ccOpenedByUser` /
+`bccOpenedByUser` ne sont jamais remis à `false`. Ils expriment « cette rangée a
+déjà été ouverte par la bascule au moins une fois », alors que la question posée
+au montage est « ce montage-ci résulte-t-il d'un clic sur la bascule ? ».
+
+Conséquence mesurable : `composer.tsx` démonte tout le corps en mode réduit
+(`{mode !== "min" && (…)}`). Réduire puis restaurer avec une rangée **remplie**
+la remonte avec `autoFocus` encore à `true` — le curseur saute dans Cc au lieu de
+rester où il était. (Une rangée vide, elle, se referme au clic sur « réduire » :
+ce bouton est hors zone, la règle de repli s'applique.)
+
+**Files:**
+- Modify: `src/components/mail/composer.tsx:29-30` (refs), `:106-123` (bascules), `:133-151` (inputs)
+- Test: `src/components/mail/composer.test.tsx`
+
+**Interfaces:**
+- Consumes : rien de nouveau.
+- Produces : rien — changement interne au composeur.
+
+**Périmètre :** `quick-reply.tsx` **n'est pas touché**. Ses rangées démarrent
+toujours fermées et le panneau entier est démonté à la fermeture, donc tout
+montage y résulte d'un clic sur la bascule : l'`autoFocus` inconditionnel y est
+correct. Un commentaire d'une ligne le dira sur place, pour qu'on ne prenne pas
+la divergence entre les deux fichiers pour un oubli.
+
+- [ ] **Step 1 : Écrire le test qui échoue**
+
+Dans `src/components/mail/composer.test.tsx`, ajouter au `describe("Composer")` :
+
+```tsx
+  it("réduire puis restaurer ne vole pas le curseur à une rangée remplie", () => {
+    render(
+      <Composer
+        initial={initial}
+        sending={false}
+        onSend={() => {}}
+        onClose={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.cc" }))
+    fireEvent.change(screen.getByRole("textbox", { name: "mail.compose.cc" }), {
+      target: { value: "bob@x.fr" },
+    })
+    // Le corps du composeur est démonté en mode réduit puis remonté : ce
+    // remontage n'est PAS une ouverture par bascule.
+    fireEvent.click(
+      screen.getByRole("button", { name: "mail.compose.minimize" })
+    )
+    fireEvent.click(screen.getByRole("button", { name: "mail.compose.expand" }))
+    const cc = screen.getByRole("textbox", { name: "mail.compose.cc" })
+    expect(cc).toHaveValue("bob@x.fr")
+    expect(document.activeElement).not.toBe(cc)
+  })
+```
+
+- [ ] **Step 2 : Lancer le test pour le voir échouer**
+
+```bash
+bun run vitest run src/components/mail/composer.test.tsx
+```
+
+Attendu : ÉCHEC sur `expect(document.activeElement).not.toBe(cc)` — le drapeau
+permanent redonne `autoFocus={true}` au remontage. Si le test passe déjà,
+**arrête-toi et signale-le** : le défaut ne serait pas celui décrit.
+
+- [ ] **Step 3 : Remplacer les drapeaux par une intention consommée**
+
+Dans `composer.tsx`, remplacer les deux refs (l. 29-30) par une seule :
+
+```tsx
+  // Quelle rangée doit recevoir le focus à son PROCHAIN montage. L'intention est
+  // consommée au montage : `autoFocus` ne sait pas distinguer une ouverture par
+  // bascule d'un simple remontage (retour du mode réduit), et un drapeau
+  // permanent y volerait le curseur.
+  const pendingFocus = useRef<"cc" | "bcc" | null>(null)
+```
+
+Les deux bascules posent l'intention (l. 106-109 et 120-123) :
+
+```tsx
+                  onClick={() => {
+                    pendingFocus.current = "cc"
+                    setShowCc(true)
+                  }}
+```
+
+```tsx
+                  onClick={() => {
+                    pendingFocus.current = "bcc"
+                    setShowBcc(true)
+                  }}
+```
+
+Les deux inputs perdent `autoFocus` et gagnent une ref de rappel qui consomme
+l'intention (`#cmp-cc`, l. 133-139) :
+
+```tsx
+                <input
+                  id="cmp-cc"
+                  aria-label={t("mail.compose.cc")}
+                  ref={(el) => {
+                    if (el && pendingFocus.current === "cc") {
+                      pendingFocus.current = null
+                      el.focus()
+                    }
+                  }}
+                  value={draft.cc}
+                  onChange={(e) => set({ cc: e.target.value })}
+                />
+```
+
+Idem pour `#cmp-bcc` (l. 145-151) avec `"bcc"`, `draft.bcc` et `set({ bcc: … })`.
+
+La ref de rappel ne doit **rien renvoyer** : en React 19 une valeur de retour est
+interprétée comme fonction de nettoyage. Le corps entre accolades ci-dessus
+renvoie bien `undefined`.
+
+- [ ] **Step 4 : Documenter la divergence côté réponse rapide**
+
+Dans `quick-reply.tsx`, au-dessus de l'`autoFocus` de `#qr-cc`, compléter le
+commentaire existant par une phrase :
+
+```tsx
+            // Inconditionnel ici, contrairement au grand Composer : le panneau
+            // entier est démonté à la fermeture et les rangées démarrent
+            // fermées, donc tout montage résulte d'un clic sur la bascule.
+```
+
+- [ ] **Step 5 : Lancer les tests pour les voir passer**
+
+```bash
+bun run vitest run src/components/mail/composer.test.tsx src/components/mail/quick-reply.test.tsx
+```
+
+Attendu : PASS, y compris les deux tests existants qui encadrent le comportement
+— « la bascule Cc donne le focus au champ révélé » et « une rangée Cc pré-remplie
+(replyAll) ne prend PAS le focus au montage ».
+
+- [ ] **Step 6 : Vérifier la suite complète et les contrôles**
+
+```bash
+bun run test && bun run lint && bun run typecheck
+```
+
+- [ ] **Step 7 : Commit**
+
+```bash
+git add src/components/mail/composer.tsx src/components/mail/composer.test.tsx src/components/mail/quick-reply.tsx
+git commit -m "fix(composer): consume the focus intent instead of latching it"
+```
