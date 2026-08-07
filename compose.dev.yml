@@ -61,6 +61,12 @@ services:
 
   caddy:
     image: caddy:2.9.1
+    environment:
+      # Le Caddyfile est partagé avec la prod et porte `acme_ca {$STALMAIL_ACME_DIRECTORY}`
+      # sans défaut (le défaut vit dans compose). La stack de dev ne fait jamais d'ACME
+      # réel, mais une valeur vide/absente casserait quand même l'analyse du Caddyfile
+      # (acme_ca exige un argument) — d'où ce défaut, jamais utilisé pour de vrai ici.
+      STALMAIL_ACME_DIRECTORY: "${STALMAIL_ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
